@@ -65,6 +65,7 @@
 const supabase = window.supabase.createClient(window.SUPABASE_URL, window.SUPABASE_ANON_KEY);
 const urlParams = new URLSearchParams(window.location.search);
 const selectedUserId = urlParams.get('id');
+let songsRefreshTimeoutId = null;
 const sampleSongs = [
   { title: 'Sol de Medianoche', artist: 'Luna Áurea' },
   { title: 'Viento del Sur', artist: 'Horizonte Azul' },
@@ -249,20 +250,54 @@ function initAddSongModal() {
   renderSuggestedSongs(handleSuggestionSelect);
 }
 
+function scheduleSongsRefresh() {
+  if (songsRefreshTimeoutId) {
+    clearTimeout(songsRefreshTimeoutId);
+  }
+  songsRefreshTimeoutId = setTimeout(() => {
+    songsRefreshTimeoutId = null;
+    loadSongs();
+  }, 150);
+}
+
+function initSongsRealtime() {
+  const channel = supabase
+    .channel('songs_realtime')
+    .on('postgres_changes', { event: '*', schema: 'public', table: 'canciones' }, scheduleSongsRefresh)
+    .on('postgres_changes', { event: '*', schema: 'public', table: 'nombres_canciones' }, scheduleSongsRefresh)
+    .on('postgres_changes', { event: '*', schema: 'public', table: 'artistas' }, scheduleSongsRefresh);
+
+  channel.subscribe((status) => {
+    if (status === 'CHANNEL_ERROR') {
+      console.error('Error suscribiendo al canal de canciones en tiempo real');
+    }
+  });
+}
+
 // Run on load and when resizing
 window.addEventListener('load', adjustSongsContainerPadding);
 window.addEventListener('resize', adjustSongsContainerPadding);
 
 async function loadSongs() {
-  const { data: songs, error } = await supabase.from('songs').select('*');
+  const { data: songs, error } = await supabase
+    .from('canciones')
+    .select(`
+      id,
+      nombres_canciones ( titulo ),
+      artistas ( nombre )
+    `);
   if (error) console.error(error);
   else {
     const container = document.getElementById('songs-container');
     container.innerHTML = '';
     songs.forEach(song => {
-      const firstLetter = song.titulo.charAt(0).toUpperCase();
+      if (!song || !song.id) return;
+      const songTitle = song.nombres_canciones?.titulo;
+      if (!songTitle) return;
+      const artistName = song.artistas?.nombre || '';
+      const firstLetter = songTitle.charAt(0).toUpperCase();
       const songElement = document.createElement('a');
-      const audioParams = new URLSearchParams({ title: song.titulo });
+      const audioParams = new URLSearchParams({ songId: song.id, title: songTitle });
       if (selectedUserId) {
         audioParams.set('id', selectedUserId);
       }
@@ -271,8 +306,8 @@ async function loadSongs() {
       songElement.innerHTML = `
         <div class="bg-[var(--primary-color)] flex items-center justify-center text-white font-bold text-xl rounded-lg size-20">${firstLetter}</div>
         <div class="flex-1">
-          <p class="text-white text-base font-medium leading-normal">${song.titulo}</p>
-          <p class="text-gray-400 text-sm font-normal leading-normal">${song.artista}</p>
+          <p class="text-white text-base font-medium leading-normal">${songTitle}</p>
+          <p class="text-gray-400 text-sm font-normal leading-normal">${artistName}</p>
         </div>
         <button class="flex items-center justify-center rounded-full h-10 w-10 text-gray-400 hover:text-white hover:bg-white/10 transition-colors">
           <span class="material-symbols-outlined">more_vert</span>
@@ -286,4 +321,5 @@ async function loadSongs() {
 loadSongs();
 updateSongsTitle();
 initAddSongModal();
+initSongsRealtime();
 </script>

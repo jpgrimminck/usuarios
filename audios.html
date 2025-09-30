@@ -53,6 +53,7 @@ const supabase = window.supabase.createClient(window.SUPABASE_URL, window.SUPABA
 const urlParams = new URLSearchParams(window.location.search);
 const userId = urlParams.get('id');
 const title = urlParams.get('title');
+const songIdParam = urlParams.get('songId');
 
 const backLink = document.getElementById('back-to-songs');
 if (backLink) {
@@ -79,44 +80,110 @@ function initUploadFab() {
 }
 
 async function loadAudios() {
-  if (title) {
-    document.querySelector('h2').textContent = title;
-    const { data: song } = await supabase.from('songs').select('id').eq('titulo', title).single();
-    if (song) {
-      const { data: audios, error } = await supabase.from('audios').select('*').eq('song_id', song.id);
-      if (error) console.error(error);
-      else {
-        const container = document.querySelector('.space-y-4');
-        container.innerHTML = '';
-        audios.forEach(audio => {
-          const audioElement = document.createElement('div');
-          audioElement.className = 'flex flex-col gap-4 rounded-lg bg-gray-800 p-4';
-          audioElement.innerHTML = `
-            <div class="flex items-center gap-4">
-              <div class="flex-1">
-                <p class="text-lg font-semibold text-white">${audio.instrumento}</p>
-                <p class="text-sm text-gray-400">${audio.detalle}</p>
-              </div>
-              <button class="flex h-14 w-14 items-center justify-center rounded-full bg-[var(--primary-color)] text-white">
-                <span class="material-symbols-outlined text-4xl">play_arrow</span>
-              </button>
-            </div>
-            <div class="flex items-center gap-4">
-              <button class="text-white">
-                <span class="material-symbols-outlined text-3xl">replay_10</span>
-              </button>
-              <div class="h-1.5 flex-1 rounded-full bg-gray-700">
-                <div class="h-1.5 w-1/4 rounded-full bg-[var(--primary-color)]"></div>
-              </div>
-              <button class="text-white">
-                <span class="material-symbols-outlined text-3xl">forward_10</span>
-              </button>
-            </div>
-          `;
-          container.appendChild(audioElement);
-        });
+  const headingEl = document.querySelector('h2');
+  let headingTitle = title || '';
+  let songId = songIdParam || null;
+  let songRecord = null;
+
+  try {
+    if (songId) {
+      const { data, error } = await supabase
+        .from('canciones')
+        .select('id, nombres_canciones ( titulo )')
+        .eq('id', songId)
+        .single();
+
+      if (error) {
+        console.error('Error obteniendo canción por ID:', error);
+        songId = null;
+      } else {
+        songRecord = data;
+        songId = data?.id || songId;
+        if (!headingTitle && data?.nombres_canciones?.titulo) {
+          headingTitle = data.nombres_canciones.titulo;
+        }
       }
     }
+
+    if (!songRecord && headingTitle) {
+      const { data: nameRecord, error: nameError } = await supabase
+        .from('nombres_canciones')
+        .select('id, titulo')
+        .eq('titulo', headingTitle)
+        .single();
+
+      if (nameError) {
+        console.error('Error obteniendo nombre de canción:', nameError);
+      } else if (nameRecord) {
+        const { data, error } = await supabase
+          .from('canciones')
+          .select('id, nombres_canciones ( titulo )')
+          .eq('nombre_id', nameRecord.id)
+          .limit(1)
+          .single();
+
+        if (error) {
+          console.error('Error obteniendo canción por nombre_id:', error);
+        } else {
+          songRecord = data;
+          songId = data?.id || songId;
+          if (!headingTitle && data?.nombres_canciones?.titulo) {
+            headingTitle = data.nombres_canciones.titulo;
+          }
+        }
+      }
+    }
+
+    if (!songRecord || !songId) {
+      console.warn('No se encontró la canción para cargar audios.');
+      return;
+    }
+
+    if (headingEl && headingTitle) {
+      headingEl.textContent = headingTitle;
+    }
+
+    const { data: audios, error: audiosError } = await supabase
+      .from('audios')
+      .select('*')
+      .eq('song_id', songId);
+
+    if (audiosError) {
+      console.error(audiosError);
+      return;
+    }
+
+    const container = document.querySelector('.space-y-4');
+    container.innerHTML = '';
+    audios.forEach(audio => {
+      const audioElement = document.createElement('div');
+      audioElement.className = 'flex flex-col gap-4 rounded-lg bg-gray-800 p-4';
+      audioElement.innerHTML = `
+        <div class="flex items-center gap-4">
+          <div class="flex-1">
+            <p class="text-lg font-semibold text-white">${audio.instrumento}</p>
+            <p class="text-sm text-gray-400">${audio.detalle}</p>
+          </div>
+          <button class="flex h-14 w-14 items-center justify-center rounded-full bg-[var(--primary-color)] text-white">
+            <span class="material-symbols-outlined text-4xl">play_arrow</span>
+          </button>
+        </div>
+        <div class="flex items-center gap-4">
+          <button class="text-white">
+            <span class="material-symbols-outlined text-3xl">replay_10</span>
+          </button>
+          <div class="h-1.5 flex-1 rounded-full bg-gray-700">
+            <div class="h-1.5 w-1/4 rounded-full bg-[var(--primary-color)]"></div>
+          </div>
+          <button class="text-white">
+            <span class="material-symbols-outlined text-3xl">forward_10</span>
+          </button>
+        </div>
+      `;
+      container.appendChild(audioElement);
+    });
+  } catch (err) {
+    console.error('Error general al cargar audios:', err);
   }
 }
 
