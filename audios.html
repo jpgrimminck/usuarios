@@ -25,7 +25,7 @@
 <div>
 <header class="sticky top-0 z-10 bg-gray-900/80 backdrop-blur-sm" style="height: 60px;">
 <div class="flex items-center p-4">
-<a href="songs.html" class="text-white">
+<a href="songs.html" id="back-to-songs" class="text-white">
 <span class="material-symbols-outlined text-3xl">
                         arrow_back_ios_new
                     </span>
@@ -50,6 +50,14 @@
 <script src="config.js"></script>
 <script>
 const supabase = window.supabase.createClient(window.SUPABASE_URL, window.SUPABASE_ANON_KEY);
+const urlParams = new URLSearchParams(window.location.search);
+const userId = urlParams.get('id');
+const title = urlParams.get('title');
+
+const backLink = document.getElementById('back-to-songs');
+if (backLink) {
+  backLink.href = userId ? `songs.html?id=${encodeURIComponent(userId)}` : 'songs.html';
+}
 
 function initUploadFab() {
   const fab = document.getElementById('upload-audio-fab');
@@ -71,8 +79,6 @@ function initUploadFab() {
 }
 
 async function loadAudios() {
-  const urlParams = new URLSearchParams(window.location.search);
-  const title = urlParams.get('title');
   if (title) {
     document.querySelector('h2').textContent = title;
     const { data: song } = await supabase.from('songs').select('id').eq('titulo', title).single();

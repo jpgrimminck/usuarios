@@ -262,7 +262,11 @@ async function loadSongs() {
     songs.forEach(song => {
       const firstLetter = song.titulo.charAt(0).toUpperCase();
       const songElement = document.createElement('a');
-      songElement.href = `audios.html?title=${encodeURIComponent(song.titulo)}`;
+      const audioParams = new URLSearchParams({ title: song.titulo });
+      if (selectedUserId) {
+        audioParams.set('id', selectedUserId);
+      }
+      songElement.href = `audios.html?${audioParams.toString()}`;
   songElement.className = 'song-card flex items-center gap-4 px-4 py-3 hover:bg-white/5 transition-colors duration-200';
       songElement.innerHTML = `
         <div class="bg-[var(--primary-color)] flex items-center justify-center text-white font-bold text-xl rounded-lg size-20">${firstLetter}</div>
