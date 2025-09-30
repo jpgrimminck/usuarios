@@ -59,6 +59,9 @@ const AUDIO_BUCKET = 'audios';
 const playbackCache = new Map();
 let currentAudioInstance = null;
 let currentAudioButton = null;
+let currentSongIdResolved = null;
+let audiosChannel = null;
+let audiosRefreshTimeout = null;
 
 const backLink = document.getElementById('back-to-songs');
 if (backLink) {
@@ -84,6 +87,28 @@ function stopCurrentAudio() {
   }
   currentAudioInstance = null;
   currentAudioButton = null;
+}
+
+function clearPlaybackCache() {
+  stopCurrentAudio();
+  playbackCache.forEach(({ player, revoke }) => {
+    try {
+      if (player) {
+        player.pause();
+        player.currentTime = 0;
+      }
+    } catch (err) {
+      console.warn('No se pudo detener un reproductor en caché:', err);
+    }
+    if (typeof revoke === 'function') {
+      try {
+        revoke();
+      } catch (revErr) {
+        console.warn('No se pudo liberar la URL en caché:', revErr);
+      }
+    }
+  });
+  playbackCache.clear();
 }
 
 function isHttpUrl(path) {
@@ -177,6 +202,40 @@ async function togglePlayback(button, audio) {
   }
 }
 
+function scheduleAudiosRefresh() {
+  if (audiosRefreshTimeout) {
+    clearTimeout(audiosRefreshTimeout);
+  }
+  audiosRefreshTimeout = setTimeout(() => {
+    audiosRefreshTimeout = null;
+    loadAudios({ skipRealtimeSetup: true });
+  }, 150);
+}
+
+function initAudiosRealtime() {
+  if (!currentSongIdResolved) return;
+
+  if (audiosChannel) {
+    supabase.removeChannel(audiosChannel);
+    audiosChannel = null;
+  }
+
+  audiosChannel = supabase
+    .channel(`audios_song_${currentSongIdResolved}`)
+    .on('postgres_changes', {
+      event: '*',
+      schema: 'public',
+      table: 'audios',
+      filter: `cancion_id=eq.${currentSongIdResolved}`
+    }, scheduleAudiosRefresh);
+
+  audiosChannel.subscribe((status) => {
+    if (status === 'CHANNEL_ERROR') {
+      console.error('Error suscribiéndose a cambios de audios en tiempo real');
+    }
+  });
+}
+
 function attachPlayback(button, audio) {
   if (!button) return;
   button.dataset.playing = 'false';
@@ -204,7 +263,8 @@ function initUploadFab() {
   });
 }
 
-async function loadAudios() {
+async function loadAudios(options = {}) {
+  const { skipRealtimeSetup = false } = options;
   const headingEl = document.querySelector('h2');
   let headingTitle = title || '';
   let songId = songIdParam ? Number(songIdParam) : null;
@@ -268,6 +328,9 @@ async function loadAudios() {
       headingEl.textContent = headingTitle;
     }
 
+    const previousSongId = currentSongIdResolved;
+    currentSongIdResolved = songId;
+
     const { data: audios, error: audiosError } = await supabase
       .from('audios')
       .select('id, instrument, detail, name, uploader_id, cancion_id, url')
@@ -287,8 +350,15 @@ async function loadAudios() {
       emptyState.className = 'rounded-lg bg-gray-800 p-6 text-center text-gray-400';
       emptyState.textContent = 'Aún no hay pistas registradas para esta canción.';
       container.appendChild(emptyState);
+      clearPlaybackCache();
+
+      if (!skipRealtimeSetup && (previousSongId !== currentSongIdResolved || !audiosChannel)) {
+        initAudiosRealtime();
+      }
       return;
     }
+
+    clearPlaybackCache();
 
     const uploaderNames = {};
     const uploaderIds = [...new Set(
@@ -347,6 +417,10 @@ async function loadAudios() {
       attachPlayback(playButton, audio);
       container.appendChild(audioElement);
     });
+
+    if (!skipRealtimeSetup && (previousSongId !== currentSongIdResolved || !audiosChannel)) {
+      initAudiosRealtime();
+    }
   } catch (err) {
     console.error('Error general al cargar audios:', err);
   }
@@ -354,6 +428,14 @@ async function loadAudios() {
 
 loadAudios();
 initUploadFab();
+
+window.addEventListener('beforeunload', () => {
+  clearPlaybackCache();
+  if (audiosChannel) {
+    supabase.removeChannel(audiosChannel);
+    audiosChannel = null;
+  }
+});
 </script>
 
 </body></html>
