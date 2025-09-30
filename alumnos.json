@@ -1,0 +1,104 @@
+{
+  "valorClase": 35000,
+  "diasSemana": ["Domingo", "Lunes", "Martes", "Miércoles", "Jueves", "Viernes", "Sábado"],
+  "meses": ["Enero", "Febrero", "Marzo", "Abril", "Mayo", "Junio", "Julio", "Agosto", "Septiembre", "Octubre", "Noviembre", "Diciembre"],
+  "apoderados": [
+       {
+      "apoderado": "Pascale",
+      "alumnos": [
+        { "nombre": "Martín", "hora": "14:30" },
+        { "nombre": "Emma", "hora": "15:15" }
+      ],
+      "diaSemana": "Lunes"
+    },
+    {
+      "apoderado": "Victoria",
+      "alumnos": [
+        { "nombre": "Mateo", "hora": "16:30" },
+        { "nombre": "Juan", "hora": "17:15" }
+      ],
+      "diaSemana": "Lunes"
+    },
+    {
+      "apoderado": "Juanita",
+      "alumnos": [
+        { "nombre": "Juanita", "hora": "10:30" }
+      ],
+      "diaSemana": "Martes"
+    },
+    {
+      "apoderado": "María Jesús",
+      "alumnos": [
+        { "nombre": "Violetta", "hora": "14:20" }
+      ],
+      "diaSemana": "Martes"
+    },
+    {
+      "apoderado": "Amalia",
+      "alumnos": [
+        { "nombre": "Lucas", "hora": "16:10" }
+      ],
+      "diaSemana": "Martes"
+    },
+      {
+      "apoderado": "Tere",
+      "alumnos": [
+        { "nombre": "José Antonio ", "hora": "17:30" }
+      ],
+      "diaSemana": "Martes"
+    },
+    {
+      "apoderado": "Elisa",
+      "alumnos": [
+        { "nombre": "Elisa", "hora": "16:20" },
+        { "nombre": "Samuel", "hora": "16:50" },
+        { "nombre": "Bernardo", "hora": "17:35" }
+      ],
+      "diaSemana": "Miércoles"
+    },
+  
+    {
+      "apoderado": "Patricia",
+      "alumnos": [
+        { "nombre": "Patricia", "hora": "12:30" },
+        { "nombre": "Pedro", "hora": "15:45" }
+      ],
+      "diaSemana": "Jueves"
+    },
+        {
+      "apoderado": "Ignacia",
+      "alumnos": [
+        { "nombre": "Clemente", "hora": "16:45" }
+      ],
+      "diaSemana": "Jueves"
+    },
+    {
+      "apoderado": "Ximena",
+      "alumnos": [
+        { "nombre": "Josefa", "hora": "18:10" }
+      ],
+      "diaSemana": "Jueves"
+    },
+    {
+      "apoderado": "Lupe",
+      "alumnos": [
+        { "nombre": "Clarita", "hora": "19:45" }
+      ],
+      "diaSemana": "Jueves"
+    },
+   {
+      "apoderado": "Tomás",
+      "alumnos": [
+        { "nombre": "Teo", "hora": "15:20" }
+      ],
+      "diaSemana": "Viernes"
+    },
+    {
+      "apoderado": "Pía",
+      "alumnos": [
+        { "nombre": "Agustín", "hora": "17:00" }
+      ],
+      "diaSemana": "Viernes"
+    }
+  ]
+}

@@ -1,0 +1,285 @@
+<html><head>
+<meta charset="utf-8"/>
+<meta name="viewport" content="width=device-width, initial-scale=1.0"/>
+<link crossorigin="" href="https://fonts.gstatic.com/" rel="preconnect"/>
+<link as="style" href="https://fonts.googleapis.com/css2?display=swap&amp;family=Inter%3Awght%40400%3B500%3B700%3B900&amp;family=Noto+Sans%3Awght%40400%3B500%3B700%3B900" onload="this.rel='stylesheet'" rel="stylesheet"/>
+<link href="https://fonts.googleapis.com/css2?family=Material+Symbols+Outlined" rel="stylesheet"/>
+<title>Stitch Design</title>
+<link href="data:image/x-icon;base64," rel="icon" type="image/x-icon"/>
+<link rel="stylesheet" href="styles.css"/>
+<style>
+      :root {
+        --primary-color: #137fec;
+      }
+      body {
+        font-family: 'Inter', sans-serif;
+      }
+    </style>
+<style>
+    body {
+      min-height: max(884px, 100dvh);
+    }
+  </style>
+<style>
+    body {
+      min-height: max(884px, 100dvh);
+    }
+  </style>
+  </head>
+<body class="bg-gray-900">
+<div class="relative flex size-full min-h-screen flex-col justify-between group/design-root overflow-x-hidden text-white">
+  <div class="flex-grow">
+    <!-- Header: give an id and higher z-index so it stays above dynamic content -->
+    <div id="site-header" class="sticky top-0 z-20 bg-gray-900/95 backdrop-blur-sm" style="height: 40px;">
+      <div class="flex items-center p-4 pb-2 justify-between">
+        <div class="w-12"></div>
+        <h1 class="text-xl font-bold leading-tight tracking-tight flex-1 text-center">Canciones</h1>
+        <div class="flex w-12 items-center justify-end">
+          <button class="flex items-center justify-center rounded-full h-10 w-10 text-white hover:bg-white/10 transition-colors">
+            <span class="material-symbols-outlined text-2xl">add</span>
+          </button>
+        </div>
+      </div>
+    </div>
+
+  <!-- Cards container: use an id so JS can set padding-top equal to header height -->
+  <div id="songs-container" class="flex flex-col songs-list">
+      <!-- cards will be injected here -->
+    </div>
+  </div>
+  <button id="add-song-fab" class="fixed bg-blue-500 hover:bg-blue-700 text-white rounded-full flex items-center justify-center" style="bottom:24px; right:24px; width:56px; height:56px; z-index:25;">
+    <span class="material-symbols-outlined text-3xl">add</span>
+  </button>
+  <div id="add-song-modal" class="fixed inset-0 bg-black bg-opacity-50 flex items-center justify-center hidden" style="z-index:30;">
+    <div class="bg-gray-800 p-6 rounded-lg text-white w-full" style="max-width:350px; position:relative;">
+      <h2 class="text-xl font-bold" style="margin:0 0 16px 0; text-align:center;">Agregar canción</h2>
+      <div class="suggested-wrapper">
+        <div id="suggested-songs-container" class="suggested-grid"></div>
+      </div>
+    </div>
+  </div>
+</div>
+<script src="https://cdn.jsdelivr.net/npm/@supabase/supabase-js@2"></script>
+<script src="config.js"></script>
+<script>
+const supabase = window.supabase.createClient(window.SUPABASE_URL, window.SUPABASE_ANON_KEY);
+const urlParams = new URLSearchParams(window.location.search);
+const selectedUserId = urlParams.get('id');
+const sampleSongs = [
+  { title: 'Sol de Medianoche', artist: 'Luna Áurea' },
+  { title: 'Viento del Sur', artist: 'Horizonte Azul' },
+  { title: 'Caminos de Sal', artist: 'Los Errantes' },
+  { title: 'Corazón Mapache', artist: 'Selva Lenta' },
+  { title: 'Pasos de Fuego', artist: 'Bruma Roja' },
+  { title: 'Nubes de Abril', artist: 'Camila Rivero' },
+  { title: 'Tiempo en Re', artist: 'Los Forasteros' },
+  { title: 'Mar Adentro', artist: 'Nora Esencial' },
+  { title: 'Río Eléctrico', artist: 'Voltaje 21' },
+  { title: 'Bosque de Cristal', artist: 'Dalia Boreal' },
+  { title: 'Horizonte Ígneo', artist: 'Alma Bravía' },
+  { title: 'Flor de Cardo', artist: 'Lucía y el Monte' },
+  { title: 'Sueño de Plata', artist: 'Sirenas del Sur' },
+  { title: 'Puesta Morena', artist: 'Ecos Urbanos' },
+  { title: 'Ritmo Lunar', artist: 'Trío Eclipse' },
+  { title: 'Luz en la Niebla', artist: 'Matías Prado' },
+  { title: 'Nave de Papel', artist: 'Cielo Frágil' },
+  { title: 'Verde Azahar', artist: 'Estación Primavera' },
+  { title: 'Faro del Alma', artist: 'Lucero Atlántico' },
+  { title: 'Espinas y Rosas', artist: 'Marina Oscura' },
+  { title: 'Fuga del Sol', artist: 'Ráfaga Dorada' },
+  { title: 'Zarpazo', artist: 'Los Felinos' },
+  { title: 'Lluvia de Agosto', artist: 'Paula Méndez' },
+  { title: 'Cicatriz de Luz', artist: 'Ave Nómada' },
+  { title: 'Frontera Nítida', artist: 'La Ruta Blanca' },
+  { title: 'Boreal', artist: 'Sofía Vega' },
+  { title: 'Eco en la Arena', artist: 'Kilómetro Cero' },
+  { title: 'Puerto Equinox', artist: 'Valiente Prisma' },
+  { title: 'Latido Azul', artist: 'Domo Atlántida' },
+  { title: 'Brisa Mística', artist: 'Isla Tiburón' }
+];
+
+async function updateSongsTitle() {
+  const titleEl = document.querySelector('#site-header h1');
+  if (!titleEl) return;
+  if (!selectedUserId) {
+    titleEl.textContent = 'Canciones';
+    return;
+  }
+  try {
+    const { data, error } = await supabase
+      .from('users')
+      .select('name')
+      .eq('id', selectedUserId)
+      .single();
+    if (!error && data && data.name) {
+      titleEl.textContent = `Canciones de ${data.name}`;
+    } else {
+      titleEl.textContent = 'Canciones';
+    }
+  } catch (err) {
+    console.warn('No se pudo obtener el nombre del usuario para el título:', err);
+    titleEl.textContent = 'Canciones';
+  }
+}
+
+// Ensure the songs container has top padding equal to header height to avoid overlap.
+function adjustSongsContainerPadding() {
+  const header = document.getElementById('site-header');
+  const container = document.getElementById('songs-container');
+  if (!header || !container) return;
+  // Temporarily hide container until padding is set to avoid visual jump
+  container.style.visibility = 'hidden';
+  // Measure header height (including margins) and apply as padding-top
+  const headerHeight = header.getBoundingClientRect().height;
+  container.style.paddingTop = '40px';
+  // Make sure header stays above
+  header.style.zIndex = 20;
+  // Reveal container after layout stabilized
+  // Use requestAnimationFrame to ensure layout update
+  requestAnimationFrame(() => { container.style.visibility = 'visible'; });
+}
+
+function renderSuggestedSongs(onSelect) {
+  const container = document.getElementById('suggested-songs-container');
+  if (!container) return;
+  container.innerHTML = '';
+
+  const sortedSongs = [...sampleSongs].sort((a, b) => a.title.localeCompare(b.title, 'es', { sensitivity: 'base' }));
+
+  sortedSongs.forEach((song) => {
+    const card = document.createElement('div');
+    card.className = 'suggested-card';
+
+    const titleSpan = document.createElement('span');
+    titleSpan.className = 'suggested-title';
+    titleSpan.textContent = song.title;
+
+    const artistSpan = document.createElement('span');
+    artistSpan.className = 'suggested-artist';
+    artistSpan.textContent = song.artist;
+
+    const addButton = document.createElement('button');
+    addButton.className = 'suggested-add';
+    addButton.type = 'button';
+    addButton.setAttribute('aria-pressed', 'false');
+    addButton.innerHTML = '<span class="material-symbols-outlined">add</span>';
+
+    addButton.addEventListener('click', () => {
+      const iconSpan = addButton.querySelector('.material-symbols-outlined');
+      const existingTimeout = addButton.dataset.animTimeout;
+
+      if (existingTimeout) {
+        clearTimeout(Number(existingTimeout));
+        delete addButton.dataset.animTimeout;
+      }
+
+      if (addButton.classList.contains('suggested-add--selected')) {
+        addButton.classList.remove('suggested-add--selected', 'suggested-add--animating');
+        addButton.setAttribute('aria-pressed', 'false');
+        if (iconSpan) {
+          iconSpan.textContent = 'add';
+        }
+        return;
+      }
+
+      addButton.classList.add('suggested-add--animating');
+      addButton.setAttribute('aria-pressed', 'true');
+
+      if (iconSpan) {
+        iconSpan.textContent = 'check';
+      }
+
+      if (typeof onSelect === 'function') {
+        onSelect(song);
+      }
+
+      // Force the radial fill to begin immediately before locking the selected state
+      void addButton.offsetWidth;
+      addButton.classList.add('suggested-add--selected');
+
+      const timeoutId = setTimeout(() => {
+        addButton.classList.remove('suggested-add--animating');
+        delete addButton.dataset.animTimeout;
+      }, 320);
+
+      addButton.dataset.animTimeout = String(timeoutId);
+    });
+
+    card.appendChild(titleSpan);
+    card.appendChild(artistSpan);
+    card.appendChild(addButton);
+    container.appendChild(card);
+  });
+}
+
+function initAddSongModal() {
+  const fab = document.getElementById('add-song-fab');
+  const modal = document.getElementById('add-song-modal');
+  const closeBtn = document.getElementById('add-song-close');
+
+  if (!fab || !modal) return;
+
+  const handleSuggestionSelect = (song) => {
+    if (!song) return;
+    console.log('Seleccionar canción sugerida:', song.title, '/', song.artist);
+  };
+
+  function openModal() {
+    renderSuggestedSongs(handleSuggestionSelect);
+    modal.classList.remove('hidden');
+  }
+
+  function closeModal() {
+    modal.classList.add('hidden');
+  }
+
+  fab.addEventListener('click', openModal);
+
+  if (closeBtn) {
+    closeBtn.addEventListener('click', closeModal);
+  }
+
+  modal.addEventListener('click', function (event) {
+    if (event.target === modal) {
+      closeModal();
+    }
+  });
+
+  // Render initially so the modal is ready if opened via other triggers
+  renderSuggestedSongs(handleSuggestionSelect);
+}
+
+// Run on load and when resizing
+window.addEventListener('load', adjustSongsContainerPadding);
+window.addEventListener('resize', adjustSongsContainerPadding);
+
+async function loadSongs() {
+  const { data: songs, error } = await supabase.from('songs').select('*');
+  if (error) console.error(error);
+  else {
+    const container = document.getElementById('songs-container');
+    container.innerHTML = '';
+    songs.forEach(song => {
+      const firstLetter = song.titulo.charAt(0).toUpperCase();
+      const songElement = document.createElement('a');
+      songElement.href = `audios.html?title=${encodeURIComponent(song.titulo)}`;
+  songElement.className = 'song-card flex items-center gap-4 px-4 py-3 hover:bg-white/5 transition-colors duration-200';
+      songElement.innerHTML = `
+        <div class="bg-[var(--primary-color)] flex items-center justify-center text-white font-bold text-xl rounded-lg size-20">${firstLetter}</div>
+        <div class="flex-1">
+          <p class="text-white text-base font-medium leading-normal">${song.titulo}</p>
+          <p class="text-gray-400 text-sm font-normal leading-normal">${song.artista}</p>
+        </div>
+        <button class="flex items-center justify-center rounded-full h-10 w-10 text-gray-400 hover:text-white hover:bg-white/10 transition-colors">
+          <span class="material-symbols-outlined">more_vert</span>
+        </button>
+      `;
+      container.appendChild(songElement);
+    });
+  }
+}
+
+loadSongs();
+updateSongsTitle();
+initAddSongModal();
+</script>

@@ -1,0 +1,295 @@
+<!DOCTYPE html>
+<html lang="es">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>Admin de Usuarios</title>
+  <link rel="stylesheet" href="styles.css">
+  <script src="https://cdn.jsdelivr.net/npm/@supabase/supabase-js@2"></script>
+  <script src="config.js"></script>
+</head>
+<body class="bg-gray-900 text-white flex flex-col h-screen">
+  <div id="ip-request" class="text-left text-lg p-4 bg-gray-800 fixed top-0 w-full z-10">No hay solicitudes pendientes</div>
+  <div id="users-cards" class="flex-1 overflow-y-auto p-4 pt-40 pb-32 grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-4"></div>
+  <div class="fixed bottom-0 w-full bg-gray-900 p-4 border-t border-gray-700">
+    <div id="time-ago" class="text-center mb-2"></div>
+    <button id="dar-acceso" class="bg-gray-500 hover:bg-gray-700 text-white font-bold py-2 px-4 rounded w-full">
+      Dar acceso
+    </button>
+  </div>
+  <script>
+    const supabase = window.supabase.createClient(window.SUPABASE_URL, window.SUPABASE_ANON_KEY);
+    let pendingId = null;
+    let selectedUserId = null;
+    let timeInterval;
+  // Ajuste horario para mostrar la hora local (ej: UTC-3). Cambia este valor si tu zona es distinta.
+  const DISPLAY_TIME_OFFSET_HOURS = 3; // resta 3 horas al horario UTC recibido
+
+    function updateAccessButton() {
+      const btn = document.getElementById('dar-acceso');
+      if (pendingId && selectedUserId) {
+        btn.classList.remove('bg-gray-500','hover:bg-gray-700');
+        btn.classList.add('bg-green-500','hover:bg-green-700');
+      } else {
+        btn.classList.remove('bg-green-500','hover:bg-green-700');
+        btn.classList.add('bg-gray-500','hover:bg-gray-700');
+      }
+    }
+
+    async function loadUserCards() {
+      const { data: users, error } = await supabase.from('users').select('*');
+      if (error) console.error(error);
+      else {
+        const container = document.getElementById('users-cards');
+        container.innerHTML = '';
+        for (let i = users.length - 1; i >= 0; i--) {
+          const user = users[i];
+          const { data: assigned, error: ipError } = await supabase
+            .from('user_ip')
+            .select('ip, device_model, created_at, device_code, comment')
+            .eq('selected_user_id', user.id)
+            .eq('approved', true);
+          if (ipError) console.error(ipError);
+          let ipInfo = 'Sin IP asignada';
+          if (assigned && assigned.length > 0) {
+            ipInfo = assigned.map(a => {
+              const days = Math.max(0, Math.floor((Date.now() - new Date(a.created_at)) / (1000 * 60 * 60 * 24)));
+              const timeAgo = days === 0 ? 'hoy' : `${days} días`;
+              const commentLine = a.comment ? ` | ${a.comment}` : '';
+              const deviceCodeLine = a.device_code ? ` | ${a.device_code}` : '';
+              return `IP: ${a.ip} (${a.device_model}) (${timeAgo})${commentLine}${deviceCodeLine}`;
+            }).join('<br>');
+          }
+          const borderClass = assigned && assigned.length > 0 ? 'border-4 border-green-500' : 'border-4 border-gray-500';
+          const card = document.createElement('div');
+          card.className = `bg-gray-800 p-4 rounded ${borderClass} cursor-pointer h-35`;
+          card.dataset.userId = user.id;
+          card.dataset.hasIp = (assigned && assigned.length > 0).toString();
+          card.innerHTML = `
+            <div class="relative" style="padding-right:60px;">
+              <p class="text-2xl font-bold" style="margin:0;">${user.name}</p>
+              <p class="text-sm text-gray-400" style="position:absolute; top:0; right:0; margin:0;">${user.id}</p>
+            </div>
+            <p class="text-sm" style="margin:2px 0 0 0;">${ipInfo}</p>
+          `;
+          card.addEventListener('click', () => {
+            if (card.classList.contains('selected')) {
+              card.classList.remove('border-dashed', 'selected');
+              if (card.dataset.hasIp !== 'true') card.classList.remove('border-green-600');
+              selectedUserId = null;
+            } else {
+              document.querySelectorAll('#users-cards > div').forEach(c => {
+                c.classList.remove('border-dashed', 'selected');
+                if (c.dataset.hasIp !== 'true') c.classList.remove('border-green-600');
+              });
+              card.classList.add('border-dashed', 'border-green-600', 'selected');
+              selectedUserId = user.id;
+            }
+            updateAccessButton();
+          });
+          container.appendChild(card);
+        }
+      }
+    }
+
+    async function loadLatestPending() {
+      const { data: pending, error } = await supabase
+        .from('user_ip')
+        .select('*')
+        .eq('approved', false)
+        .order('created_at', { ascending: false });
+      const wrapper = document.getElementById('ip-request');
+      if (error) {
+        console.error('Error cargando pending:', error);
+        wrapper.textContent = 'Error cargando solicitudes';
+        return;
+      }
+      if (!pending || pending.length === 0) {
+        wrapper.textContent = 'No hay solicitudes pendientes';
+        pendingId = null;
+        clearInterval(timeInterval);
+        document.getElementById('time-ago').textContent = '';
+        updateAccessButton();
+        document.getElementById('pending-count').textContent = '(0 pendientes)';
+        return;
+      }
+
+      wrapper.innerHTML = `
+        <div id="pending-list" class="flex gap-2 mb-2 overflow-x-auto p-2" style="-webkit-scrollbar:{display:none};scrollbar-width:none;"></div>
+        <div class="flex justify-between mb-2">
+          <button id="toggle-details" class="bg-gray-600 hover:bg-gray-500 text-white px-3 py-1 rounded">Mostrar detalles</button>
+          <span id="pending-count" class="text-white text-lg">(0 pendientes)</span>
+        </div>
+        <div id="pending-details" class="text-xs leading-snug hidden"></div>
+      `;
+      const listEl = document.getElementById('pending-list');
+      const detailsEl = document.getElementById('pending-details');
+
+      pending.forEach((p, index) => {
+        const createdAtRaw = new Date(p.created_at); // UTC
+        const hora = new Date(createdAtRaw.getTime() - 3 * 60 * 60 * 1000).toLocaleTimeString('es-ES', { hour: '2-digit', minute: '2-digit', timeZone: 'UTC' });
+        const el = document.createElement('button');
+        el.type = 'button';
+        el.className = 'pending-item bg-gray-700 hover:bg-gray-600 px-3 py-1 rounded transition-colors';
+        el.dataset.id = p.id;
+  el.innerHTML = `<span class="font-semibold">${p.comment || 'Sin nombre'}</span><span class="text-gray-300" style="margin-left:3px;">(${hora})</span>`;
+        el.addEventListener('click', () => {
+          if (el.classList.contains('pending-selected')) {
+            // Deseleccionar
+            el.classList.remove('pending-selected');
+            pendingId = null;
+            clearInterval(timeInterval);
+            document.getElementById('time-ago').textContent = '';
+            const detailsEl = document.getElementById('pending-details');
+            if (!detailsEl.classList.contains('hidden')) {
+              detailsEl.innerHTML = '<div class="text-gray-400">Selecciona una solicitud para ver detalles</div>';
+            }
+            updateAccessButton();
+          } else {
+            // Seleccionar
+            document.querySelectorAll('.pending-item').forEach(i => i.classList.remove('pending-selected'));
+            el.classList.add('pending-selected');
+            pendingId = p.id;
+            // Start time counter
+            clearInterval(timeInterval);
+            const created = createdAtRaw.getTime();
+            let diff = Math.floor((Date.now() - created) / 1000);
+            const tick = () => {
+              const m = Math.floor(diff / 60);
+              const s = diff % 60;
+              document.getElementById('time-ago').textContent = `Hace ${m} min ${s < 10 ? '0'+s : s} seg`;
+              diff++;
+            };
+            tick();
+            timeInterval = setInterval(tick, 1000);
+            const detailsEl = document.getElementById('pending-details');
+            if (!detailsEl.classList.contains('hidden')) {
+              const hora = new Date(createdAtRaw.getTime() - 3 * 60 * 60 * 1000).toLocaleTimeString('es-ES', { hour: '2-digit', minute: '2-digit', timeZone: 'UTC' });
+              detailsEl.innerHTML = `
+                <div class="text-yellow-400 font-semibold mb-1">Detalle Seleccionado</div>
+                <div><span class="font-semibold">IP:</span> ${p.ip}</div>
+                <div><span class="font-semibold">Comentario:</span> ${p.comment || 'Sin comentario'}</div>
+                <div><span class="font-semibold">Modelo:</span> ${p.device_model}</div>
+                <div><span class="font-semibold">Código:</span> ${p.device_code || 'Sin código'}</div>
+                <div><span class="font-semibold">Tipo:</span> ${p.device_type}</div>
+                <div><span class="font-semibold">Pantalla:</span> ${p.resolution} (${p.screen_format})</div>
+                <div><span class="font-semibold">PPI:</span> ${p.ppi}</div>
+                <div><span class="font-semibold">SO:</span> ${p.os} ${p.os_version}</div>
+                <div><span class="font-semibold">Browser:</span> ${p.browser} ${p.browser_version}</div>
+                <div><span class="font-semibold">Latencia:</span> ${p.latency ? p.latency + ' ms' : 'Desconocida'}</div>
+                <div><span class="font-semibold">RAM:</span> ${p.ram ? p.ram + ' GB' : 'Desconocida'}</div>
+                <div><span class="font-semibold">Núcleos:</span> ${p.cores || 'Desconocidos'}</div>
+                <div><span class="font-semibold">Oscuro:</span> ${p.dark_mode ? 'Sí' : 'No'}</div>
+                <div><span class="font-semibold">Notch:</span> ${p.notch ? 'Sí' : 'No'}</div>
+                <div><span class="font-semibold">Touch:</span> ${p.supports_touch ? 'Sí' : 'No'}</div>
+                <div><span class="font-semibold">Zona:</span> ${p.timezone}</div>
+                <div><span class="font-semibold">Hora solicitud (UTC +00):</span> ${createdAtRaw.toLocaleTimeString('es-ES', { hour: '2-digit', minute: '2-digit', timeZone: 'UTC' })}</div>
+                <div><span class="font-semibold">Hora solicitud Chile (UTC -03):</span> (${hora})</div>
+              `;
+            }
+            updateAccessButton();
+          }
+        });
+        listEl.appendChild(el);
+      });
+
+      // Auto select first (más reciente) si no hay selección
+      if (!pendingId) {
+        const auto = listEl.firstChild;
+        if (auto) auto.click();
+      }
+
+      document.getElementById('pending-count').textContent = `(${pending.length} pendientes)`;
+
+      // Toggle details button
+      document.getElementById('toggle-details').addEventListener('click', () => {
+        const detailsEl = document.getElementById('pending-details');
+        const btn = document.getElementById('toggle-details');
+        if (detailsEl.classList.contains('hidden')) {
+          detailsEl.classList.remove('hidden');
+          btn.textContent = 'Ocultar detalles';
+          if (pendingId) {
+            const selectedP = pending.find(p => p.id === pendingId);
+            if (selectedP) {
+              const createdAtRaw = new Date(selectedP.created_at);
+              const hora = new Date(createdAtRaw.getTime() - 3 * 60 * 60 * 1000).toLocaleTimeString('es-ES', { hour: '2-digit', minute: '2-digit', timeZone: 'UTC' });
+              detailsEl.innerHTML = `
+                <div class="text-yellow-400 font-semibold mb-1">Detalle Seleccionado</div>
+                <div><span class="font-semibold">IP:</span> ${selectedP.ip}</div>
+                <div><span class="font-semibold">Comentario:</span> ${selectedP.comment || 'Sin comentario'}</div>
+                <div><span class="font-semibold">Modelo:</span> ${selectedP.device_model}</div>
+                <div><span class="font-semibold">Código:</span> ${selectedP.device_code || 'Sin código'}</div>
+                <div><span class="font-semibold">Tipo:</span> ${selectedP.device_type}</div>
+                <div><span class="font-semibold">Pantalla:</span> ${selectedP.resolution} (${selectedP.screen_format})</div>
+                <div><span class="font-semibold">PPI:</span> ${selectedP.ppi}</div>
+                <div><span class="font-semibold">SO:</span> ${selectedP.os} ${selectedP.os_version}</div>
+                <div><span class="font-semibold">Browser:</span> ${selectedP.browser} ${selectedP.browser_version}</div>
+                <div><span class="font-semibold">Latencia:</span> ${selectedP.latency ? selectedP.latency + ' ms' : 'Desconocida'}</div>
+                <div><span class="font-semibold">RAM:</span> ${selectedP.ram ? selectedP.ram + ' GB' : 'Desconocida'}</div>
+                <div><span class="font-semibold">Núcleos:</span> ${selectedP.cores || 'Desconocidos'}</div>
+                <div><span class="font-semibold">Oscuro:</span> ${selectedP.dark_mode ? 'Sí' : 'No'}</div>
+                <div><span class="font-semibold">Notch:</span> ${selectedP.notch ? 'Sí' : 'No'}</div>
+                <div><span class="font-semibold">Touch:</span> ${selectedP.supports_touch ? 'Sí' : 'No'}</div>
+                <div><span class="font-semibold">Zona:</span> ${selectedP.timezone}</div>
+                <div><span class="font-semibold">Hora solicitud (UTC +00):</span> ${createdAtRaw.toLocaleTimeString('es-ES', { hour: '2-digit', minute: '2-digit', timeZone: 'UTC' })}</div>
+                <div><span class="font-semibold">Hora solicitud Chile (UTC -03):</span> (${hora})</div>
+              `;
+            }
+          } else {
+            detailsEl.innerHTML = '<div class="text-gray-400">Selecciona una solicitud para ver detalles</div>';
+          }
+        } else {
+          detailsEl.classList.add('hidden');
+          btn.textContent = 'Mostrar detalles';
+        }
+      });
+    }
+
+    document.getElementById('dar-acceso').addEventListener('click', async () => {
+      if (!pendingId || !selectedUserId) {
+        alert('No hay solicitud pendiente o usuario seleccionado');
+        return;
+      }
+      const { error } = await supabase
+        .from('user_ip')
+        .update({ selected_user_id: selectedUserId, approved: true })
+        .eq('id', pendingId);
+      if (error) {
+        console.error('Error al dar acceso:', error);
+        alert('Error al dar acceso');
+      } else {
+        document.getElementById('dar-acceso').textContent = 'Listo!';
+        selectedUserId = null;
+        document.querySelectorAll('.selected').forEach(c => {
+          c.classList.remove('border-dashed', 'selected');
+          if (c.dataset.hasIp !== 'true') {
+            c.classList.remove('border-green-600');
+          }
+        });
+  // Cambiar botón a gris
+  pendingId = null;
+  updateAccessButton();
+        loadLatestPending();
+        loadUserCards();
+        setTimeout(() => {
+          document.getElementById('dar-acceso').textContent = 'Dar acceso';
+        }, 2000);
+      }
+    });
+
+    // Cargar datos iniciales
+    document.getElementById('dar-acceso').textContent = 'Dar acceso';
+    loadLatestPending();
+    loadUserCards();
+
+    // Suscripción en tiempo real
+    supabase
+      .channel('user_ip_changes')
+      .on('postgres_changes', { event: '*', schema: 'public', table: 'user_ip' }, (payload) => {
+        console.log('Cambio detectado en user_ip:', payload);
+        loadLatestPending();
+      })
+      .subscribe();
+  </script>
+</body>
+</html>

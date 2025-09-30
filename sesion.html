@@ -1,0 +1,521 @@
+<!DOCTYPE html>
+<html lang="es">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>Sesión</title>
+  <link rel="stylesheet" href="styles.css">
+  <script src="https://cdn.jsdelivr.net/npm/@supabase/supabase-js@2"></script>
+  <script src="config.js"></script>
+</head>
+<body class="bg-gray-900 text-white">
+  <div class="flex items-center justify-center min-h-screen">
+    <button id="practicar-btn" class="border border-gray-500 bg-transparent text-gray-500 font-bold py-2 px-4 rounded">
+      Practicar
+    </button>
+  </div>
+  <script>
+    const supabase = window.supabase.createClient(window.SUPABASE_URL, window.SUPABASE_ANON_KEY);
+
+    const DEVICE_CODE_KEY = 'device_code';
+    let cachedDeviceCode = null;
+
+    function getDeviceCode() {
+      if (cachedDeviceCode) {
+        return cachedDeviceCode;
+      }
+      try {
+        let code = localStorage.getItem(DEVICE_CODE_KEY);
+        if (!code || !/^[A-Z][0-9]$/.test(code)) {
+          const letter = String.fromCharCode(65 + Math.floor(Math.random() * 26));
+          const digit = Math.floor(Math.random() * 10);
+          code = letter + digit;
+          localStorage.setItem(DEVICE_CODE_KEY, code);
+        }
+        cachedDeviceCode = code;
+        return cachedDeviceCode;
+      } catch (err) {
+        console.warn('No se pudo acceder a localStorage para guardar el código del dispositivo:', err);
+        const letter = String.fromCharCode(65 + Math.floor(Math.random() * 26));
+        const digit = Math.floor(Math.random() * 10);
+        cachedDeviceCode = letter + digit;
+        return cachedDeviceCode;
+      }
+    }
+
+  let currentState = 1;
+  let approvedId = null;
+  let clientIp = null;
+  const localDeviceCode = getDeviceCode();
+  const userNameCache = {};
+
+    async function getUserNameById(userId) {
+      if (!userId) return null;
+      if (userNameCache[userId]) return userNameCache[userId];
+      try {
+        const { data, error } = await supabase
+          .from('users')
+          .select('name')
+          .eq('id', userId)
+          .single();
+        if (!error && data && data.name) {
+          userNameCache[userId] = data.name;
+          return data.name;
+        }
+      } catch (err) {
+        console.warn('No se pudo obtener el nombre del usuario:', err);
+      }
+      return null;
+    }
+
+    async function applyApprovedState(record, animate = false) {
+      const targetId = record.selected_user_id || record.id;
+      let displayName = null;
+      if (record.selected_user_id) {
+        displayName = await getUserNameById(record.selected_user_id);
+      }
+      setState3(targetId, displayName, animate);
+    }
+
+    function setState1() {
+      currentState = 1;
+      approvedId = null;
+      const btn = document.getElementById('practicar-btn');
+      btn.className = 'border border-gray-500 bg-transparent text-gray-500 font-bold py-2 px-4 rounded';
+      btn.innerHTML = 'Practicar';
+      btn.onclick = () => {
+        document.getElementById('modal').classList.remove('hidden');
+      };
+    }
+
+    async function setState2(record = null) {
+      currentState = 2;
+      approvedId = null;
+      const btn = document.getElementById('practicar-btn');
+      btn.className = 'relative bg-transparent hover:bg-yellow-700 text-gray-900 font-bold py-2 px-4 rounded overflow-hidden';
+      btn.innerHTML = '<div class="absolute left-0 top-0 h-full bg-yellow-500 transition-all duration-1000 w-0"></div><span class="relative z-10 text-gray-900">Espere</span>';
+      setTimeout(() => {
+        const progressDiv = btn.querySelector('div');
+        if (progressDiv) progressDiv.style.width = '100%';
+      }, 0);
+      if (record && record.ip) {
+        clientIp = record.ip;
+      } else if (!clientIp) {
+        try {
+          const ipResponse = await fetch('https://api.ipify.org?format=json');
+          const ipData = await ipResponse.json();
+          clientIp = ipData.ip;
+        } catch (err) {
+          console.warn('No se pudo actualizar la IP en setState2:', err);
+        }
+      }
+      btn.onclick = () => {
+        document.getElementById('pending-modal').classList.remove('hidden');
+      };
+    }
+
+    function setState3(id, name = null, animate = false) {
+      currentState = 3;
+      approvedId = id;
+      const btn = document.getElementById('practicar-btn');
+      btn.className = 'relative bg-transparent hover:bg-red-700 text-gray-900 font-bold py-2 px-4 rounded overflow-hidden';
+      const label = name || 'Practicar';
+  btn.innerHTML = `<div class="absolute left-0 top-0 h-full bg-blue-500 transition-all duration-1000 w-0"></div><span class="relative z-10 text-gray-900">${label}</span>`;
+      btn.onclick = () => {
+        window.location.href = `songs.html?id=${id}`;
+      };
+      if (animate) {
+        setTimeout(() => {
+          const progressDiv = btn.querySelector('div');
+          if (progressDiv) progressDiv.style.width = '100%';
+        }, 0);
+      } else {
+        // Set to full immediately
+        const progressDiv = btn.querySelector('div');
+        if (progressDiv) progressDiv.style.width = '100%';
+      }
+    }
+
+    function showPendingModal() {
+      document.getElementById('pending-modal').classList.remove('hidden');
+    }
+
+    async function handleRequest() {
+      console.log('Botón Practicar presionado');
+      try {
+        console.log('Recopilando datos del dispositivo...');
+        const deviceData = await collectDeviceData();
+        console.log('Datos recopilados:', deviceData);
+
+        console.log('Obteniendo IP...');
+        const ipResponse = await fetch('https://api.ipify.org?format=json');
+        const ipData = await ipResponse.json();
+        deviceData.ip = ipData.ip;
+        console.log('IP obtenida:', deviceData.ip);
+
+        console.log('Enviando a Supabase...');
+        const { error } = await supabase.from('user_ip').insert([deviceData]);
+        if (error) {
+          console.error('Error al enviar solicitud:', error);
+          alert('Error al enviar solicitud: ' + error.message);
+        } else {
+          console.log('Solicitud enviada correctamente');
+          document.getElementById('modal').classList.remove('hidden');
+        }
+      } catch (err) {
+        console.error('Error general:', err);
+        alert('Error al recopilar datos o enviar solicitud: ' + err.message);
+      }
+    }
+
+    async function checkApproval() {
+      try {
+        const ipResponse = await fetch('https://api.ipify.org?format=json');
+        const ipData = await ipResponse.json();
+        const ip = ipData.ip;
+        clientIp = ip;
+        console.log('Checking approval for IP:', ip, 'con código de dispositivo:', localDeviceCode);
+
+        // Check for approved
+        const { data: approvedData, error: aError } = await supabase
+          .from('user_ip')
+          .select('id, selected_user_id')
+          .eq('ip', ip)
+          .eq('device_code', localDeviceCode)
+          .eq('approved', true)
+          .limit(1);
+        if (approvedData && approvedData.length > 0 && !aError) {
+          // Use the assigned user id for redirect
+          await applyApprovedState(approvedData[0], false);
+        } else {
+          // Check for pending
+          const { data: pendingData, error: pError } = await supabase
+            .from('user_ip')
+            .select('*')
+            .eq('ip', ip)
+            .eq('device_code', localDeviceCode)
+            .eq('approved', false)
+            .order('created_at', { ascending: false })
+            .limit(1);
+          if (pendingData && pendingData.length > 0 && !pError) {
+            setState2(pendingData[0]);
+          } else {
+            setState1();
+          }
+        }
+
+        // Subscribe to real-time updates
+        const matchesCurrentDevice = (entry) => entry && entry.ip === clientIp && entry.device_code === localDeviceCode;
+
+        const channel = supabase.channel('user_ip_changes')
+          .on('postgres_changes', { event: 'INSERT', schema: 'public', table: 'user_ip' }, async (payload) => {
+            if (matchesCurrentDevice(payload.new)) {
+              if (payload.new.approved) {
+                await applyApprovedState(payload.new, false);
+              } else {
+                setState2(payload.new);
+              }
+            }
+          })
+          .on('postgres_changes', { event: 'UPDATE', schema: 'public', table: 'user_ip' }, async (payload) => {
+            if (matchesCurrentDevice(payload.new)) {
+              if (payload.new.approved) {
+                const wasApproved = payload.old && payload.old.approved === true;
+                await applyApprovedState(payload.new, !wasApproved);
+              } else {
+                setState2(payload.new);
+              }
+            } else if (matchesCurrentDevice(payload.old)) {
+              setState1();
+            }
+          })
+          .on('postgres_changes', { event: 'DELETE', schema: 'public', table: 'user_ip' }, (payload) => {
+            if (matchesCurrentDevice(payload.old)) {
+              setState1();
+            }
+          })
+          .subscribe();
+      } catch (err) {
+        console.warn('Error checking approval:', err);
+      }
+    }
+
+  // Button behavior is controlled by setState1/2/3; initialize by checking DB
+  checkApproval();
+
+    if (document.getElementById('volver-btn')) {
+      document.getElementById('volver-btn').addEventListener('click', () => {
+        document.getElementById('modal').classList.add('hidden');
+      });
+    }
+
+    async function collectDeviceData() {
+      const userAgent = navigator.userAgent;
+      const screenWidth = window.screen.width;
+      const screenHeight = window.screen.height;
+      const pixelRatio = window.devicePixelRatio || 1;
+
+      // Tipo de dispositivo
+      const deviceType = /Mobile|Android|iP(hone|od|ad)/.test(userAgent) ? 'Mobile' : 'Desktop';
+
+      // Formato de pantalla
+      const gcd = (a, b) => b === 0 ? a : gcd(b, a % b);
+      const divisor = gcd(screenWidth, screenHeight);
+      const screenFormat = `${screenWidth / divisor}:${screenHeight / divisor}`;
+
+      // Resolución
+      const resolution = `${screenWidth}x${screenHeight}`;
+
+      // PPI aproximado
+      const ppi = Math.round(pixelRatio * 96);
+
+      // SO y versión completa
+      let os = 'Unknown';
+      let osVersion = 'Unknown';
+      if (userAgent.includes('Windows')) {
+        os = 'Windows';
+        const match = userAgent.match(/Windows NT ([^\s;]+)/);
+        osVersion = match ? match[1] : 'Unknown';
+      } else if (userAgent.includes('Android')) {
+        os = 'Android';
+        const match = userAgent.match(/Android ([^\s;]+)/);
+        osVersion = match ? match[1] : 'Unknown';
+      } else if (userAgent.includes('iPhone') || userAgent.includes('iPad') || userAgent.includes('iPod')) {
+        os = 'iOS';
+        const match = userAgent.match(/OS ([^\s_)]+)/);
+        osVersion = match ? match[1].replace(/_/g, '.') : 'Unknown';
+      } else if (userAgent.includes('Mac')) {
+        os = 'macOS';
+        const match = userAgent.match(/Mac OS X ([^\s)]+)/);
+        osVersion = match ? match[1].replace(/_/g, '.') : 'Unknown';
+      } else if (userAgent.includes('Linux')) {
+        os = 'Linux';
+        osVersion = 'Unknown'; // Difícil de parsear
+      }
+
+      // Browser y versión completa
+      let browser = 'Unknown';
+      let browserVersion = 'Unknown';
+      if (userAgent.includes('CriOS')) {
+        browser = 'Chrome';
+        const match = userAgent.match(/CriOS\/([^\s]+)/);
+        browserVersion = match ? match[1] : 'Unknown';
+      } else if (userAgent.includes('Chrome') && !userAgent.includes('Edg')) {
+        browser = 'Chrome';
+        const match = userAgent.match(/Chrome\/([^\s]+)/);
+        browserVersion = match ? match[1] : 'Unknown';
+      } else if (userAgent.includes('Firefox')) {
+        browser = 'Firefox';
+        const match = userAgent.match(/Firefox\/([^\s]+)/);
+        browserVersion = match ? match[1] : 'Unknown';
+      } else if (userAgent.includes('Safari') && !userAgent.includes('Chrome')) {
+        browser = 'Safari';
+        const match = userAgent.match(/Version\/([^\s]+)/);
+        browserVersion = match ? match[1] : 'Unknown';
+      } else if (userAgent.includes('Edg')) {
+        browser = 'Edge';
+        const match = userAgent.match(/Edg\/([^\s]+)/);
+        browserVersion = match ? match[1] : 'Unknown';
+      }
+
+      // Modelo del dispositivo
+      let deviceModel = 'Unknown';
+      if (deviceType === 'Mobile') {
+        if (userAgent.includes('iPhone')) {
+          const match = userAgent.match(/iPhone (.*?);/);
+          deviceModel = match ? 'iPhone ' + match[1] : 'iPhone';
+        } else if (userAgent.includes('iPad')) {
+          deviceModel = 'iPad';
+        } else if (userAgent.includes('Android')) {
+          const match = userAgent.match(/Android.*?; (.*?)\)/);
+          deviceModel = match ? match[1] : 'Android Device';
+        }
+      } else {
+        deviceModel = 'Desktop PC';
+      }
+
+      // Ubicación (API externa por IP)
+      let location = 'No disponible';
+      try {
+        const geoResponse = await fetch('https://ipapi.co/json/');
+        const geoData = await geoResponse.json();
+        location = `${geoData.city}, ${geoData.country_name}`;
+      } catch (err) {
+        console.warn('Error obteniendo ubicación:', err);
+      }
+
+      // Otros
+      const language = navigator.language || 'Unknown';
+      const timezone = Intl.DateTimeFormat().resolvedOptions().timeZone || 'Unknown';
+
+      // Nuevos parámetros
+      const connection = navigator.connection;
+      let internetConnection = 'Unknown';
+      if (connection) {
+        if (connection.type) {
+          internetConnection = connection.type; // 'wifi', 'cellular', etc.
+        } else if (connection.effectiveType) {
+          internetConnection = connection.effectiveType; // '4g', '3g', etc.
+        } else {
+          internetConnection = navigator.onLine ? 'online' : 'offline';
+        }
+      } else {
+        internetConnection = navigator.onLine ? 'online' : 'offline';
+      }
+      const latency = await measureLatency();
+      const ram = navigator.deviceMemory || null;
+      const cores = navigator.hardwareConcurrency || null;
+      const darkMode = window.matchMedia('(prefers-color-scheme: dark)').matches;
+      let notch = hasNotch();
+      if (os === 'iOS' && deviceType === 'Mobile') notch = true;
+      const supportsTouch = navigator.maxTouchPoints > 0 || 'ontouchstart' in window;
+      const innerWidth = window.innerWidth;
+      const innerHeight = window.innerHeight;
+
+      const data = {};
+      data.device_type = deviceType;
+      data.screen_format = screenFormat;
+      data.resolution = resolution;
+      data.ppi = ppi;
+      data.os = os;
+      data.os_version = osVersion;
+      data.browser = browser;
+      data.browser_version = browserVersion;
+      data.device_model = deviceModel;
+      data.location = location;
+      data.language = language;
+      data.timezone = timezone;
+      data.user_agent = userAgent;
+      data.internet_connection = internetConnection;
+      data.latency = typeof latency === 'number' ? latency : null;
+      data.ram = ram;
+      data.cores = cores;
+      data.dark_mode = darkMode;
+      data.notch = notch;
+      data.supports_touch = supportsTouch;
+      data.inner_width = innerWidth;
+      data.inner_height = innerHeight;
+      data.approved = false;
+      data.created_at = new Date().toISOString();
+      data.device_code = getDeviceCode();
+      return data;
+    }
+
+    function hasNotch() {
+      const testEl = document.createElement('div');
+      testEl.style.cssText = 'position: fixed; top: env(safe-area-inset-top); left: 0; width: 1px; height: 1px; visibility: hidden;';
+      document.body.appendChild(testEl);
+      const hasInset = getComputedStyle(testEl).top !== '0px';
+      document.body.removeChild(testEl);
+      return hasInset;
+    }
+
+    async function measureLatency() {
+      try {
+        const controller = new AbortController();
+        const timeoutId = setTimeout(() => controller.abort(), 5000); // 5 segundos de timeout
+        const start = performance.now();
+        await fetch('https://www.google.com/favicon.ico', { method: 'HEAD', mode: 'no-cors', signal: controller.signal });
+        clearTimeout(timeoutId);
+        const end = performance.now();
+        return Math.round(end - start);
+      } catch (err) {
+        console.warn('Error measuring latency:', err);
+        return 'Unknown';
+      }
+    }
+  </script>
+  <div id="modal" class="fixed inset-0 bg-black bg-opacity-50 flex items-center justify-center hidden z-50">
+    <div class="bg-gray-800 p-6 rounded-lg text-white text-center max-w-[300px]">
+      <label for="name-input" class="block mb-2">Nombre</label>
+      <input id="name-input" type="text" class="w-full p-2 mb-4 bg-gray-700 text-white rounded" placeholder="Ingresa tu nombre">
+      <button id="solicitar-btn" class="relative bg-blue-500 hover:bg-blue-700 text-white font-bold py-2 px-4 rounded w-full overflow-hidden">
+        <div id="progress" class="absolute left-0 top-0 h-full bg-yellow-500 transition-all duration-1000 w-0"></div>
+        <span id="btn-text" class="relative z-10">Enviar</span>
+      </button>
+    </div>
+  </div>
+  <div id="pending-modal" class="fixed inset-0 bg-black bg-opacity-50 flex items-center justify-center hidden z-50">
+    <div class="bg-gray-800 p-6 rounded-lg text-white text-center max-w-[300px]">
+      <div class="mb-4">
+        <p>El administrador te dará acceso pronto...</p>
+      </div>
+      <button id="pending-volver-btn" class="bg-yellow-500 hover:bg-yellow-700 text-gray-800 font-bold py-2 px-4 rounded">Volver</button>
+    </div>
+  </div>
+  <script>
+    // Close on backdrop click for both modals
+    document.getElementById('modal').addEventListener('click', (e) => {
+      if (e.target === e.currentTarget) {
+        e.currentTarget.classList.add('hidden');
+      }
+    });
+    document.getElementById('pending-modal').addEventListener('click', (e) => {
+      if (e.target === e.currentTarget) {
+        e.currentTarget.classList.add('hidden');
+      }
+    });
+    document.getElementById('pending-volver-btn').addEventListener('click', () => {
+      document.getElementById('pending-modal').classList.add('hidden');
+    });
+
+    document.getElementById('solicitar-btn').addEventListener('click', async () => {
+      console.log('Solicitar acceso clicked');
+      const name = document.getElementById('name-input').value.trim();
+      if (!name) {
+        alert('Por favor, ingresa tu nombre');
+        return;
+      }
+      const btn = document.getElementById('solicitar-btn');
+      const progress = document.getElementById('progress');
+      const btnText = document.getElementById('btn-text');
+      btn.disabled = true;
+      progress.style.width = '100%';
+      setTimeout(() => {
+        btnText.textContent = 'Listo!';
+        setTimeout(() => {
+          document.getElementById('modal').classList.add('hidden');
+          // Reset
+          progress.style.width = '0';
+          btnText.textContent = 'Solicitar acceso';
+          btn.disabled = false;
+          document.getElementById('name-input').value = '';
+        }, 1000);
+      }, 1000);
+
+      // Collect data and send
+      console.log('Recopilando datos del dispositivo...');
+      const deviceData = await collectDeviceData();
+      deviceData.comment = name;
+      console.log('Datos recopilados:', deviceData);
+
+      if (!clientIp) {
+        console.log('Obteniendo IP...');
+        try {
+          const ipResponse = await fetch('https://api.ipify.org?format=json');
+          const ipData = await ipResponse.json();
+          clientIp = ipData.ip;
+        } catch (err) {
+          console.error('No se pudo obtener la IP:', err);
+          alert('No se pudo obtener la IP del dispositivo. Inténtalo nuevamente.');
+          btn.disabled = false;
+          progress.style.width = '0';
+          btnText.textContent = 'Solicitar acceso';
+          return;
+        }
+      }
+      deviceData.ip = clientIp;
+      console.log('IP obtenida:', deviceData.ip);
+
+      console.log('Enviando a Supabase...');
+      const { error } = await supabase.from('user_ip').insert([deviceData]);
+      if (error) {
+        console.error('Error al enviar solicitud:', error);
+        alert('Error al enviar solicitud: ' + error.message);
+      } else {
+        console.log('Solicitud enviada correctamente');
+      }
+    });
+  </script>
+</body>
+</html>

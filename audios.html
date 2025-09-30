@@ -1,0 +1,121 @@
+<html><head>
+<meta charset="utf-8"/>
+<meta name="viewport" content="width=device-width, initial-scale=1.0"/>
+<link crossorigin="" href="https://fonts.gstatic.com/" rel="preconnect"/>
+<link as="style" href="https://fonts.googleapis.com/css2?display=swap&amp;family=Inter%3Awght%40400%3B500%3B700%3B900&amp;family=Noto+Sans%3Awght%40400%3B500%3B700%3B900" onload="this.rel='stylesheet'" rel="preload"/>
+<link href="https://fonts.googleapis.com/css2?family=Material+Symbols+Outlined" rel="stylesheet"/>
+<title>Stitch Design</title>
+<link href="data:image/x-icon;base64," rel="icon" type="image/x-icon"/>
+<link rel="stylesheet" href="styles.css"/>
+<style>
+      :root {
+        --primary-color: #137fec;
+      }
+      .material-symbols-outlined {
+        font-variation-settings:
+        'FILL' 0,
+        'wght' 400,
+        'GRAD' 0,
+        'opsz' 24
+      }
+    </style>
+  </head>
+<body class="bg-gray-900">
+<div class="relative flex h-auto min-h-screen w-full flex-col bg-gray-900 justify-between group/design-root" style='font-family: Inter, "Noto Sans", sans-serif;'>
+<div>
+<header class="sticky top-0 z-10 bg-gray-900/80 backdrop-blur-sm" style="height: 60px;">
+<div class="flex items-center p-4">
+<a href="songs.html" class="text-white">
+<span class="material-symbols-outlined text-3xl">
+                        arrow_back_ios_new
+                    </span>
+</a>
+<h1 class="flex-1 text-center text-xl font-bold text-white pr-8">Pistas de práctica</h1>
+</div>
+</header>
+<main class="p-4">
+<h2 class="text-3xl font-bold text-white mb-6">Pistas de Práctica</h2>
+<div class="space-y-4">
+</div>
+</main>
+</div>
+</div>
+
+<button id="upload-audio-fab" class="fixed bottom-6 right-6 flex h-14 w-14 items-center justify-center rounded-full bg-red-500 text-white shadow-lg" style="z-index:25;">
+  <span class="material-symbols-outlined text-3xl">add</span>
+</button>
+<input id="audio-file-input" type="file" accept="audio/*" class="hidden" />
+
+<script src="https://cdn.jsdelivr.net/npm/@supabase/supabase-js@2"></script>
+<script src="config.js"></script>
+<script>
+const supabase = window.supabase.createClient(window.SUPABASE_URL, window.SUPABASE_ANON_KEY);
+
+function initUploadFab() {
+  const fab = document.getElementById('upload-audio-fab');
+  const fileInput = document.getElementById('audio-file-input');
+
+  if (!fab || !fileInput) return;
+
+  fab.addEventListener('click', () => {
+    fileInput.value = '';
+    fileInput.click();
+  });
+
+  fileInput.addEventListener('change', (event) => {
+    const file = event.target.files && event.target.files[0];
+    if (!file) return;
+    console.log('Archivo de audio seleccionado:', file.name, file.type, file.size);
+    // TODO: manejar carga de audio y UI relacionada
+  });
+}
+
+async function loadAudios() {
+  const urlParams = new URLSearchParams(window.location.search);
+  const title = urlParams.get('title');
+  if (title) {
+    document.querySelector('h2').textContent = title;
+    const { data: song } = await supabase.from('songs').select('id').eq('titulo', title).single();
+    if (song) {
+      const { data: audios, error } = await supabase.from('audios').select('*').eq('song_id', song.id);
+      if (error) console.error(error);
+      else {
+        const container = document.querySelector('.space-y-4');
+        container.innerHTML = '';
+        audios.forEach(audio => {
+          const audioElement = document.createElement('div');
+          audioElement.className = 'flex flex-col gap-4 rounded-lg bg-gray-800 p-4';
+          audioElement.innerHTML = `
+            <div class="flex items-center gap-4">
+              <div class="flex-1">
+                <p class="text-lg font-semibold text-white">${audio.instrumento}</p>
+                <p class="text-sm text-gray-400">${audio.detalle}</p>
+              </div>
+              <button class="flex h-14 w-14 items-center justify-center rounded-full bg-[var(--primary-color)] text-white">
+                <span class="material-symbols-outlined text-4xl">play_arrow</span>
+              </button>
+            </div>
+            <div class="flex items-center gap-4">
+              <button class="text-white">
+                <span class="material-symbols-outlined text-3xl">replay_10</span>
+              </button>
+              <div class="h-1.5 flex-1 rounded-full bg-gray-700">
+                <div class="h-1.5 w-1/4 rounded-full bg-[var(--primary-color)]"></div>
+              </div>
+              <button class="text-white">
+                <span class="material-symbols-outlined text-3xl">forward_10</span>
+              </button>
+            </div>
+          `;
+          container.appendChild(audioElement);
+        });
+      }
+    }
+  }
+}
+
+loadAudios();
+initUploadFab();
+</script>
+
+</body></html>
