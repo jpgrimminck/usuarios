@@ -1,0 +1,398 @@
+<!DOCTYPE html>
+<html lang="es">
+<head>
+  <meta charset="UTF-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+  <title>Subir pista de audio</title>
+  <link rel="stylesheet" href="styles.css" />
+  <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin />
+  <link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;700&family=Noto+Sans:wght@400;500;700&display=swap" />
+  <style>
+    body {
+      font-family: 'Inter', 'Noto Sans', sans-serif;
+      background-color: #111827;
+      color: #ffffff;
+    }
+    .container {
+      max-width: 520px;
+      margin: 0 auto;
+      padding: 32px 16px 64px;
+    }
+    h1 {
+      text-align: center;
+      margin-bottom: 24px;
+      font-size: 1.75rem;
+      font-weight: 700;
+    }
+    form {
+      display: flex;
+      flex-direction: column;
+      gap: 16px;
+      background-color: #1f2937;
+      padding: 24px;
+      border-radius: 16px;
+      box-shadow: 0 18px 45px rgba(0, 0, 0, 0.35);
+    }
+    label {
+      font-weight: 600;
+      display: block;
+      margin-bottom: 6px;
+    }
+    input[type="text"],
+    input[type="file"],
+    select {
+      width: 100%;
+      padding: 10px 12px;
+      border-radius: 8px;
+      border: 1px solid #374151;
+      background-color: #111827;
+      color: #f9fafb;
+      font-size: 0.95rem;
+    }
+    input[readonly],
+    select[disabled] {
+      background-color: #0f172a;
+      color: #94a3b8;
+      cursor: not-allowed;
+    }
+    button {
+      margin-top: 12px;
+      background-color: #3b82f6;
+      color: #ffffff;
+      font-weight: 600;
+      padding: 12px 16px;
+      border-radius: 9999px;
+      border: none;
+      cursor: pointer;
+      transition: background-color 0.2s ease;
+    }
+    button:hover:not([disabled]) {
+      background-color: #2563eb;
+    }
+    button[disabled] {
+      background-color: #1d4ed8;
+      cursor: progress;
+      opacity: 0.7;
+    }
+    .message {
+      margin-top: 16px;
+      padding: 12px 16px;
+      border-radius: 10px;
+      font-size: 0.95rem;
+      display: none;
+    }
+    .message.success {
+      background-color: rgba(34, 197, 94, 0.18);
+      color: #bbf7d0;
+    }
+    .message.error {
+      background-color: rgba(248, 113, 113, 0.12);
+      color: #fecaca;
+    }
+    .inline {
+      display: flex;
+      gap: 16px;
+      flex-wrap: wrap;
+    }
+    .inline > div {
+      flex: 1 1 220px;
+    }
+    .helper {
+      font-size: 0.75rem;
+      color: #94a3b8;
+      margin-top: -8px;
+    }
+  </style>
+</head>
+<body>
+  <div class="container">
+    <h1>Subir nuevo audio (MP3)</h1>
+    <form id="audio-upload-form">
+      <div>
+        <label for="audio-file">Archivo MP3</label>
+        <input id="audio-file" type="file" accept="audio/mpeg" required />
+        <p class="helper">Selecciona un archivo con extensión .mp3 (audio/mpeg).</p>
+      </div>
+      <div class="inline">
+        <div>
+          <label for="audio-id">ID generado</label>
+          <input id="audio-id" type="text" readonly />
+        </div>
+        <div>
+          <label for="file-name">Nombre del archivo</label>
+          <input id="file-name" type="text" readonly />
+        </div>
+      </div>
+      <div>
+        <label for="uploader">Subido por</label>
+        <select id="uploader" required>
+          <option value="">Selecciona un usuario…</option>
+        </select>
+      </div>
+      <div class="inline">
+        <div>
+          <label for="instrument">Instrumento</label>
+          <input id="instrument" type="text" placeholder="Ej: guitarra1" required />
+        </div>
+        <div>
+          <label for="detail">Detalle</label>
+          <select id="detail" required>
+            <option value="">Selecciona detalle…</option>
+            <option value="estrofa">Estrofa</option>
+            <option value="coro">Coro</option>
+            <option value="puente">Puente</option>
+          </select>
+        </div>
+      </div>
+      <div>
+        <label for="song-id">Canción</label>
+        <select id="song-id" required>
+          <option value="">Cargando canciones…</option>
+        </select>
+      </div>
+      <button id="submit-btn" type="submit">Subir audio</button>
+      <div id="form-message" class="message"></div>
+    </form>
+  </div>
+
+  <script src="https://cdn.jsdelivr.net/npm/@supabase/supabase-js@2"></script>
+  <script src="config.js"></script>
+  <script>
+    const supabase = window.supabase.createClient(window.SUPABASE_URL, window.SUPABASE_ANON_KEY);
+
+    const AUDIO_BUCKET = 'audios'; // Ajusta el nombre del bucket si es distinto
+    const form = document.getElementById('audio-upload-form');
+    const fileInput = document.getElementById('audio-file');
+    const audioIdInput = document.getElementById('audio-id');
+    const fileNameInput = document.getElementById('file-name');
+  const uploaderSelect = document.getElementById('uploader');
+    const instrumentSelect = document.getElementById('instrument');
+    const detailSelect = document.getElementById('detail');
+    const songSelect = document.getElementById('song-id');
+    const submitBtn = document.getElementById('submit-btn');
+    const messageBox = document.getElementById('form-message');
+
+  let currentAudioId = null;
+  let currentUploaderId = null;
+
+    async function loadNextAudioId() {
+      try {
+        const { data, error } = await supabase
+          .from('audios')
+          .select('id')
+          .order('id', { ascending: false })
+          .limit(1);
+
+        if (error) {
+          console.error('No se pudo obtener el último ID de audios:', error.message);
+          currentAudioId = 1;
+        } else if (!data || data.length === 0) {
+          currentAudioId = 1;
+        } else {
+          const lastId = Number(data[0].id);
+          currentAudioId = Number.isFinite(lastId) ? lastId + 1 : 1;
+        }
+      } catch (err) {
+        console.error('Error inesperado obteniendo el último ID:', err);
+        currentAudioId = 1;
+      }
+
+      audioIdInput.value = currentAudioId;
+      return currentAudioId;
+    }
+
+    async function loadUploaders() {
+      try {
+        const { data, error } = await supabase
+          .from('users')
+          .select('id, name')
+          .order('name', { ascending: true });
+
+        if (error) {
+          console.error('No se pudieron cargar los usuarios:', error.message);
+          uploaderSelect.innerHTML = '<option value="">Error cargando usuarios</option>';
+          uploaderSelect.disabled = true;
+          currentUploaderId = null;
+          return;
+        }
+
+        if (!data || data.length === 0) {
+          uploaderSelect.innerHTML = '<option value="">No hay usuarios disponibles</option>';
+          uploaderSelect.disabled = true;
+          currentUploaderId = null;
+          return;
+        }
+
+        uploaderSelect.disabled = false;
+        uploaderSelect.innerHTML = '<option value="">Selecciona un usuario…</option>';
+        data.forEach((user) => {
+          const option = document.createElement('option');
+          option.value = user.id;
+          option.textContent = user.name || user.id;
+          uploaderSelect.appendChild(option);
+        });
+        currentUploaderId = null;
+      } catch (err) {
+        console.error('Fallo inesperado cargando usuarios:', err);
+        uploaderSelect.innerHTML = '<option value="">Error cargando usuarios</option>';
+        uploaderSelect.disabled = true;
+        currentUploaderId = null;
+      }
+    }
+
+    async function loadSongs() {
+      try {
+        const { data, error } = await supabase
+          .from('nombres_canciones')
+          .select('id, titulo')
+          .order('titulo', { ascending: true });
+
+        if (error) {
+          console.error('No se pudieron cargar las canciones:', error.message);
+          songSelect.innerHTML = '<option value="">No fue posible cargar canciones</option>';
+          songSelect.disabled = true;
+          return;
+        }
+
+        if (!data || data.length === 0) {
+          songSelect.innerHTML = '<option value="">No hay canciones disponibles</option>';
+          songSelect.disabled = true;
+          return;
+        }
+
+        songSelect.innerHTML = '<option value="">Selecciona una canción…</option>';
+        data.forEach((song) => {
+          const option = document.createElement('option');
+          option.value = song.id;
+          option.textContent = song.titulo;
+          songSelect.appendChild(option);
+        });
+        songSelect.disabled = false;
+      } catch (err) {
+        console.error('Fallo inesperado cargando canciones:', err);
+        songSelect.innerHTML = '<option value="">Error cargando canciones</option>';
+        songSelect.disabled = true;
+      }
+    }
+
+    function showMessage(type, text) {
+      messageBox.className = 'message ' + type;
+      messageBox.textContent = text;
+      messageBox.style.display = 'block';
+    }
+
+    function clearMessage() {
+      messageBox.style.display = 'none';
+      messageBox.textContent = '';
+      messageBox.className = 'message';
+    }
+
+    fileInput.addEventListener('change', async (event) => {
+      clearMessage();
+      const file = event.target.files && event.target.files[0];
+      if (!file) {
+        fileNameInput.value = '';
+        return;
+      }
+
+      if (file.type !== 'audio/mpeg' && !file.name.toLowerCase().endsWith('.mp3')) {
+        showMessage('error', 'El archivo debe ser un MP3 (.mp3).');
+        fileInput.value = '';
+        fileNameInput.value = '';
+        return;
+      }
+
+      fileNameInput.value = file.name;
+      if (!currentAudioId) {
+        await loadNextAudioId();
+      }
+    });
+
+    uploaderSelect.addEventListener('change', (event) => {
+      currentUploaderId = event.target.value || null;
+    });
+
+    form.addEventListener('submit', async (event) => {
+      event.preventDefault();
+      clearMessage();
+      const file = fileInput.files && fileInput.files[0];
+      const instrumentValue = instrumentSelect.value;
+      const detailValue = detailSelect.value;
+      const nombreCancionId = songSelect.value;
+      const uploaderId = currentUploaderId;
+
+      if (!file) {
+        showMessage('error', 'Selecciona un archivo MP3 antes de enviar.');
+        return;
+      }
+
+      if (!instrumentValue || !detailValue || !nombreCancionId || !uploaderId) {
+        showMessage('error', 'Completa todos los campos obligatorios.');
+        return;
+      }
+
+      if (!currentAudioId) {
+        await loadNextAudioId();
+      }
+
+      const audioId = currentAudioId;
+      submitBtn.disabled = true;
+      submitBtn.textContent = 'Subiendo…';
+
+      try {
+        const storagePath = `audios/${audioId}-${file.name}`;
+        const { error: uploadError } = await supabase
+          .storage
+          .from(AUDIO_BUCKET)
+          .upload(storagePath, file, {
+            cacheControl: '3600',
+            upsert: false,
+            contentType: file.type || 'audio/mpeg'
+          });
+
+        if (uploadError) {
+          throw new Error(uploadError.message || 'No se pudo subir el archivo al storage.');
+        }
+
+        const { error: insertError } = await supabase
+          .from('audios')
+          .insert({
+            id: audioId,
+            cancion_id: nombreCancionId,
+            instrument: instrumentValue,
+            detail: detailValue,
+            name: file.name,
+            uploader_id: uploaderId,
+            url: storagePath
+          })
+          .select()
+          .single();
+
+        if (insertError) {
+          throw new Error(insertError.message || 'No se pudo crear el registro en la tabla audios.');
+        }
+
+        showMessage('success', '¡Audio subido y registrado correctamente!');
+        form.reset();
+        currentAudioId = null;
+        currentUploaderId = null;
+        uploaderSelect.value = '';
+        await loadNextAudioId();
+        fileNameInput.value = '';
+        submitBtn.textContent = 'Subir otro audio';
+      } catch (err) {
+        console.error('Error al subir audio:', err);
+        showMessage('error', err.message || 'Hubo un problema al subir el audio.');
+        submitBtn.textContent = 'Reintentar subida';
+      } finally {
+        submitBtn.disabled = false;
+      }
+    });
+
+    // Inicialización
+    loadNextAudioId();
+    loadUploaders();
+    loadSongs();
+  </script>
+</body>
+</html>
