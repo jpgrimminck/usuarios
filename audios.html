@@ -19,6 +19,55 @@
         'opsz' 24
       }
     </style>
+  <style>
+    .audio-card {
+      cursor: pointer;
+      transition: padding 0.2s ease, background-color 0.2s ease;
+    }
+    .audio-card--expanded {
+      padding-bottom: 32px !important;
+      background-color: rgba(31, 41, 55, 0.85);
+    }
+    .audio-card button[data-role="play-button"] {
+      flex-shrink: 0;
+    }
+    .audio-card .waveform {
+      position: relative;
+      width: 100%;
+      height: 96px;
+      border-radius: 14px;
+      background: linear-gradient(180deg, rgba(148, 163, 184, 0.12) 0%, rgba(30, 41, 59, 0.45) 100%);
+      overflow: hidden;
+      opacity: 0;
+      max-height: 0;
+      margin-top: 0;
+      transition: max-height 0.25s ease, opacity 0.25s ease, margin-top 0.25s ease;
+    }
+    .audio-card .waveform::before {
+      content: '';
+      position: absolute;
+      inset: 0;
+      background:
+        repeating-linear-gradient(90deg, rgba(148, 163, 184, 0.35) 0 2px, transparent 2px 8px),
+        repeating-linear-gradient(0deg, rgba(148, 163, 184, 0.18) 0 12px, transparent 12px 24px);
+      opacity: 0.45;
+      pointer-events: none;
+    }
+    .audio-card .waveform-progress {
+      position: absolute;
+      inset: 0;
+      width: 0%;
+      background: linear-gradient(90deg, rgba(59, 130, 246, 0.1), rgba(59, 130, 246, 0.65));
+      mix-blend-mode: screen;
+      transition: width 0.1s linear;
+      pointer-events: none;
+    }
+    .audio-card--expanded .waveform {
+      opacity: 1;
+      max-height: 120px;
+      margin-top: 20px;
+    }
+  </style>
   </head>
 <body class="bg-gray-900">
 <div class="relative flex h-auto min-h-screen w-full flex-col bg-gray-900 justify-between group/design-root" style='font-family: Inter, "Noto Sans", sans-serif;'>
@@ -62,6 +111,7 @@ let currentAudioButton = null;
 let currentSongIdResolved = null;
 let audiosChannel = null;
 let audiosRefreshTimeout = null;
+let currentExpandedCard = null;
 
 const backLink = document.getElementById('back-to-songs');
 if (backLink) {
@@ -84,14 +134,49 @@ function stopCurrentAudio() {
   }
   if (currentAudioButton) {
     setButtonPlaying(currentAudioButton, false);
+    const progressEl = currentAudioButton.closest('.audio-card')?.querySelector('[data-role="waveform-progress"]');
+    if (progressEl) {
+      progressEl.style.width = '0%';
+    }
   }
   currentAudioInstance = null;
   currentAudioButton = null;
 }
 
+function updateWaveformProgress(progressEl, player) {
+  if (!progressEl || !player) return;
+  const duration = player.duration || 0;
+  const percentage = duration && Number.isFinite(duration)
+    ? Math.min(100, Math.max(0, (player.currentTime / duration) * 100))
+    : 0;
+  progressEl.style.width = `${percentage}%`;
+}
+
+function collapseCurrentCard() {
+  if (!currentExpandedCard) return;
+  const card = currentExpandedCard;
+  if (currentAudioButton && currentAudioButton.closest('.audio-card') === card) {
+    stopCurrentAudio();
+  }
+  const progressEl = card.querySelector('[data-role="waveform-progress"]');
+  if (progressEl) {
+    progressEl.style.width = '0%';
+  }
+  card.classList.remove('audio-card--expanded');
+  currentExpandedCard = null;
+}
+
+function expandCard(card) {
+  if (!card) return;
+  if (currentExpandedCard === card) return;
+  collapseCurrentCard();
+  card.classList.add('audio-card--expanded');
+  currentExpandedCard = card;
+}
+
 function clearPlaybackCache() {
   stopCurrentAudio();
-  playbackCache.forEach(({ player, revoke }) => {
+  playbackCache.forEach(({ player, revoke, progressEl, cleanup }) => {
     try {
       if (player) {
         player.pause();
@@ -99,6 +184,16 @@ function clearPlaybackCache() {
       }
     } catch (err) {
       console.warn('No se pudo detener un reproductor en caché:', err);
+    }
+    if (progressEl) {
+      progressEl.style.width = '0%';
+    }
+    if (typeof cleanup === 'function') {
+      try {
+        cleanup();
+      } catch (cleanupErr) {
+        console.warn('No se pudo limpiar eventos del reproductor:', cleanupErr);
+      }
     }
     if (typeof revoke === 'function') {
       try {
@@ -109,13 +204,14 @@ function clearPlaybackCache() {
     }
   });
   playbackCache.clear();
+  collapseCurrentCard();
 }
 
 function isHttpUrl(path) {
   return typeof path === 'string' && /^https?:\/\//i.test(path);
 }
 
-async function prepareAudioPlayer(audio, button) {
+async function prepareAudioPlayer(audio, button, progressEl) {
   if (!audio) return null;
 
   let cached = playbackCache.get(audio.id);
@@ -153,25 +249,57 @@ async function prepareAudioPlayer(audio, button) {
     }
 
     const audioElement = new Audio(sourceUrl);
-    audioElement.addEventListener('ended', () => {
+    const cacheEntry = {
+      player: audioElement,
+      revoke,
+      progressEl: progressEl || null,
+      playButtonRef: button || null,
+      cleanup: null
+    };
+
+    const handleEnded = () => {
       if (currentAudioInstance === audioElement) {
         stopCurrentAudio();
-      } else if (button.dataset.playing === 'true') {
-        setButtonPlaying(button, false);
+      } else if (cacheEntry.playButtonRef && cacheEntry.playButtonRef.dataset.playing === 'true') {
+        setButtonPlaying(cacheEntry.playButtonRef, false);
       }
-    });
+      updateWaveformProgress(cacheEntry.progressEl, audioElement);
+    };
 
-    cached = { player: audioElement, revoke }; 
-    playbackCache.set(audio.id, cached);
+    const handleProgress = () => updateWaveformProgress(cacheEntry.progressEl, audioElement);
+
+    audioElement.addEventListener('ended', handleEnded);
+    audioElement.addEventListener('timeupdate', handleProgress);
+    audioElement.addEventListener('loadedmetadata', handleProgress);
+    audioElement.addEventListener('emptied', handleProgress);
+
+    cacheEntry.cleanup = () => {
+      audioElement.removeEventListener('ended', handleEnded);
+      audioElement.removeEventListener('timeupdate', handleProgress);
+      audioElement.removeEventListener('loadedmetadata', handleProgress);
+      audioElement.removeEventListener('emptied', handleProgress);
+    };
+
+    playbackCache.set(audio.id, cacheEntry);
+    cached = cacheEntry;
+  }
+
+  if (progressEl) {
+    cached.progressEl = progressEl;
+    updateWaveformProgress(cached.progressEl, cached.player);
+  }
+
+  if (button) {
+    cached.playButtonRef = button;
   }
 
   return cached;
 }
 
-async function togglePlayback(button, audio) {
+async function togglePlayback(button, audio, progressEl) {
   if (!button || !audio) return;
 
-  const cached = await prepareAudioPlayer(audio, button);
+  const cached = await prepareAudioPlayer(audio, button, progressEl);
   if (!cached) {
     setButtonPlaying(button, false);
     return;
@@ -189,14 +317,19 @@ async function togglePlayback(button, audio) {
       currentAudioInstance = player;
       currentAudioButton = button;
       setButtonPlaying(button, true);
+      updateWaveformProgress(cached.progressEl, player);
     } catch (err) {
       console.error('No se pudo reproducir el audio:', err);
       setButtonPlaying(button, false);
+      if (cached.progressEl) {
+        cached.progressEl.style.width = '0%';
+      }
     }
   } else {
     player.pause();
     player.currentTime = 0;
     setButtonPlaying(button, false);
+    updateWaveformProgress(cached.progressEl, player);
     currentAudioInstance = null;
     currentAudioButton = null;
   }
@@ -236,11 +369,13 @@ function initAudiosRealtime() {
   });
 }
 
-function attachPlayback(button, audio) {
+function attachPlayback(button, audio, card, progressEl) {
   if (!button) return;
   button.dataset.playing = 'false';
-  button.addEventListener('click', () => {
-    togglePlayback(button, audio);
+  button.addEventListener('click', (event) => {
+    event.stopPropagation();
+    expandCard(card);
+    togglePlayback(button, audio, progressEl);
   });
 }
 
@@ -333,7 +468,7 @@ async function loadAudios(options = {}) {
 
     const { data: audios, error: audiosError } = await supabase
       .from('audios')
-      .select('id, instrument, detail, name, uploader_id, cancion_id, url')
+      .select('id, instrument, cancion_id, url')
       .eq('cancion_id', songId)
       .order('instrument', { ascending: true });
 
@@ -360,33 +495,10 @@ async function loadAudios(options = {}) {
 
     clearPlaybackCache();
 
-    const uploaderNames = {};
-    const uploaderIds = [...new Set(
-      audios
-        .map((audio) => audio.uploader_id)
-        .filter((id) => typeof id === 'string' || typeof id === 'number')
-    )];
-
-    if (uploaderIds.length > 0) {
-      const { data: usersData, error: usersError } = await supabase
-        .from('users')
-        .select('id, name')
-        .in('id', uploaderIds);
-
-      if (usersError) {
-        console.warn('No se pudieron cargar los nombres de usuarios:', usersError.message);
-      } else if (usersData) {
-        usersData.forEach((user) => {
-          if (user && user.id) {
-            uploaderNames[user.id] = user.name || String(user.id);
-          }
-        });
-      }
-    }
-
     audios.forEach((audio) => {
       const audioElement = document.createElement('div');
-      audioElement.className = 'flex flex-col gap-4 rounded-lg bg-gray-800 p-4';
+      audioElement.className = 'audio-card flex flex-col gap-4 rounded-lg bg-gray-800 p-4';
+      audioElement.dataset.audioId = audio.id;
       audioElement.innerHTML = `
         <div class="flex items-start gap-4">
           <div class="flex-1">
@@ -396,9 +508,21 @@ async function loadAudios(options = {}) {
             <span class="material-symbols-outlined text-4xl">play_arrow</span>
           </button>
         </div>
+        <div class="waveform" data-role="waveform">
+          <div class="waveform-progress" data-role="waveform-progress"></div>
+        </div>
       `;
       const playButton = audioElement.querySelector('[data-role="play-button"]');
-      attachPlayback(playButton, audio);
+      const waveformProgress = audioElement.querySelector('[data-role="waveform-progress"]');
+      attachPlayback(playButton, audio, audioElement, waveformProgress);
+      audioElement.addEventListener('click', (event) => {
+        if (event.target.closest('[data-role="play-button"]')) return;
+        if (currentExpandedCard === audioElement) {
+          collapseCurrentCard();
+          return;
+        }
+        expandCard(audioElement);
+      });
       container.appendChild(audioElement);
     });
 
