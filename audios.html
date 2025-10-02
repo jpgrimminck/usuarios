@@ -34,7 +34,7 @@
     .audio-card .waveform {
       position: relative;
       width: 100%;
-      height: 96px;
+      height: 120px;
       border-radius: 14px;
       background: linear-gradient(180deg, rgba(148, 163, 184, 0.12) 0%, rgba(30, 41, 59, 0.45) 100%);
       overflow: hidden;
@@ -43,23 +43,44 @@
       margin-top: 0;
       transition: max-height 0.25s ease, opacity 0.25s ease, margin-top 0.25s ease;
     }
-    .audio-card .waveform::before {
+    .audio-card .waveform::after {
       content: '';
       position: absolute;
-      inset: 0;
+      top: 10px;
+      bottom: 10px;
+      left: 50%;
+      transform: translateX(-50%);
+      width: 3px;
+      border-radius: 9999px;
+      background: rgba(255, 255, 255, 0.9);
+      box-shadow: 0 0 12px rgba(255, 255, 255, 0.65);
+      pointer-events: none;
+      z-index: 3;
+    }
+    .audio-card .waveform-viewport {
+      position: relative;
+      width: 100%;
+      height: 100%;
+      overflow: hidden;
+      border-radius: inherit;
+      mask-image: linear-gradient(90deg, transparent 0%, rgba(0, 0, 0, 0.8) 15%, rgba(0, 0, 0, 0.95) 50%, rgba(0, 0, 0, 0.8) 85%, transparent 100%);
+      -webkit-mask-image: linear-gradient(90deg, transparent 0%, rgba(0, 0, 0, 0.8) 15%, rgba(0, 0, 0, 0.95) 50%, rgba(0, 0, 0, 0.8) 85%, transparent 100%);
+    }
+    .audio-card .waveform-content {
+      position: absolute;
+      top: 0;
+      bottom: 0;
+      left: 50%;
+      width: 400%;
+      min-width: 400%;
       background:
         repeating-linear-gradient(90deg, rgba(148, 163, 184, 0.35) 0 2px, transparent 2px 8px),
         repeating-linear-gradient(0deg, rgba(148, 163, 184, 0.18) 0 12px, transparent 12px 24px);
-      opacity: 0.45;
-      pointer-events: none;
-    }
-    .audio-card .waveform-progress {
-      position: absolute;
-      inset: 0;
-      width: 0%;
-      background: linear-gradient(90deg, rgba(59, 130, 246, 0.1), rgba(59, 130, 246, 0.65));
+      opacity: 0.55;
       mix-blend-mode: screen;
-      transition: width 0.1s linear;
+      will-change: transform;
+      transform: translateX(0px);
+      transition: transform 0.12s linear;
       pointer-events: none;
     }
     .audio-card--expanded .waveform {
@@ -113,6 +134,9 @@ let audiosChannel = null;
 let audiosRefreshTimeout = null;
 let currentExpandedCard = null;
 
+const WAVEFORM_VIEW_WINDOW_SECONDS = 4;
+const WAVEFORM_HALF_WINDOW_SECONDS = WAVEFORM_VIEW_WINDOW_SECONDS / 2;
+
 const backLink = document.getElementById('back-to-songs');
 if (backLink) {
   backLink.href = userId ? `songs.html?id=${encodeURIComponent(userId)}` : 'songs.html';
@@ -134,22 +158,102 @@ function stopCurrentAudio() {
   }
   if (currentAudioButton) {
     setButtonPlaying(currentAudioButton, false);
-    const progressEl = currentAudioButton.closest('.audio-card')?.querySelector('[data-role="waveform-progress"]');
-    if (progressEl) {
-      progressEl.style.width = '0%';
+    const audioCard = currentAudioButton.closest('.audio-card');
+    const audioId = audioCard?.dataset?.audioId ? Number(audioCard.dataset.audioId) : null;
+    if (audioId && playbackCache.has(audioId)) {
+      const cached = playbackCache.get(audioId);
+      if (cached?.waveform) {
+        resetWaveformState(cached.waveform);
+      }
     }
   }
   currentAudioInstance = null;
   currentAudioButton = null;
 }
 
-function updateWaveformProgress(progressEl, player) {
-  if (!progressEl || !player) return;
-  const duration = player.duration || 0;
-  const percentage = duration && Number.isFinite(duration)
-    ? Math.min(100, Math.max(0, (player.currentTime / duration) * 100))
-    : 0;
-  progressEl.style.width = `${percentage}%`;
+function computeWaveformMetrics(viewportEl) {
+  if (!viewportEl) return null;
+  const width = viewportEl.getBoundingClientRect().width || viewportEl.offsetWidth || 0;
+  if (!width) return null;
+  return {
+    viewportWidth: width,
+    initialOffset: width / 2,
+    pixelsPerSecond: width / WAVEFORM_VIEW_WINDOW_SECONDS
+  };
+}
+
+function refreshWaveformMetrics(state) {
+  if (!state) return null;
+  const metrics = computeWaveformMetrics(state.viewportEl);
+  if (!metrics) return null;
+  state.metrics = metrics;
+  return metrics;
+}
+
+function updateWaveformDimensions(state, duration) {
+  if (!state || !state.contentEl) return;
+  const metrics = state.metrics || refreshWaveformMetrics(state);
+  if (!metrics) {
+    requestAnimationFrame(() => updateWaveformDimensions(state, duration));
+    return;
+  }
+  const effectiveDuration = Number.isFinite(duration) && duration > 0 ? duration : 0;
+  const totalWidth = metrics.initialOffset + (effectiveDuration + WAVEFORM_HALF_WINDOW_SECONDS) * metrics.pixelsPerSecond;
+  state.contentEl.style.width = `${Math.max(totalWidth, metrics.viewportWidth * 1.5)}px`;
+}
+
+function applyWaveformPosition(state, currentTime, duration) {
+  if (!state || !state.contentEl) return;
+  const metrics = state.metrics || refreshWaveformMetrics(state);
+  if (!metrics) {
+    requestAnimationFrame(() => applyWaveformPosition(state, currentTime, duration));
+    return;
+  }
+  const effectiveTime = Math.max(0, Number(currentTime) || 0);
+  const effectiveDuration = Number.isFinite(duration) && duration > 0 ? duration : 0;
+  state.duration = effectiveDuration;
+  state.lastCurrentTime = effectiveTime;
+  updateWaveformDimensions(state, effectiveDuration);
+  const contentWidth = state.contentEl.offsetWidth || 0;
+  const minOffset = metrics.viewportWidth - contentWidth;
+  const offset = Math.max(minOffset, metrics.initialOffset - (effectiveTime * metrics.pixelsPerSecond));
+  state.contentEl.style.transform = `translateX(${offset}px)`;
+}
+
+function resetWaveformState(state) {
+  if (!state || !state.contentEl) return;
+  const metrics = refreshWaveformMetrics(state);
+  if (!metrics) {
+    requestAnimationFrame(() => resetWaveformState(state));
+    return;
+  }
+  state.lastCurrentTime = 0;
+  updateWaveformDimensions(state, state.duration || 0);
+  state.contentEl.style.transform = `translateX(${metrics.initialOffset}px)`;
+}
+
+function buildWaveformState(waveformElements) {
+  if (!waveformElements) return null;
+  const { viewportEl, contentEl } = waveformElements;
+  if (!viewportEl || !contentEl) return null;
+  const state = {
+    viewportEl,
+    contentEl,
+    metrics: computeWaveformMetrics(viewportEl),
+    duration: 0,
+    lastCurrentTime: 0
+  };
+  if (state.metrics) {
+    state.contentEl.style.transform = `translateX(${state.metrics.initialOffset}px)`;
+  } else {
+    requestAnimationFrame(() => {
+      const metrics = refreshWaveformMetrics(state);
+      if (metrics) {
+        state.contentEl.style.transform = `translateX(${metrics.initialOffset}px)`;
+      }
+    });
+  }
+  return state;
 }
 
 function collapseCurrentCard() {
@@ -158,9 +262,12 @@ function collapseCurrentCard() {
   if (currentAudioButton && currentAudioButton.closest('.audio-card') === card) {
     stopCurrentAudio();
   }
-  const progressEl = card.querySelector('[data-role="waveform-progress"]');
-  if (progressEl) {
-    progressEl.style.width = '0%';
+  const audioId = card.dataset?.audioId ? Number(card.dataset.audioId) : null;
+  if (audioId && playbackCache.has(audioId)) {
+    const cached = playbackCache.get(audioId);
+    if (cached?.waveform) {
+      resetWaveformState(cached.waveform);
+    }
   }
   card.classList.remove('audio-card--expanded');
   currentExpandedCard = null;
@@ -171,12 +278,20 @@ function expandCard(card) {
   if (currentExpandedCard === card) return;
   collapseCurrentCard();
   card.classList.add('audio-card--expanded');
+  const audioId = card.dataset?.audioId ? Number(card.dataset.audioId) : null;
+  if (audioId && playbackCache.has(audioId)) {
+    const cached = playbackCache.get(audioId);
+    if (cached?.waveform) {
+      refreshWaveformMetrics(cached.waveform);
+      resetWaveformState(cached.waveform);
+    }
+  }
   currentExpandedCard = card;
 }
 
 function clearPlaybackCache() {
   stopCurrentAudio();
-  playbackCache.forEach(({ player, revoke, progressEl, cleanup }) => {
+  playbackCache.forEach(({ player, revoke, waveform, cleanup }) => {
     try {
       if (player) {
         player.pause();
@@ -185,8 +300,8 @@ function clearPlaybackCache() {
     } catch (err) {
       console.warn('No se pudo detener un reproductor en caché:', err);
     }
-    if (progressEl) {
-      progressEl.style.width = '0%';
+    if (waveform) {
+      resetWaveformState(waveform);
     }
     if (typeof cleanup === 'function') {
       try {
@@ -211,7 +326,7 @@ function isHttpUrl(path) {
   return typeof path === 'string' && /^https?:\/\//i.test(path);
 }
 
-async function prepareAudioPlayer(audio, button, progressEl) {
+async function prepareAudioPlayer(audio, button, waveformElements) {
   if (!audio) return null;
 
   let cached = playbackCache.get(audio.id);
@@ -252,8 +367,8 @@ async function prepareAudioPlayer(audio, button, progressEl) {
     const cacheEntry = {
       player: audioElement,
       revoke,
-      progressEl: progressEl || null,
       playButtonRef: button || null,
+      waveform: waveformElements ? buildWaveformState(waveformElements) : null,
       cleanup: null
     };
 
@@ -263,20 +378,25 @@ async function prepareAudioPlayer(audio, button, progressEl) {
       } else if (cacheEntry.playButtonRef && cacheEntry.playButtonRef.dataset.playing === 'true') {
         setButtonPlaying(cacheEntry.playButtonRef, false);
       }
-      updateWaveformProgress(cacheEntry.progressEl, audioElement);
+      if (cacheEntry.waveform) {
+        resetWaveformState(cacheEntry.waveform);
+      }
     };
 
-    const handleProgress = () => updateWaveformProgress(cacheEntry.progressEl, audioElement);
+    const handleProgress = () => applyWaveformPosition(cacheEntry.waveform, audioElement.currentTime, audioElement.duration);
+    const handleLoadedMetadata = () => applyWaveformPosition(cacheEntry.waveform, audioElement.currentTime, audioElement.duration);
 
     audioElement.addEventListener('ended', handleEnded);
     audioElement.addEventListener('timeupdate', handleProgress);
-    audioElement.addEventListener('loadedmetadata', handleProgress);
+    audioElement.addEventListener('loadedmetadata', handleLoadedMetadata);
+    audioElement.addEventListener('seeking', handleProgress);
     audioElement.addEventListener('emptied', handleProgress);
 
     cacheEntry.cleanup = () => {
       audioElement.removeEventListener('ended', handleEnded);
       audioElement.removeEventListener('timeupdate', handleProgress);
-      audioElement.removeEventListener('loadedmetadata', handleProgress);
+      audioElement.removeEventListener('loadedmetadata', handleLoadedMetadata);
+      audioElement.removeEventListener('seeking', handleProgress);
       audioElement.removeEventListener('emptied', handleProgress);
     };
 
@@ -284,9 +404,12 @@ async function prepareAudioPlayer(audio, button, progressEl) {
     cached = cacheEntry;
   }
 
-  if (progressEl) {
-    cached.progressEl = progressEl;
-    updateWaveformProgress(cached.progressEl, cached.player);
+  if (waveformElements) {
+    const rebuiltState = buildWaveformState(waveformElements);
+    if (rebuiltState) {
+      cached.waveform = rebuiltState;
+      applyWaveformPosition(cached.waveform, cached.player?.currentTime || 0, cached.player?.duration || 0);
+    }
   }
 
   if (button) {
@@ -296,10 +419,10 @@ async function prepareAudioPlayer(audio, button, progressEl) {
   return cached;
 }
 
-async function togglePlayback(button, audio, progressEl) {
+async function togglePlayback(button, audio, waveformElements) {
   if (!button || !audio) return;
 
-  const cached = await prepareAudioPlayer(audio, button, progressEl);
+  const cached = await prepareAudioPlayer(audio, button, waveformElements);
   if (!cached) {
     setButtonPlaying(button, false);
     return;
@@ -317,19 +440,19 @@ async function togglePlayback(button, audio, progressEl) {
       currentAudioInstance = player;
       currentAudioButton = button;
       setButtonPlaying(button, true);
-      updateWaveformProgress(cached.progressEl, player);
+      applyWaveformPosition(cached.waveform, player.currentTime, player.duration);
     } catch (err) {
       console.error('No se pudo reproducir el audio:', err);
       setButtonPlaying(button, false);
-      if (cached.progressEl) {
-        cached.progressEl.style.width = '0%';
+      if (cached.waveform) {
+        resetWaveformState(cached.waveform);
       }
     }
   } else {
     player.pause();
     player.currentTime = 0;
     setButtonPlaying(button, false);
-    updateWaveformProgress(cached.progressEl, player);
+    resetWaveformState(cached.waveform);
     currentAudioInstance = null;
     currentAudioButton = null;
   }
@@ -369,13 +492,13 @@ function initAudiosRealtime() {
   });
 }
 
-function attachPlayback(button, audio, card, progressEl) {
+function attachPlayback(button, audio, card, waveformElements) {
   if (!button) return;
   button.dataset.playing = 'false';
   button.addEventListener('click', (event) => {
     event.stopPropagation();
     expandCard(card);
-    togglePlayback(button, audio, progressEl);
+    togglePlayback(button, audio, waveformElements);
   });
 }
 
@@ -509,12 +632,15 @@ async function loadAudios(options = {}) {
           </button>
         </div>
         <div class="waveform" data-role="waveform">
-          <div class="waveform-progress" data-role="waveform-progress"></div>
+          <div class="waveform-viewport" data-role="waveform-viewport">
+            <div class="waveform-content" data-role="waveform-content"></div>
+          </div>
         </div>
       `;
       const playButton = audioElement.querySelector('[data-role="play-button"]');
-      const waveformProgress = audioElement.querySelector('[data-role="waveform-progress"]');
-      attachPlayback(playButton, audio, audioElement, waveformProgress);
+      const waveformViewport = audioElement.querySelector('[data-role="waveform-viewport"]');
+      const waveformContent = audioElement.querySelector('[data-role="waveform-content"]');
+      attachPlayback(playButton, audio, audioElement, { viewportEl: waveformViewport, contentEl: waveformContent });
       audioElement.addEventListener('click', (event) => {
         if (event.target.closest('[data-role="play-button"]')) return;
         if (currentExpandedCard === audioElement) {
@@ -536,6 +662,16 @@ async function loadAudios(options = {}) {
 
 loadAudios();
 initUploadFab();
+
+window.addEventListener('resize', () => {
+  playbackCache.forEach((cacheEntry) => {
+    if (!cacheEntry || !cacheEntry.waveform) return;
+    refreshWaveformMetrics(cacheEntry.waveform);
+    const currentTime = cacheEntry.waveform.lastCurrentTime ?? cacheEntry.player?.currentTime ?? 0;
+    const duration = cacheEntry.waveform.duration ?? cacheEntry.player?.duration ?? 0;
+    applyWaveformPosition(cacheEntry.waveform, currentTime, duration);
+  });
+});
 
 window.addEventListener('beforeunload', () => {
   clearPlaybackCache();
