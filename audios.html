@@ -385,31 +385,15 @@ async function loadAudios(options = {}) {
     }
 
     audios.forEach((audio) => {
-      const uploaderName = uploaderNames[audio.uploader_id] || `ID: ${audio.uploader_id}`;
-      const detailLabel = audio.detail ? audio.detail : 'Sin detalle';
-
       const audioElement = document.createElement('div');
       audioElement.className = 'flex flex-col gap-4 rounded-lg bg-gray-800 p-4';
       audioElement.innerHTML = `
         <div class="flex items-start gap-4">
           <div class="flex-1">
             <p class="text-lg font-semibold text-white">${audio.instrument || 'Instrumento sin nombre'}</p>
-            <p class="text-sm text-gray-400">${detailLabel}</p>
-            <p class="text-xs text-gray-500 mt-3">Subido por: <span class="font-medium text-gray-300">${uploaderName}</span></p>
           </div>
           <button type="button" class="flex h-14 w-14 items-center justify-center rounded-full bg-[var(--primary-color)] text-white" data-role="play-button">
             <span class="material-symbols-outlined text-4xl">play_arrow</span>
-          </button>
-        </div>
-        <div class="flex items-center gap-4">
-          <button class="text-white">
-            <span class="material-symbols-outlined text-3xl">replay_10</span>
-          </button>
-          <div class="h-1.5 flex-1 rounded-full bg-gray-700">
-            <div class="h-1.5 w-1/4 rounded-full bg-[var(--primary-color)]"></div>
-          </div>
-          <button class="text-white">
-            <span class="material-symbols-outlined text-3xl">forward_10</span>
           </button>
         </div>
       `;
