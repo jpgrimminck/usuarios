@@ -283,17 +283,63 @@ window.addEventListener('load', adjustSongsContainerPadding);
 window.addEventListener('resize', adjustSongsContainerPadding);
 
 async function loadSongs() {
-  const { data: songs, error } = await supabase
-    .from('canciones')
-    .select(`
-      id,
-      nombres_canciones ( titulo ),
-      artists ( name )
-    `);
-  if (error) console.error(error);
-  else {
-    const container = document.getElementById('songs-container');
-    container.innerHTML = '';
+  const container = document.getElementById('songs-container');
+  if (!container) return;
+  container.innerHTML = '';
+
+  try {
+    let songs = null;
+
+    if (selectedUserId) {
+      // 1) Get song IDs linked to this user from user_songs
+      const { data: userSongs, error: usErr } = await supabase
+        .from('user_songs')
+        .select('song_id')
+        .eq('user_id', selectedUserId);
+
+      if (usErr) {
+        console.error('Error loading user_songs:', usErr);
+        return;
+      }
+
+      const songIds = (userSongs || []).map(r => r.song_id).filter(Boolean);
+      if (!songIds.length) {
+        container.innerHTML = '<p class="text-gray-400 p-4">No hay canciones para este usuario.</p>';
+        return;
+      }
+
+      // 2) Load only those canciones
+      const { data, error } = await supabase
+        .from('canciones')
+        .select(`
+          id,
+          nombres_canciones ( titulo ),
+          artists ( name )
+        `)
+        .in('id', songIds);
+
+      if (error) {
+        console.error(error);
+        return;
+      }
+      songs = data;
+    } else {
+      // No selected user: load all songs as before
+      const { data, error } = await supabase
+        .from('canciones')
+        .select(`
+          id,
+          nombres_canciones ( titulo ),
+          artists ( name )
+        `);
+      if (error) {
+        console.error(error);
+        return;
+      }
+      songs = data;
+    }
+
+    // Render songs (same rendering logic as before)
     songs.forEach(song => {
       if (!song || !song.id) return;
       const songTitle = song.nombres_canciones?.titulo;
@@ -306,7 +352,7 @@ async function loadSongs() {
         audioParams.set('id', selectedUserId);
       }
       songElement.href = `audios.html?${audioParams.toString()}`;
-  songElement.className = 'song-card flex items-center gap-4 px-4 py-3 hover:bg-white/5 transition-colors duration-200';
+      songElement.className = 'song-card flex items-center gap-4 px-4 py-3 hover:bg-white/5 transition-colors duration-200';
       songElement.innerHTML = `
         <div class="bg-[var(--primary-color)] flex items-center justify-center text-white font-bold text-xl rounded-lg size-20">${firstLetter}</div>
         <div class="flex-1">
@@ -319,6 +365,8 @@ async function loadSongs() {
       `;
       container.appendChild(songElement);
     });
+  } catch (err) {
+    console.error('Error in loadSongs:', err);
   }
 }
 
