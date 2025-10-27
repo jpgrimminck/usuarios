@@ -269,7 +269,7 @@ function initSongsRealtime() {
     .channel('songs_realtime')
     .on('postgres_changes', { event: '*', schema: 'public', table: 'canciones' }, scheduleSongsRefresh)
     .on('postgres_changes', { event: '*', schema: 'public', table: 'nombres_canciones' }, scheduleSongsRefresh)
-    .on('postgres_changes', { event: '*', schema: 'public', table: 'artistas' }, scheduleSongsRefresh);
+    .on('postgres_changes', { event: '*', schema: 'public', table: 'artists' }, scheduleSongsRefresh);
 
   channel.subscribe((status) => {
     if (status === 'CHANNEL_ERROR') {
@@ -288,7 +288,7 @@ async function loadSongs() {
     .select(`
       id,
       nombres_canciones ( titulo ),
-      artistas ( nombre )
+      artists ( name )
     `);
   if (error) console.error(error);
   else {
@@ -298,7 +298,7 @@ async function loadSongs() {
       if (!song || !song.id) return;
       const songTitle = song.nombres_canciones?.titulo;
       if (!songTitle) return;
-      const artistName = song.artistas?.nombre || '';
+      const artistName = song.artists?.name || '';
       const firstLetter = songTitle.charAt(0).toUpperCase();
       const songElement = document.createElement('a');
       const audioParams = new URLSearchParams({ songId: song.id, title: songTitle });
