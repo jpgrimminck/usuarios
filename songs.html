@@ -32,7 +32,11 @@
     <!-- Header: give an id and higher z-index so it stays above dynamic content -->
     <div id="site-header" class="sticky top-0 z-20 bg-gray-900/95 backdrop-blur-sm" style="height: 40px;">
       <div class="flex items-center p-4 pb-2 justify-between">
-        <div class="w-12"></div>
+        <div class="w-12 flex items-center">
+          <button id="back-button" aria-label="Volver" class="flex items-center justify-center rounded-full h-10 w-10 text-white hover:bg-white/10 transition-colors">
+            <span class="material-symbols-outlined text-2xl">arrow_back</span>
+          </button>
+        </div>
         <h1 class="text-xl font-bold leading-tight tracking-tight flex-1 text-center">Canciones</h1>
         <div class="flex w-12 items-center justify-end">
           <button class="flex items-center justify-center rounded-full h-10 w-10 text-white hover:bg-white/10 transition-colors">
@@ -322,4 +326,32 @@ loadSongs();
 updateSongsTitle();
 initAddSongModal();
 initSongsRealtime();
+</script>
+<script>
+// Back button behavior: try history.back(), fallback to index.html
+document.addEventListener('DOMContentLoaded', function () {
+  const backBtn = document.getElementById('back-button');
+  if (!backBtn) return;
+  backBtn.addEventListener('click', function (e) {
+    e.preventDefault();
+    // If there's a meaningful history entry, go back.
+    // history.length > 1 is a heuristic; also check document.referrer when length is 1.
+    if (window.history && window.history.length > 1) {
+      window.history.back();
+      // If the back navigation doesn't happen quickly, ensure fallback after a short timeout
+      setTimeout(() => {
+        // If still on this page after 300ms, fallback to index
+        if (location.pathname.endsWith('songs.html') || location.pathname === '/' ) {
+          window.location.href = 'index.html';
+        }
+      }, 300);
+      return;
+    }
+    // No history to go back to: navigate to index.html (preserve query id if present)
+    const params = new URLSearchParams(window.location.search);
+    const id = params.get('id');
+    const target = id ? `index.html?id=${encodeURIComponent(id)}` : 'index.html';
+    window.location.href = target;
+  });
+});
 </script>
