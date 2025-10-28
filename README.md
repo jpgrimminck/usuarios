@@ -23,6 +23,7 @@
 
 ## 5. Song Status Tags
 - Songs can have two status tags:
+    - Not started (default)
     - Practicing
     - Ready (or "Completed")
 - The list view should visually separate songs using these tags, so users can distinguish what they're still practicing from what's already finished.
