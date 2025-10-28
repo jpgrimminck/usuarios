@@ -148,8 +148,13 @@ function renderSuggestedSongs(onSelect) {
   const container = document.getElementById('suggested-songs-container');
   if (!container) return;
   container.innerHTML = '';
-
-  const sortedSongs = [...sampleSongs].sort((a, b) => a.title.localeCompare(b.title, 'es', { sensitivity: 'base' }));
+  // fallback to sampleSongs if no list provided
+  const sourceSongs = renderSuggestedSongs._lastList || sampleSongs;
+  const sortedSongs = [...sourceSongs].sort((a, b) => {
+    const aTitle = (a.title || '').toString();
+    const bTitle = (b.title || '').toString();
+    return aTitle.localeCompare(bTitle, 'es', { sensitivity: 'base' });
+  });
 
   sortedSongs.forEach((song) => {
     const card = document.createElement('div');
@@ -157,11 +162,13 @@ function renderSuggestedSongs(onSelect) {
 
     const titleSpan = document.createElement('span');
     titleSpan.className = 'suggested-title';
-    titleSpan.textContent = song.title;
+    // support both sampleSongs shape ({title,artist}) and DB shape ({title, artists:{name}})
+    const songTitle = song.title || '';
+    titleSpan.textContent = songTitle;
 
     const artistSpan = document.createElement('span');
     artistSpan.className = 'suggested-artist';
-    artistSpan.textContent = song.artist;
+    artistSpan.textContent = song.artist || song.artists?.name || '';
 
     const addButton = document.createElement('button');
     addButton.className = 'suggested-add';
@@ -217,6 +224,24 @@ function renderSuggestedSongs(onSelect) {
   });
 }
 
+// Fetch songs from the 'songs' table (library)
+async function fetchLibrarySongs() {
+  try {
+    const { data, error } = await supabase
+      .from('songs')
+      .select(`id, title, artists ( name )`)
+      .order('title', { ascending: true });
+    if (error) {
+      console.error('Error fetching library songs:', error);
+      return [];
+    }
+    return data || [];
+  } catch (err) {
+    console.error('Unexpected error fetching library songs:', err);
+    return [];
+  }
+}
+
 function initAddSongModal() {
   const fab = document.getElementById('add-song-fab');
   const modal = document.getElementById('add-song-modal');
@@ -230,7 +255,14 @@ function initAddSongModal() {
   };
 
   function openModal() {
-    renderSuggestedSongs(handleSuggestionSelect);
+    // Fetch library songs and render them in the modal
+    fetchLibrarySongs().then(list => {
+      renderSuggestedSongs._lastList = list.length ? list : sampleSongs;
+      renderSuggestedSongs(handleSuggestionSelect);
+    }).catch(() => {
+      renderSuggestedSongs._lastList = sampleSongs;
+      renderSuggestedSongs(handleSuggestionSelect);
+    });
     modal.classList.remove('hidden');
   }
 
@@ -251,7 +283,14 @@ function initAddSongModal() {
   });
 
   // Render initially so the modal is ready if opened via other triggers
-  renderSuggestedSongs(handleSuggestionSelect);
+  // prefetch library songs for faster open
+  fetchLibrarySongs().then(list => {
+    renderSuggestedSongs._lastList = list.length ? list : sampleSongs;
+    renderSuggestedSongs(handleSuggestionSelect);
+  }).catch(() => {
+    renderSuggestedSongs._lastList = sampleSongs;
+    renderSuggestedSongs(handleSuggestionSelect);
+  });
 }
 
 function scheduleSongsRefresh() {
