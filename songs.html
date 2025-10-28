@@ -268,8 +268,8 @@ function initSongsRealtime() {
   const channel = supabase
     .channel('songs_realtime')
     .on('postgres_changes', { event: '*', schema: 'public', table: 'canciones' }, scheduleSongsRefresh)
-    .on('postgres_changes', { event: '*', schema: 'public', table: 'nombres_canciones' }, scheduleSongsRefresh)
-    .on('postgres_changes', { event: '*', schema: 'public', table: 'artists' }, scheduleSongsRefresh);
+    .on('postgres_changes', { event: '*', schema: 'public', table: 'artists' }, scheduleSongsRefresh)
+    .on('postgres_changes', { event: '*', schema: 'public', table: 'user_songs' }, scheduleSongsRefresh);
 
   channel.subscribe((status) => {
     if (status === 'CHANNEL_ERROR') {
@@ -310,10 +310,10 @@ async function loadSongs() {
 
       // 2) Load only those canciones
       const { data, error } = await supabase
-        .from('canciones')
+        .from('songs')
         .select(`
           id,
-          nombres_canciones ( titulo ),
+          title,
           artists ( name )
         `)
         .in('id', songIds);
@@ -326,10 +326,10 @@ async function loadSongs() {
     } else {
       // No selected user: load all songs as before
       const { data, error } = await supabase
-        .from('canciones')
+        .from('songs')
         .select(`
           id,
-          nombres_canciones ( titulo ),
+          title,
           artists ( name )
         `);
       if (error) {
@@ -342,7 +342,7 @@ async function loadSongs() {
     // Render songs (same rendering logic as before)
     songs.forEach(song => {
       if (!song || !song.id) return;
-      const songTitle = song.nombres_canciones?.titulo;
+      const songTitle = song.title;
       if (!songTitle) return;
       const artistName = song.artists?.name || '';
       const firstLetter = songTitle.charAt(0).toUpperCase();
