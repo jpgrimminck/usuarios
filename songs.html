@@ -28,26 +28,26 @@
   </head>
 <body class="bg-gray-900">
 <div class="relative flex size-full min-h-screen flex-col justify-between group/design-root overflow-x-hidden text-white">
-  <div class="flex-grow">
-    <!-- Header: give an id and higher z-index so it stays above dynamic content -->
-    <div id="site-header" class="sticky top-0 z-20 bg-gray-900/95 backdrop-blur-sm" style="height: 40px;">
-      <div class="flex items-center p-4 pb-2 justify-between">
-        <div class="w-12 flex items-center">
-          <button id="back-button" aria-label="Volver" class="flex items-center justify-center rounded-full h-10 w-10 text-white hover:bg-white/10 transition-colors">
-            <span class="material-symbols-outlined text-2xl">arrow_back</span>
-          </button>
-        </div>
-        <h1 class="text-xl font-bold leading-tight tracking-tight flex-1 text-center">Canciones</h1>
-        <div class="flex w-12 items-center justify-end">
-          <button class="flex items-center justify-center rounded-full h-10 w-10 text-white hover:bg-white/10 transition-colors">
-            <span class="material-symbols-outlined text-2xl">add</span>
-          </button>
-        </div>
+  <!-- Header: keep separate from scrollable area -->
+  <div id="site-header" class="bg-gray-900/95 backdrop-blur-sm" style="position: fixed; top: 0; left: 0; right: 0; height: 40px; z-index: 30;">
+    <div class="flex items-center p-4 pb-2 justify-between">
+      <div class="w-12 flex items-center">
+        <button id="back-button" aria-label="Volver" class="flex items-center justify-center rounded-full h-10 w-10 text-white hover:bg-white/10 transition-colors">
+          <span class="material-symbols-outlined text-2xl">arrow_back</span>
+        </button>
+      </div>
+      <h1 class="text-xl font-bold leading-tight tracking-tight flex-1 text-center">Canciones</h1>
+      <div class="flex w-12 items-center justify-end">
+        <button class="flex items-center justify-center rounded-full h-10 w-10 text-white hover:bg-white/10 transition-colors">
+          <span class="material-symbols-outlined text-2xl">add</span>
+        </button>
       </div>
     </div>
+  </div>
 
-  <!-- Cards container: use an id so JS can set padding-top equal to header height -->
-  <div id="songs-container" class="flex flex-col songs-list">
+  <!-- Scrollable list area separated from header -->
+  <div id="songs-scroll" class="flex-1 overflow-y-auto" style="padding-top: 80px;">
+    <div id="songs-container" class="flex flex-col songs-list">
       <!-- cards will be injected here -->
     </div>
   </div>
@@ -132,16 +132,12 @@ function adjustSongsContainerPadding() {
   const header = document.getElementById('site-header');
   const container = document.getElementById('songs-container');
   if (!header || !container) return;
-  // Temporarily hide container until padding is set to avoid visual jump
-  container.style.visibility = 'hidden';
-  // Measure header height (including margins) and apply as padding-top
-  const headerHeight = header.getBoundingClientRect().height;
-  container.style.paddingTop = '40px';
-  // Make sure header stays above
-  header.style.zIndex = 20;
-  // Reveal container after layout stabilized
-  // Use requestAnimationFrame to ensure layout update
-  requestAnimationFrame(() => { container.style.visibility = 'visible'; });
+  const scrollWrapper = document.getElementById('songs-scroll');
+  if (scrollWrapper) {
+    scrollWrapper.style.visibility = 'hidden';
+    requestAnimationFrame(() => { scrollWrapper.style.visibility = 'visible'; });
+  }
+  header.style.zIndex = 30;
 }
 
 function renderSuggestedSongs(onSelect) {
