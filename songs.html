@@ -382,24 +382,12 @@ document.addEventListener('DOMContentLoaded', function () {
   if (!backBtn) return;
   backBtn.addEventListener('click', function (e) {
     e.preventDefault();
-    // If there's a meaningful history entry, go back.
-    // history.length > 1 is a heuristic; also check document.referrer when length is 1.
-    if (window.history && window.history.length > 1) {
-      window.history.back();
-      // If the back navigation doesn't happen quickly, ensure fallback after a short timeout
-      setTimeout(() => {
-        // If still on this page after 300ms, fallback to index
-        if (location.pathname.endsWith('songs.html') || location.pathname === '/' ) {
-          window.location.href = 'index.html';
-        }
-      }, 300);
-      return;
-    }
-    // No history to go back to: navigate to index.html (preserve query id if present)
+    // Always navigate back to index.html (preserve id if present) using replace
     const params = new URLSearchParams(window.location.search);
     const id = params.get('id');
     const target = id ? `index.html?id=${encodeURIComponent(id)}` : 'index.html';
-    window.location.href = target;
+    // Use replace so this navigation doesn't create a new history entry
+    window.location.replace(target);
   });
 });
 </script>
