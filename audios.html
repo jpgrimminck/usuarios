@@ -142,37 +142,41 @@ if (backLink) {
   backLink.href = userId ? `songs.html?id=${encodeURIComponent(userId)}` : 'songs.html';
 }
 
-// Helper: fetch a single song by id and update page titles
+// Helper: probe candidate tables for a song record by id and update page titles
 async function fetchAndApplySongTitle(songId) {
   if (!songId) return null;
   const idVal = Number.isFinite(Number(songId)) ? Number(songId) : songId;
-  const attempts = [
-    { table: 'songs', select: 'id, title, artists ( name )' },
-    { table: 'canciones', select: 'id, nombres_canciones ( titulo ), artistas ( nombre )' }
+
+  const candidates = [
+    { table: 'songs', select: 'id, title, artists ( name )', getTitle: (d) => d.title },
+    { table: 'canciones', select: 'id, nombres_canciones ( titulo ), artistas ( nombre )', getTitle: (d) => d.nombres_canciones?.titulo }
   ];
 
-  for (const t of attempts) {
+  for (const c of candidates) {
     try {
       const { data, error } = await supabase
-        .from(t.table)
-        .select(t.select)
+        .from(c.table)
+        .select(c.select)
         .eq('id', idVal)
         .limit(1)
         .single();
+
       if (!error && data) {
-        // Normalize title from possible shapes
-        const songTitle = data.title || data.nombres_canciones?.titulo || urlParams.get('title') || 'Pistas de práctica';
+        const songTitle = c.getTitle(data) || urlParams.get('title') || 'Pistas de práctica';
         const headerH1 = document.querySelector('header h1');
         const mainH2 = document.querySelector('main h2');
         if (headerH1) headerH1.textContent = songTitle;
         if (mainH2) mainH2.textContent = songTitle;
         try { document.title = songTitle + ' — Stitch Design'; } catch (e) {}
         currentSongIdResolved = data?.id || null;
-        return data;
+        // Return a normalized record with a consistent title field
+        return { id: data.id, title: songTitle, raw: data };
       }
     } catch (err) {
-      // ignore and try next table
-      console.debug(`fetch from ${t.table} failed:`, err?.message || err);
+      // If the table doesn't exist, PostgREST responds with code PGRST205.
+      // Log and continue to next candidate without failing the whole flow.
+      console.debug(`probe ${c.table} failed:`, err?.message || err, err?.code || null);
+      continue;
     }
   }
 
@@ -183,6 +187,26 @@ async function fetchAndApplySongTitle(songId) {
   if (headerH1) headerH1.textContent = fallback;
   if (mainH2) mainH2.textContent = fallback;
   try { document.title = fallback + ' — Stitch Design'; } catch (e) {}
+  return null;
+}
+
+// Helper: try to find a song by title (used when only a title param is available)
+async function probeSongByTitle(titleStr) {
+  if (!titleStr) return null;
+  try {
+    // Prefer the canonical 'songs' table
+    const { data, error } = await supabase
+      .from('songs')
+      .select('id, title, artists ( name )')
+      .ilike('title', titleStr)
+      .limit(1)
+      .single();
+    if (!error && data) {
+      return { id: data.id, title: data.title, raw: data };
+    }
+  } catch (err) {
+    console.debug('probeSongByTitle: songs table lookup failed:', err?.message || err);
+  }
   return null;
 }
 
@@ -392,6 +416,20 @@ async function prepareAudioPlayer(audio, button, waveformElements) {
       return null;
     }
 
+    // Normalize storage path: DB stores filename only (e.g. "1-6.mp3").
+    // Ensure we always use the configured AUDIO_BUCKET and strip any accidental prefix.
+    let downloadBucket = AUDIO_BUCKET;
+    let downloadPath = storagePath;
+    if (typeof downloadPath === 'string') {
+      // If the path contains the bucket name as a prefix (e.g. "audios/1-6.mp3"), strip it.
+      const prefix = `${AUDIO_BUCKET}/`;
+      if (downloadPath.startsWith(prefix)) {
+        downloadPath = downloadPath.slice(prefix.length);
+      }
+    }
+
+    console.debug(`Downloading audio. bucket=${downloadBucket} path=${downloadPath} (original=${storagePath})`, { audioId: audio.id });
+
     let sourceUrl = null;
     let revoke = null;
 
@@ -401,8 +439,8 @@ async function prepareAudioPlayer(audio, button, waveformElements) {
       try {
         const { data, error } = await supabase
           .storage
-          .from(AUDIO_BUCKET)
-          .download(storagePath);
+          .from(downloadBucket)
+          .download(downloadPath);
 
         if (error) {
           console.error(`No se pudo descargar el audio ${storagePath}:`, error.message);
@@ -536,7 +574,7 @@ function initAudiosRealtime() {
       event: '*',
       schema: 'public',
       table: 'audios',
-      filter: `cancion_id=eq.${currentSongIdResolved}`
+  filter: `relational_song_id=eq.${currentSongIdResolved}`
     }, scheduleAudiosRefresh);
 
   audiosChannel.subscribe((status) => {
@@ -583,51 +621,34 @@ async function loadAudios(options = {}) {
   let songRecord = null;
 
   try {
+    // Use probing helpers to resolve song record by id or title. This avoids
+    // querying tables that may not exist in every schema (e.g., 'nombres_canciones').
     if (songId) {
-      const { data, error } = await supabase
-        .from('canciones')
-        .select('id, nombres_canciones ( titulo )')
-        .eq('id', songId)
-        .single();
-
-      if (error) {
-        console.error('Error obteniendo canción por ID:', error);
-        songId = null;
-      } else {
-        songRecord = data;
-        songId = data?.id || songId;
-        if (!headingTitle && data?.nombres_canciones?.titulo) {
-          headingTitle = data.nombres_canciones.titulo;
+      try {
+        const probed = await fetchAndApplySongTitle(songId);
+        if (probed) {
+          songRecord = probed.raw || probed;
+          songId = probed.id || songId;
+          if (!headingTitle && probed.title) headingTitle = probed.title;
+        } else {
+          songId = null;
         }
+      } catch (err) {
+        console.error('Error obteniendo canción por ID:', err);
+        songId = null;
       }
     }
 
     if (!songRecord && headingTitle) {
-      const { data: nameRecord, error: nameError } = await supabase
-        .from('nombres_canciones')
-        .select('id, titulo')
-        .eq('titulo', headingTitle)
-        .single();
-
-      if (nameError) {
-        console.error('Error obteniendo nombre de canción:', nameError);
-      } else if (nameRecord) {
-        const { data, error } = await supabase
-          .from('canciones')
-          .select('id, nombres_canciones ( titulo )')
-          .eq('nombre_id', nameRecord.id)
-          .limit(1)
-          .single();
-
-        if (error) {
-          console.error('Error obteniendo canción por nombre_id:', error);
-        } else {
-          songRecord = data;
-          songId = data?.id || songId;
-          if (!headingTitle && data?.nombres_canciones?.titulo) {
-            headingTitle = data.nombres_canciones.titulo;
-          }
+      try {
+        const probed = await probeSongByTitle(headingTitle);
+        if (probed) {
+          songRecord = probed.raw || probed;
+          songId = probed.id || songId;
+          if (!headingTitle && probed.title) headingTitle = probed.title;
         }
+      } catch (err) {
+        console.error('Error obteniendo nombre de canción (probe):', err);
       }
     }
 
@@ -645,8 +666,8 @@ async function loadAudios(options = {}) {
 
     const { data: audios, error: audiosError } = await supabase
       .from('audios')
-      .select('id, instrument, cancion_id, url')
-      .eq('cancion_id', songId)
+      .select('id, instrument, relational_song_id, url, storage_path')
+      .eq('relational_song_id', songId)
       .order('instrument', { ascending: true });
 
     if (audiosError) {
