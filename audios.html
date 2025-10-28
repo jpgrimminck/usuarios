@@ -404,31 +404,34 @@ function isHttpUrl(path) {
   return typeof path === 'string' && /^https?:\/\//i.test(path);
 }
 
+// Normalize Supabase object keys so we hit the real file regardless of how the path was stored.
+function normalizeAudioStoragePath(rawPath) {
+  if (!rawPath || typeof rawPath !== 'string') return null;
+  let path = rawPath.trim();
+  if (!path) return null;
+  path = path.replace(/^https?:\/\/[^/]+\/storage\/v1\/object\/[^/]+\/[^/]+\//i, '');
+  path = path.replace(/^\/+/, '');
+  if (!path) return null;
+  if (path.startsWith(`${AUDIO_BUCKET}/`)) {
+    return path;
+  }
+  if (path.includes('/')) {
+    return path;
+  }
+  return `${AUDIO_BUCKET}/${path}`;
+}
+
 async function prepareAudioPlayer(audio, button, waveformElements) {
   if (!audio) return null;
 
   let cached = playbackCache.get(audio.id);
 
   if (!cached) {
-  const storagePath = audio.url || null;
+    const storagePath = audio.url || null;
     if (!storagePath) {
       console.warn('El audio no tiene ruta de almacenamiento definida:', audio.id);
       return null;
     }
-
-    // Normalize storage path: DB stores filename only (e.g. "1-6.mp3").
-    // Ensure we always use the configured AUDIO_BUCKET and strip any accidental prefix.
-    let downloadBucket = AUDIO_BUCKET;
-    let downloadPath = storagePath;
-    if (typeof downloadPath === 'string') {
-      // If the path contains the bucket name as a prefix (e.g. "audios/1-6.mp3"), strip it.
-      const prefix = `${AUDIO_BUCKET}/`;
-      if (downloadPath.startsWith(prefix)) {
-        downloadPath = downloadPath.slice(prefix.length);
-      }
-    }
-
-    console.debug(`Downloading audio. bucket=${downloadBucket} path=${downloadPath} (original=${storagePath})`, { audioId: audio.id });
 
     let sourceUrl = null;
     let revoke = null;
@@ -436,23 +439,49 @@ async function prepareAudioPlayer(audio, button, waveformElements) {
     if (isHttpUrl(storagePath)) {
       sourceUrl = storagePath;
     } else {
-      try {
-        const { data, error } = await supabase
-          .storage
-          .from(downloadBucket)
-          .download(downloadPath);
+      const downloadBucket = AUDIO_BUCKET;
+      const normalizedPath = normalizeAudioStoragePath(storagePath);
+      const rawCandidate = typeof storagePath === 'string' ? storagePath.trim().replace(/^\/+/, '') : null;
+      const candidatePaths = [];
 
-        if (error) {
-          console.error(`No se pudo descargar el audio ${storagePath}:`, error.message);
-          return null;
-        }
+      if (normalizedPath) candidatePaths.push(normalizedPath);
+      if (rawCandidate && !candidatePaths.includes(rawCandidate)) candidatePaths.push(rawCandidate);
 
-        sourceUrl = URL.createObjectURL(data);
-        revoke = () => URL.revokeObjectURL(sourceUrl);
-      } catch (err) {
-        console.error(`Fallo inesperado descargando audio ${storagePath}:`, err);
+      if (!candidatePaths.length) {
+        console.warn('No se pudo normalizar la ruta de almacenamiento para el audio:', audio.id);
         return null;
       }
+
+      let downloadBlob = null;
+      let lastError = null;
+
+      for (const candidate of candidatePaths) {
+        try {
+          const { data, error } = await supabase
+            .storage
+            .from(downloadBucket)
+            .download(candidate);
+
+          if (error) {
+            lastError = error;
+            continue;
+          }
+
+          downloadBlob = data;
+          console.debug('Audio descargado', { audioId: audio.id, bucket: downloadBucket, path: candidate });
+          break;
+        } catch (err) {
+          lastError = err;
+        }
+      }
+
+      if (!downloadBlob) {
+        console.error(`No se pudo descargar el audio ${storagePath}:`, lastError || {});
+        return null;
+      }
+
+      sourceUrl = URL.createObjectURL(downloadBlob);
+      revoke = () => URL.revokeObjectURL(sourceUrl);
     }
 
     const audioElement = new Audio(sourceUrl);
