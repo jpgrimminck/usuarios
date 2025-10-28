@@ -142,6 +142,60 @@ if (backLink) {
   backLink.href = userId ? `songs.html?id=${encodeURIComponent(userId)}` : 'songs.html';
 }
 
+// Helper: fetch a single song by id and update page titles
+async function fetchAndApplySongTitle(songId) {
+  if (!songId) return null;
+  const idVal = Number.isFinite(Number(songId)) ? Number(songId) : songId;
+  const attempts = [
+    { table: 'songs', select: 'id, title, artists ( name )' },
+    { table: 'canciones', select: 'id, nombres_canciones ( titulo ), artistas ( nombre )' }
+  ];
+
+  for (const t of attempts) {
+    try {
+      const { data, error } = await supabase
+        .from(t.table)
+        .select(t.select)
+        .eq('id', idVal)
+        .limit(1)
+        .single();
+      if (!error && data) {
+        // Normalize title from possible shapes
+        const songTitle = data.title || data.nombres_canciones?.titulo || urlParams.get('title') || 'Pistas de práctica';
+        const headerH1 = document.querySelector('header h1');
+        const mainH2 = document.querySelector('main h2');
+        if (headerH1) headerH1.textContent = songTitle;
+        if (mainH2) mainH2.textContent = songTitle;
+        try { document.title = songTitle + ' — Stitch Design'; } catch (e) {}
+        currentSongIdResolved = data?.id || null;
+        return data;
+      }
+    } catch (err) {
+      // ignore and try next table
+      console.debug(`fetch from ${t.table} failed:`, err?.message || err);
+    }
+  }
+
+  // Fallback to URL title param
+  const fallback = urlParams.get('title') || 'Pistas de práctica';
+  const headerH1 = document.querySelector('header h1');
+  const mainH2 = document.querySelector('main h2');
+  if (headerH1) headerH1.textContent = fallback;
+  if (mainH2) mainH2.textContent = fallback;
+  try { document.title = fallback + ' — Stitch Design'; } catch (e) {}
+  return null;
+}
+
+// Apply title on load
+if (songIdParam) {
+  fetchAndApplySongTitle(songIdParam);
+} else if (title) {
+  const headerH1 = document.querySelector('header h1');
+  const mainH2 = document.querySelector('main h2');
+  if (headerH1) headerH1.textContent = title;
+  if (mainH2) mainH2.textContent = title;
+}
+
 function setButtonPlaying(button, isPlaying) {
   if (!button) return;
   const icon = button.querySelector('.material-symbols-outlined');
