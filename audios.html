@@ -410,7 +410,7 @@ async function prepareAudioPlayer(audio, button, waveformElements) {
   let cached = playbackCache.get(audio.id);
 
   if (!cached) {
-    const storagePath = audio.url || audio.storage_path || null;
+  const storagePath = audio.url || null;
     if (!storagePath) {
       console.warn('El audio no tiene ruta de almacenamiento definida:', audio.id);
       return null;
@@ -666,7 +666,7 @@ async function loadAudios(options = {}) {
 
     const { data: audios, error: audiosError } = await supabase
       .from('audios')
-      .select('id, instrument, relational_song_id, url, storage_path')
+  .select('id, instrument, relational_song_id, url')
       .eq('relational_song_id', songId)
       .order('instrument', { ascending: true });
 
