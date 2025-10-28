@@ -243,9 +243,9 @@
     async function loadSongs() {
       try {
         const { data, error } = await supabase
-          .from('nombres_canciones')
-          .select('id, titulo')
-          .order('titulo', { ascending: true });
+          .from('songs')
+          .select('id, title')
+          .order('title', { ascending: true });
 
         if (error) {
           console.error('No se pudieron cargar las canciones:', error.message);
@@ -264,15 +264,48 @@
         data.forEach((song) => {
           const option = document.createElement('option');
           option.value = song.id;
-          option.textContent = song.titulo;
+          option.textContent = song.title;
           songSelect.appendChild(option);
         });
         songSelect.disabled = false;
+        collapseSongSelect();
       } catch (err) {
         console.error('Fallo inesperado cargando canciones:', err);
         songSelect.innerHTML = '<option value="">Error cargando canciones</option>';
         songSelect.disabled = true;
+        collapseSongSelect();
       }
+    }
+
+    function expandSongSelect() {
+      if (songSelect.disabled) return;
+      const optionCount = songSelect.options.length;
+      if (optionCount <= 2) return;
+      const visibleRows = Math.min(8, Math.max(3, optionCount));
+      songSelect.size = visibleRows;
+      songSelect.dataset.expanded = 'true';
+    }
+
+    function collapseSongSelect() {
+      if (songSelect.dataset.expanded !== 'true' && songSelect.size === 1) return;
+      songSelect.size = 1;
+      songSelect.dataset.expanded = 'false';
+    }
+
+    function setupSongSelectExpandOnFocus() {
+      collapseSongSelect();
+      songSelect.addEventListener('focus', expandSongSelect);
+      songSelect.addEventListener('blur', collapseSongSelect);
+      songSelect.addEventListener('change', () => {
+        collapseSongSelect();
+        songSelect.blur();
+      });
+      songSelect.addEventListener('keydown', (event) => {
+        if (event.key === 'Escape') {
+          collapseSongSelect();
+          songSelect.blur();
+        }
+      });
     }
 
     function showMessage(type, text) {
@@ -358,7 +391,7 @@
           .from('audios')
           .insert({
             id: audioId,
-            cancion_id: nombreCancionId,
+            relational_song_id: nombreCancionId,
             instrument: instrumentValue,
             detail: detailValue,
             name: file.name,
@@ -393,6 +426,7 @@
     loadNextAudioId();
     loadUploaders();
     loadSongs();
+    setupSongSelectExpandOnFocus();
   </script>
 </body>
 </html>
