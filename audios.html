@@ -571,9 +571,7 @@ async function togglePlayback(button, audio, waveformElements) {
     }
   } else {
     player.pause();
-    player.currentTime = 0;
     setButtonPlaying(button, false);
-    resetWaveformState(cached.waveform);
     currentAudioInstance = null;
     currentAudioButton = null;
   }
