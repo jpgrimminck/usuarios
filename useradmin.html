@@ -37,7 +37,10 @@
     }
 
     async function loadUserCards() {
-      const { data: users, error } = await supabase.from('users').select('*');
+      const { data: users, error } = await supabase
+        .from('users')
+        .select('*')
+        .order('id', { ascending: false });
       if (error) {
         console.error(error);
         return;
@@ -50,8 +53,8 @@
         return;
       }
 
-      const usersToRender = [...users].reverse();
-      const userIds = usersToRender.map((user) => user.id).filter((id) => id !== null && id !== undefined);
+  const usersToRender = users || [];
+  const userIds = usersToRender.map((user) => user.id).filter((id) => id !== null && id !== undefined);
       const assignmentsMap = new Map();
 
       if (userIds.length > 0) {
