@@ -136,6 +136,7 @@ let currentExpandedCard = null;
 
 const WAVEFORM_VIEW_WINDOW_SECONDS = 4;
 const WAVEFORM_HALF_WINDOW_SECONDS = WAVEFORM_VIEW_WINDOW_SECONDS / 2;
+const SEEK_OFFSET_SECONDS = 3;
 
 const backLink = document.getElementById('back-to-songs');
 if (backLink) {
@@ -577,6 +578,71 @@ async function togglePlayback(button, audio, waveformElements) {
   }
 }
 
+async function seekPlayback(audio, offsetSeconds, waveformElements) {
+  if (!audio || !Number.isFinite(offsetSeconds)) return;
+
+  const cached = await prepareAudioPlayer(audio, null, waveformElements);
+  if (!cached) return;
+
+  const { player, waveform } = cached;
+
+  const ensureDurationReady = () => new Promise((resolve) => {
+    let resolved = false;
+    const markResolved = () => {
+      if (resolved) return;
+      resolved = true;
+      clearTimeout(timeoutId);
+      player.removeEventListener('loadedmetadata', markResolved);
+      player.removeEventListener('durationchange', markResolved);
+      resolve();
+    };
+    const timeoutId = setTimeout(markResolved, 1200);
+    player.addEventListener('loadedmetadata', markResolved);
+    player.addEventListener('durationchange', markResolved);
+    if (Number.isFinite(player.duration)) {
+      markResolved();
+    }
+  });
+
+  if (!Number.isFinite(player.duration)) {
+    try {
+      await ensureDurationReady();
+    } catch (err) {
+      console.warn('No se pudo obtener la duración del audio antes de buscar:', err);
+    }
+  }
+
+  const duration = Number.isFinite(player.duration) ? player.duration : null;
+  const currentTime = Number.isFinite(player.currentTime) ? player.currentTime : 0;
+  let nextTime = currentTime + offsetSeconds;
+
+  if (duration !== null) {
+    nextTime = Math.min(duration, nextTime);
+  }
+
+  nextTime = Math.max(0, nextTime);
+
+  try {
+    player.currentTime = nextTime;
+  } catch (err) {
+    console.warn('No se pudo ajustar el tiempo de reproducción:', err);
+    return;
+  }
+
+  if (waveform) {
+    applyWaveformPosition(waveform, nextTime, duration ?? player.duration);
+  }
+}
+
+function attachSeekControl(button, audio, card, offsetSeconds, waveformElements) {
+  if (!button) return;
+  button.addEventListener('click', async (event) => {
+    event.stopPropagation();
+    expandCard(card);
+    await seekPlayback(audio, offsetSeconds, waveformElements);
+  });
+}
+
 function scheduleAudiosRefresh() {
   if (audiosRefreshTimeout) {
     clearTimeout(audiosRefreshTimeout);
@@ -725,13 +791,21 @@ async function loadAudios(options = {}) {
       audioElement.className = 'audio-card flex flex-col gap-4 rounded-lg bg-gray-800 p-4';
       audioElement.dataset.audioId = audio.id;
       audioElement.innerHTML = `
-        <div class="flex items-start gap-4">
+        <div class="flex items-center gap-4">
           <div class="flex-1">
             <p class="text-lg font-semibold text-white">${audio.instrument || 'Instrumento sin nombre'}</p>
           </div>
-          <button type="button" class="flex h-14 w-14 items-center justify-center rounded-full bg-[var(--primary-color)] text-white" data-role="play-button">
-            <span class="material-symbols-outlined text-4xl">play_arrow</span>
-          </button>
+          <div class="flex items-center gap-2">
+            <button type="button" class="flex h-12 w-12 items-center justify-center rounded-full bg-gray-700 text-white transition-colors hover:bg-gray-600" data-role="rewind-button" aria-label="Retroceder ${SEEK_OFFSET_SECONDS} segundos" title="Retroceder ${SEEK_OFFSET_SECONDS} segundos">
+              <span class="material-symbols-outlined text-3xl">fast_rewind</span>
+            </button>
+            <button type="button" class="flex h-14 w-14 items-center justify-center rounded-full bg-[var(--primary-color)] text-white" data-role="play-button" aria-label="Reproducir o pausar" title="Reproducir o pausar">
+              <span class="material-symbols-outlined text-4xl">play_arrow</span>
+            </button>
+            <button type="button" class="flex h-12 w-12 items-center justify-center rounded-full bg-gray-700 text-white transition-colors hover:bg-gray-600" data-role="forward-button" aria-label="Avanzar ${SEEK_OFFSET_SECONDS} segundos" title="Avanzar ${SEEK_OFFSET_SECONDS} segundos">
+              <span class="material-symbols-outlined text-3xl">fast_forward</span>
+            </button>
+          </div>
         </div>
         <div class="waveform" data-role="waveform">
           <div class="waveform-viewport" data-role="waveform-viewport">
@@ -740,11 +814,15 @@ async function loadAudios(options = {}) {
         </div>
       `;
       const playButton = audioElement.querySelector('[data-role="play-button"]');
+      const rewindButton = audioElement.querySelector('[data-role="rewind-button"]');
+      const forwardButton = audioElement.querySelector('[data-role="forward-button"]');
       const waveformViewport = audioElement.querySelector('[data-role="waveform-viewport"]');
       const waveformContent = audioElement.querySelector('[data-role="waveform-content"]');
       attachPlayback(playButton, audio, audioElement, { viewportEl: waveformViewport, contentEl: waveformContent });
+      attachSeekControl(rewindButton, audio, audioElement, -SEEK_OFFSET_SECONDS, { viewportEl: waveformViewport, contentEl: waveformContent });
+      attachSeekControl(forwardButton, audio, audioElement, SEEK_OFFSET_SECONDS, { viewportEl: waveformViewport, contentEl: waveformContent });
       audioElement.addEventListener('click', (event) => {
-        if (event.target.closest('[data-role="play-button"]')) return;
+        if (event.target.closest('[data-role="play-button"], [data-role="rewind-button"], [data-role="forward-button"]')) return;
         if (currentExpandedCard === audioElement) {
           collapseCurrentCard();
           return;
