@@ -38,58 +38,84 @@
 
     async function loadUserCards() {
       const { data: users, error } = await supabase.from('users').select('*');
-      if (error) console.error(error);
-      else {
-        const container = document.getElementById('users-cards');
-        container.innerHTML = '';
-        for (let i = users.length - 1; i >= 0; i--) {
-          const user = users[i];
-          const { data: assigned, error: ipError } = await supabase
-            .from('user_ip')
-            .select('ip, device_model, created_at, device_code, comment')
-            .eq('selected_user_id', user.id)
-            .eq('approved', true);
-          if (ipError) console.error(ipError);
-          let ipInfo = 'Sin IP asignada';
-          if (assigned && assigned.length > 0) {
-            ipInfo = assigned.map(a => {
-              const days = Math.max(0, Math.floor((Date.now() - new Date(a.created_at)) / (1000 * 60 * 60 * 24)));
-              const timeAgo = days === 0 ? 'hoy' : `${days} días`;
-              const commentLine = a.comment ? ` | ${a.comment}` : '';
-              const deviceCodeLine = a.device_code ? ` | ${a.device_code}` : '';
-              return `IP: ${a.ip} (${a.device_model}) (${timeAgo})${commentLine}${deviceCodeLine}`;
-            }).join('<br>');
-          }
-          const borderClass = assigned && assigned.length > 0 ? 'border-4 border-green-500' : 'border-4 border-gray-500';
-          const card = document.createElement('div');
-          card.className = `bg-gray-800 p-4 rounded ${borderClass} cursor-pointer h-35`;
-          card.dataset.userId = user.id;
-          card.dataset.hasIp = (assigned && assigned.length > 0).toString();
-          card.innerHTML = `
+      if (error) {
+        console.error(error);
+        return;
+      }
+
+      const container = document.getElementById('users-cards');
+      container.innerHTML = '';
+
+      if (!users || users.length === 0) {
+        return;
+      }
+
+      const usersToRender = [...users].reverse();
+      const userIds = usersToRender.map((user) => user.id).filter((id) => id !== null && id !== undefined);
+      const assignmentsMap = new Map();
+
+      if (userIds.length > 0) {
+        const { data: assignments, error: assignmentsError } = await supabase
+          .from('user_ip')
+          .select('ip, device_model, created_at, device_code, comment, selected_user_id')
+          .in('selected_user_id', userIds)
+          .eq('approved', true);
+
+        if (assignmentsError) {
+          console.error(assignmentsError);
+        } else if (assignments && assignments.length > 0) {
+          assignments.forEach((assignment) => {
+            if (!assignment?.selected_user_id) return;
+            const list = assignmentsMap.get(assignment.selected_user_id) || [];
+            list.push(assignment);
+            assignmentsMap.set(assignment.selected_user_id, list);
+          });
+        }
+      }
+
+      usersToRender.forEach((user) => {
+        const assignedEntries = assignmentsMap.get(user.id) || [];
+        let ipInfo = 'Sin IP asignada';
+
+        if (assignedEntries.length > 0) {
+          ipInfo = assignedEntries.map((entry) => {
+            const days = Math.max(0, Math.floor((Date.now() - new Date(entry.created_at)) / (1000 * 60 * 60 * 24)));
+            const timeAgo = days === 0 ? 'hoy' : `${days} días`;
+            const commentLine = entry.comment ? ` | ${entry.comment}` : '';
+            const deviceCodeLine = entry.device_code ? ` | ${entry.device_code}` : '';
+            return `IP: ${entry.ip} (${entry.device_model}) (${timeAgo})${commentLine}${deviceCodeLine}`;
+          }).join('<br>');
+        }
+
+        const borderClass = assignedEntries.length > 0 ? 'border-4 border-green-500' : 'border-4 border-gray-500';
+        const card = document.createElement('div');
+        card.className = `bg-gray-800 p-4 rounded ${borderClass} cursor-pointer h-35`;
+        card.dataset.userId = user.id;
+        card.dataset.hasIp = (assignedEntries.length > 0).toString();
+        card.innerHTML = `
             <div class="relative" style="padding-right:60px;">
               <p class="text-2xl font-bold" style="margin:0;">${user.name}</p>
               <p class="text-sm text-gray-400" style="position:absolute; top:0; right:0; margin:0;">${user.id}</p>
             </div>
             <p class="text-sm" style="margin:2px 0 0 0;">${ipInfo}</p>
           `;
-          card.addEventListener('click', () => {
-            if (card.classList.contains('selected')) {
-              card.classList.remove('border-dashed', 'selected');
-              if (card.dataset.hasIp !== 'true') card.classList.remove('border-green-600');
-              selectedUserId = null;
-            } else {
-              document.querySelectorAll('#users-cards > div').forEach(c => {
-                c.classList.remove('border-dashed', 'selected');
-                if (c.dataset.hasIp !== 'true') c.classList.remove('border-green-600');
-              });
-              card.classList.add('border-dashed', 'border-green-600', 'selected');
-              selectedUserId = user.id;
-            }
-            updateAccessButton();
-          });
-          container.appendChild(card);
-        }
-      }
+        card.addEventListener('click', () => {
+          if (card.classList.contains('selected')) {
+            card.classList.remove('border-dashed', 'selected');
+            if (card.dataset.hasIp !== 'true') card.classList.remove('border-green-600');
+            selectedUserId = null;
+          } else {
+            document.querySelectorAll('#users-cards > div').forEach(c => {
+              c.classList.remove('border-dashed', 'selected');
+              if (c.dataset.hasIp !== 'true') c.classList.remove('border-green-600');
+            });
+            card.classList.add('border-dashed', 'border-green-600', 'selected');
+            selectedUserId = user.id;
+          }
+          updateAccessButton();
+        });
+        container.appendChild(card);
+      });
     }
 
     async function loadLatestPending() {
