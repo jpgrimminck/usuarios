@@ -31,6 +31,52 @@
     .audio-card button[data-role="play-button"] {
       flex-shrink: 0;
     }
+    .audio-card__header {
+      display: grid;
+      grid-template-columns: 1fr auto;
+      align-items: center;
+      gap: 0.75rem;
+    }
+    .audio-card__title {
+      margin: 0;
+    }
+    .audio-card__controls {
+      display: flex;
+      align-items: center;
+      gap: 0.5rem;
+      justify-content: flex-end;
+    }
+    .audio-card__controls button {
+      flex-shrink: 0;
+      transition: transform 0.15s ease, background-color 0.15s ease;
+    }
+    .audio-card__controls [data-role="play-button"] {
+      height: 3.25rem;
+      width: 3.25rem;
+    }
+    .audio-card__controls [data-role="rewind-button"],
+    .audio-card__controls [data-role="forward-button"] {
+      display: none;
+      height: 3rem;
+      width: 3rem;
+    }
+    .audio-card--controls-visible .audio-card__header {
+      grid-template-columns: 1fr;
+    }
+    .audio-card--controls-visible .audio-card__controls {
+      justify-content: center;
+      gap: 1.5rem;
+      width: 100%;
+      margin-top: 0.75rem;
+    }
+    .audio-card--controls-visible .audio-card__controls [data-role="play-button"] {
+      height: 3.75rem;
+      width: 3.75rem;
+    }
+    .audio-card--controls-visible .audio-card__controls [data-role="rewind-button"],
+    .audio-card--controls-visible .audio-card__controls [data-role="forward-button"] {
+      display: flex;
+    }
     .audio-card .waveform {
       position: relative;
       width: 100%;
@@ -221,6 +267,11 @@ if (songIdParam) {
   if (mainH2) mainH2.textContent = title;
 }
 
+function setCardControlsVisibility(card, visible) {
+  if (!card) return;
+  card.classList.toggle('audio-card--controls-visible', !!visible);
+}
+
 function setButtonPlaying(button, isPlaying) {
   if (!button) return;
   const icon = button.querySelector('.material-symbols-outlined');
@@ -239,6 +290,9 @@ function stopCurrentAudio() {
     setButtonPlaying(currentAudioButton, false);
     const audioCard = currentAudioButton.closest('.audio-card');
     const audioId = audioCard?.dataset?.audioId ? Number(audioCard.dataset.audioId) : null;
+    if (audioCard) {
+      setCardControlsVisibility(audioCard, false);
+    }
     if (audioId && playbackCache.has(audioId)) {
       const cached = playbackCache.get(audioId);
       if (cached?.waveform) {
@@ -349,6 +403,7 @@ function collapseCurrentCard() {
     }
   }
   card.classList.remove('audio-card--expanded');
+  setCardControlsVisibility(card, false);
   currentExpandedCard = null;
 }
 
@@ -357,6 +412,7 @@ function expandCard(card) {
   if (currentExpandedCard === card) return;
   collapseCurrentCard();
   card.classList.add('audio-card--expanded');
+  setCardControlsVisibility(card, true);
   const audioId = card.dataset?.audioId ? Number(card.dataset.audioId) : null;
   if (audioId && playbackCache.has(audioId)) {
     const cached = playbackCache.get(audioId);
@@ -499,6 +555,8 @@ async function prepareAudioPlayer(audio, button, waveformElements) {
         stopCurrentAudio();
       } else if (cacheEntry.playButtonRef && cacheEntry.playButtonRef.dataset.playing === 'true') {
         setButtonPlaying(cacheEntry.playButtonRef, false);
+        const card = cacheEntry.playButtonRef.closest('.audio-card');
+        setCardControlsVisibility(card, false);
       }
       if (cacheEntry.waveform) {
         resetWaveformState(cacheEntry.waveform);
@@ -562,6 +620,7 @@ async function togglePlayback(button, audio, waveformElements) {
       currentAudioInstance = player;
       currentAudioButton = button;
       setButtonPlaying(button, true);
+      setCardControlsVisibility(button.closest('.audio-card'), true);
       applyWaveformPosition(cached.waveform, player.currentTime, player.duration);
     } catch (err) {
       console.error('No se pudo reproducir el audio:', err);
@@ -573,8 +632,6 @@ async function togglePlayback(button, audio, waveformElements) {
   } else {
     player.pause();
     setButtonPlaying(button, false);
-    currentAudioInstance = null;
-    currentAudioButton = null;
   }
 }
 
@@ -791,18 +848,16 @@ async function loadAudios(options = {}) {
       audioElement.className = 'audio-card flex flex-col gap-4 rounded-lg bg-gray-800 p-4';
       audioElement.dataset.audioId = audio.id;
       audioElement.innerHTML = `
-        <div class="flex items-center gap-4">
-          <div class="flex-1">
-            <p class="text-lg font-semibold text-white">${audio.instrument || 'Instrumento sin nombre'}</p>
-          </div>
-          <div class="flex items-center gap-2">
-            <button type="button" class="flex h-12 w-12 items-center justify-center rounded-full bg-gray-700 text-white transition-colors hover:bg-gray-600" data-role="rewind-button" aria-label="Retroceder ${SEEK_OFFSET_SECONDS} segundos" title="Retroceder ${SEEK_OFFSET_SECONDS} segundos">
+        <div class="audio-card__header">
+          <p class="audio-card__title text-lg font-semibold text-white">${audio.instrument || 'Instrumento sin nombre'}</p>
+          <div class="audio-card__controls" data-role="controls">
+            <button type="button" class="flex items-center justify-center rounded-full bg-gray-700 text-white transition-colors hover:bg-gray-600" data-role="rewind-button" aria-label="Retroceder ${SEEK_OFFSET_SECONDS} segundos" title="Retroceder ${SEEK_OFFSET_SECONDS} segundos">
               <span class="material-symbols-outlined text-3xl">fast_rewind</span>
             </button>
-            <button type="button" class="flex h-14 w-14 items-center justify-center rounded-full bg-[var(--primary-color)] text-white" data-role="play-button" aria-label="Reproducir o pausar" title="Reproducir o pausar">
+            <button type="button" class="flex items-center justify-center rounded-full bg-[var(--primary-color)] text-white" data-role="play-button" aria-label="Reproducir o pausar" title="Reproducir o pausar">
               <span class="material-symbols-outlined text-4xl">play_arrow</span>
             </button>
-            <button type="button" class="flex h-12 w-12 items-center justify-center rounded-full bg-gray-700 text-white transition-colors hover:bg-gray-600" data-role="forward-button" aria-label="Avanzar ${SEEK_OFFSET_SECONDS} segundos" title="Avanzar ${SEEK_OFFSET_SECONDS} segundos">
+            <button type="button" class="flex items-center justify-center rounded-full bg-gray-700 text-white transition-colors hover:bg-gray-600" data-role="forward-button" aria-label="Avanzar ${SEEK_OFFSET_SECONDS} segundos" title="Avanzar ${SEEK_OFFSET_SECONDS} segundos">
               <span class="material-symbols-outlined text-3xl">fast_forward</span>
             </button>
           </div>
@@ -822,7 +877,7 @@ async function loadAudios(options = {}) {
       attachSeekControl(rewindButton, audio, audioElement, -SEEK_OFFSET_SECONDS, { viewportEl: waveformViewport, contentEl: waveformContent });
       attachSeekControl(forwardButton, audio, audioElement, SEEK_OFFSET_SECONDS, { viewportEl: waveformViewport, contentEl: waveformContent });
       audioElement.addEventListener('click', (event) => {
-        if (event.target.closest('[data-role="play-button"], [data-role="rewind-button"], [data-role="forward-button"]')) return;
+        if (event.target.closest('[data-role="play-button"], [data-role="rewind-button"], [data-role="forward-button"], .audio-card__controls')) return;
         if (currentExpandedCard === audioElement) {
           collapseCurrentCard();
           return;
