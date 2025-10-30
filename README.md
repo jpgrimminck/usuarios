@@ -22,7 +22,7 @@
     - Play / Pause / Forward / Rewind
 
 ## 5. Song Status Tags
-- Songs can have two status tags:
+- Songs can have three status tags:
     - Not started (default)
     - Practicing
     - Ready (or "Completed")
