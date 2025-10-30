@@ -180,6 +180,28 @@
       color: #f8fafc;
       transition: transform 0.15s ease, background-color 0.2s ease, opacity 0.2s ease;
     }
+    .recorder-button[hidden] {
+      display: none !important;
+    }
+    .recorder-button--round {
+      width: 4rem;
+      height: 4rem;
+      padding: 0;
+      border-radius: 50%;
+      font-size: 0.85rem;
+      line-height: 1.1;
+      text-align: center;
+      word-break: break-word;
+      flex-direction: column;
+      justify-content: center;
+      gap: 0.15rem;
+    }
+    .recorder-button__subtext {
+      font-size: 0.6rem;
+      letter-spacing: 0.04em;
+      text-transform: uppercase;
+      line-height: 1;
+    }
     .recorder-button:not(:disabled):hover {
       transform: translateY(-1px);
       background: rgba(71, 85, 105, 0.95);
@@ -249,17 +271,16 @@
 <div class="space-y-4">
 </div>
 <section class="recorder-section" data-recorder-section>
-  <h3 class="text-xl font-semibold text-white">Record New Track</h3>
+  <h3 class="text-xl font-semibold text-white">Record New Audio</h3>
   <label class="recorder-section__label">
-    <span>Track title</span>
-    <input type="text" class="recorder-section__input" placeholder="e.g. Lead bass" data-recorder-field="title"/>
+
+    <input type="text" class="recorder-section__input" placeholder="Enter a title please" data-recorder-field="title"/>
   </label>
-  <div class="recorder-section__status" data-recorder-status data-tone="neutral">Enter a title and press "Start recording".</div>
+  <div class="recorder-section__status" data-recorder-status data-tone="neutral">Press "Record" to start and add a title when you are ready.</div>
   <div class="recorder-section__controls">
-    <button type="button" class="recorder-button recorder-button--primary" data-recorder-action="start">Start recording</button>
-    <button type="button" class="recorder-button" data-recorder-action="stop" disabled>Stop</button>
-    <button type="button" class="recorder-button recorder-button--accent" data-recorder-action="upload" disabled>Upload recording</button>
-    <button type="button" class="recorder-button recorder-button--destructive" data-recorder-action="discard" disabled>Discard</button>
+    <button type="button" class="recorder-button recorder-button--primary recorder-button--round" data-recorder-action="toggle">Record</button>
+    <button type="button" class="recorder-button recorder-button--accent" data-recorder-action="upload" data-recorder-visibility="hasRecording" hidden disabled>Upload recording</button>
+    <button type="button" class="recorder-button recorder-button--destructive" data-recorder-action="discard" data-recorder-visibility="hasRecording" hidden disabled>Discard</button>
   </div>
   <audio class="recorder-section__preview" data-recorder-preview controls preload="metadata"></audio>
 </section>
@@ -833,10 +854,10 @@ function ensureRecorderElements() {
   recorderElements = {
     section,
     titleInput: section.querySelector('[data-recorder-field="title"]'),
-    startButton: section.querySelector('[data-recorder-action="start"]'),
-    stopButton: section.querySelector('[data-recorder-action="stop"]'),
+    toggleButton: section.querySelector('[data-recorder-action="toggle"]'),
     uploadButton: section.querySelector('[data-recorder-action="upload"]'),
     discardButton: section.querySelector('[data-recorder-action="discard"]'),
+    conditionalButtons: Array.from(section.querySelectorAll('[data-recorder-visibility]')),
     previewEl: section.querySelector('[data-recorder-preview]'),
     statusEl: section.querySelector('[data-recorder-status]'),
     initialized: false
@@ -858,7 +879,7 @@ function setDefaultRecorderStatus() {
     setRecorderStatus('Select a track before recording.', 'warning');
     return;
   }
-  setRecorderStatus('Enter a title and press "Start recording".', 'neutral');
+  setRecorderStatus('Press "Record" to start and add a title when you are ready.', 'neutral');
 }
 
 function updateRecorderUi() {
@@ -867,9 +888,35 @@ function updateRecorderUi() {
   const isRecording = mediaRecorder && mediaRecorder.state === 'recording';
   const hasRecording = !!recordingBlob;
 
-  const canStart = !!currentSongIdResolved && !isRecording && !isUploadingRecording;
-  elements.startButton.disabled = !canStart;
-  elements.stopButton.disabled = !isRecording;
+  if (elements.toggleButton) {
+    const showToggle = isRecording || !hasRecording;
+    elements.toggleButton.hidden = !showToggle;
+    if (!showToggle && document.activeElement === elements.toggleButton) {
+      elements.toggleButton.blur();
+    }
+
+    const canRecord = !!currentSongIdResolved && !isRecording && !isUploadingRecording && !hasRecording;
+    elements.toggleButton.disabled = isRecording ? false : !canRecord;
+  elements.toggleButton.setAttribute('aria-pressed', isRecording ? 'true' : 'false');
+  elements.toggleButton.setAttribute('aria-label', isRecording ? 'Stop' : 'Start recording');
+    if (isRecording) {
+      elements.toggleButton.innerHTML = '<span>Stop</span><span class="recorder-button__subtext">Recording...</span>';
+    } else {
+      elements.toggleButton.textContent = 'Record';
+    }
+    elements.toggleButton.classList.toggle('recorder-button--primary', !isRecording);
+    elements.toggleButton.classList.toggle('recorder-button--destructive', isRecording);
+  }
+  if (elements.conditionalButtons?.length) {
+    elements.conditionalButtons.forEach((button) => {
+      const visibility = button.dataset.recorderVisibility;
+      const shouldShow = visibility === 'hasRecording' ? hasRecording : true;
+      button.hidden = !shouldShow;
+      if (!shouldShow && document.activeElement === button) {
+        button.blur();
+      }
+    });
+  }
   elements.uploadButton.disabled = !hasRecording || isUploadingRecording;
   elements.discardButton.disabled = !hasRecording || isRecording || isUploadingRecording;
   elements.titleInput.disabled = isRecording || isUploadingRecording;
@@ -950,7 +997,7 @@ function handleRecorderStopped() {
   }
   recordingObjectUrl = URL.createObjectURL(recordingBlob);
   updateRecorderUi();
-  setRecorderStatus('Recording ready. Play it back, upload it, or discard it.', 'success');
+  setRecorderStatus('Recording ready. Add a title, then upload or discard.', 'success');
 }
 
 function determineFileExtension(mimeType) {
@@ -1001,20 +1048,13 @@ async function startRecording() {
     return;
   }
 
-  const titleValue = elements.titleInput.value.trim();
-  if (!titleValue) {
-  setRecorderStatus('Enter a recording title before you start.', 'warning');
-    elements.titleInput.focus();
-    return;
-  }
-
   if (!navigator.mediaDevices?.getUserMedia) {
-  setRecorderStatus('This browser does not support audio recording.', 'error');
+    setRecorderStatus('This browser does not support audio recording.', 'error');
     return;
   }
 
   if (mediaRecorder && mediaRecorder.state === 'recording') {
-  setRecorderStatus('There is already a recording in progress.', 'warning');
+    setRecorderStatus('There is already a recording in progress.', 'warning');
     return;
   }
 
@@ -1039,13 +1079,13 @@ async function startRecording() {
     mediaRecorder.addEventListener('stop', handleRecorderStopped);
 
     mediaRecorder.start();
-  setRecorderStatus('Recording... press "Stop" when you are done.', 'info');
+    setRecorderStatus('Recording... tap "Stop" when you are done.', 'info');
   } catch (err) {
-  console.error('Unable to start recording:', err);
+    console.error('Unable to start recording:', err);
     cleanupRecorderStream();
     mediaRecorder = null;
     resetRecordingState({ keepInput: true, silent: true });
-  setRecorderStatus('Could not access the microphone. Check your permissions.', 'error');
+    setRecorderStatus('Could not access the microphone. Check your permissions.', 'error');
   }
 
   updateRecorderUi();
@@ -1087,7 +1127,7 @@ async function uploadRecording() {
 
   const titleValue = elements.titleInput.value.trim();
   if (!titleValue) {
-  setRecorderStatus('Enter a recording title before uploading.', 'warning');
+    setRecorderStatus("Don't forget to enter a title.", 'warning');
     elements.titleInput.focus();
     return;
   }
@@ -1161,16 +1201,16 @@ async function uploadRecording() {
 
 function initRecorderControls() {
   const elements = ensureRecorderElements();
-  if (!elements || elements.initialized) return;
+  if (!elements || elements.initialized || !elements.toggleButton) return;
   elements.initialized = true;
 
-  elements.startButton.addEventListener('click', (event) => {
+  elements.toggleButton.addEventListener('click', (event) => {
     event.preventDefault();
-    startRecording();
-  });
-  elements.stopButton.addEventListener('click', (event) => {
-    event.preventDefault();
-    stopRecording();
+    if (mediaRecorder && mediaRecorder.state === 'recording') {
+      stopRecording();
+    } else {
+      startRecording();
+    }
   });
   elements.uploadButton.addEventListener('click', (event) => {
     event.preventDefault();
