@@ -134,6 +134,101 @@
       max-height: 120px;
       margin-top: 20px;
     }
+    /* Recorder */
+    .recorder-section {
+      margin-top: 2.5rem;
+      border-radius: 0.75rem;
+      background: rgba(31, 41, 55, 0.85);
+      padding: 1.5rem;
+      display: flex;
+      flex-direction: column;
+      gap: 1rem;
+    }
+    .recorder-section__label span {
+      display: block;
+      margin-bottom: 0.35rem;
+      font-size: 0.9rem;
+      color: rgba(226, 232, 240, 0.8);
+    }
+    .recorder-section__input {
+      width: 100%;
+      border-radius: 0.5rem;
+      border: 1px solid rgba(148, 163, 184, 0.2);
+      background: rgba(15, 23, 42, 0.85);
+      padding: 0.75rem 1rem;
+      color: #f8fafc;
+      outline: none;
+      transition: border-color 0.2s ease, box-shadow 0.2s ease;
+    }
+    .recorder-section__input:focus {
+      border-color: rgba(79, 70, 229, 0.65);
+      box-shadow: 0 0 0 2px rgba(79, 70, 229, 0.2);
+    }
+    .recorder-section__controls {
+      display: flex;
+      flex-wrap: wrap;
+      gap: 0.75rem;
+    }
+    .recorder-button {
+      display: inline-flex;
+      align-items: center;
+      justify-content: center;
+      border-radius: 9999px;
+      padding: 0.75rem 1.5rem;
+      font-weight: 600;
+      background: rgba(55, 65, 81, 0.9);
+      color: #f8fafc;
+      transition: transform 0.15s ease, background-color 0.2s ease, opacity 0.2s ease;
+    }
+    .recorder-button:not(:disabled):hover {
+      transform: translateY(-1px);
+      background: rgba(71, 85, 105, 0.95);
+    }
+    .recorder-button:disabled {
+      opacity: 0.45;
+      cursor: not-allowed;
+    }
+    .recorder-button--primary {
+      background: var(--primary-color);
+    }
+    .recorder-button--primary:not(:disabled):hover {
+      background: #0f6ad1;
+    }
+    .recorder-button--accent {
+      background: rgba(16, 185, 129, 0.85);
+    }
+    .recorder-button--accent:not(:disabled):hover {
+      background: rgba(5, 150, 105, 0.85);
+    }
+    .recorder-button--destructive {
+      background: rgba(239, 68, 68, 0.8);
+    }
+    .recorder-button--destructive:not(:disabled):hover {
+      background: rgba(220, 38, 38, 0.85);
+    }
+    .recorder-section__status {
+      font-size: 0.95rem;
+      color: rgba(226, 232, 240, 0.78);
+    }
+    .recorder-section__status[data-tone="warning"] {
+      color: #facc15;
+    }
+    .recorder-section__status[data-tone="error"] {
+      color: #f87171;
+    }
+    .recorder-section__status[data-tone="success"] {
+      color: #4ade80;
+    }
+    .recorder-section__status[data-tone="info"] {
+      color: #60a5fa;
+    }
+    .recorder-section__preview {
+      width: 100%;
+      display: none;
+    }
+    .recorder-section__preview.recorder-section__preview--visible {
+      display: block;
+    }
   </style>
   </head>
 <body class="bg-gray-900">
@@ -153,6 +248,21 @@
 <h2 class="text-3xl font-bold text-white mb-6">Pistas de Práctica</h2>
 <div class="space-y-4">
 </div>
+<section class="recorder-section" data-recorder-section>
+  <h3 class="text-xl font-semibold text-white">Record New Track</h3>
+  <label class="recorder-section__label">
+    <span>Track title</span>
+    <input type="text" class="recorder-section__input" placeholder="e.g. Lead bass" data-recorder-field="title"/>
+  </label>
+  <div class="recorder-section__status" data-recorder-status data-tone="neutral">Enter a title and press "Start recording".</div>
+  <div class="recorder-section__controls">
+    <button type="button" class="recorder-button recorder-button--primary" data-recorder-action="start">Start recording</button>
+    <button type="button" class="recorder-button" data-recorder-action="stop" disabled>Stop</button>
+    <button type="button" class="recorder-button recorder-button--accent" data-recorder-action="upload" disabled>Upload recording</button>
+    <button type="button" class="recorder-button recorder-button--destructive" data-recorder-action="discard" disabled>Discard</button>
+  </div>
+  <audio class="recorder-section__preview" data-recorder-preview controls preload="metadata"></audio>
+</section>
 </main>
 </div>
 </div>
@@ -180,9 +290,24 @@ let audiosChannel = null;
 let audiosRefreshTimeout = null;
 let currentExpandedCard = null;
 
+let mediaRecorder = null;
+let recorderStream = null;
+let recordedChunks = [];
+let recordingBlob = null;
+let recordingObjectUrl = null;
+let recorderMimeType = 'audio/webm';
+let isUploadingRecording = false;
+let recorderElements = null;
+
 const WAVEFORM_VIEW_WINDOW_SECONDS = 4;
 const WAVEFORM_HALF_WINDOW_SECONDS = WAVEFORM_VIEW_WINDOW_SECONDS / 2;
 const SEEK_OFFSET_SECONDS = 3;
+const RECORDER_MIME_TYPES = [
+  'audio/webm;codecs=opus',
+  'audio/webm',
+  'audio/ogg;codecs=opus',
+  'audio/mp4;codecs=mp4a.40.2'
+];
 
 const backLink = document.getElementById('back-to-songs');
 if (backLink) {
@@ -700,6 +825,366 @@ function attachSeekControl(button, audio, card, offsetSeconds, waveformElements)
   });
 }
 
+// Recorder helpers
+function ensureRecorderElements() {
+  if (recorderElements) return recorderElements;
+  const section = document.querySelector('[data-recorder-section]');
+  if (!section) return null;
+  recorderElements = {
+    section,
+    titleInput: section.querySelector('[data-recorder-field="title"]'),
+    startButton: section.querySelector('[data-recorder-action="start"]'),
+    stopButton: section.querySelector('[data-recorder-action="stop"]'),
+    uploadButton: section.querySelector('[data-recorder-action="upload"]'),
+    discardButton: section.querySelector('[data-recorder-action="discard"]'),
+    previewEl: section.querySelector('[data-recorder-preview]'),
+    statusEl: section.querySelector('[data-recorder-status]'),
+    initialized: false
+  };
+  return recorderElements;
+}
+
+function setRecorderStatus(message, tone = 'neutral') {
+  const elements = ensureRecorderElements();
+  if (!elements?.statusEl) return;
+  elements.statusEl.textContent = message;
+  elements.statusEl.dataset.tone = tone;
+}
+
+function setDefaultRecorderStatus() {
+  if (mediaRecorder && mediaRecorder.state === 'recording') return;
+  if (recordingBlob) return;
+  if (!currentSongIdResolved) {
+    setRecorderStatus('Select a track before recording.', 'warning');
+    return;
+  }
+  setRecorderStatus('Enter a title and press "Start recording".', 'neutral');
+}
+
+function updateRecorderUi() {
+  const elements = ensureRecorderElements();
+  if (!elements) return;
+  const isRecording = mediaRecorder && mediaRecorder.state === 'recording';
+  const hasRecording = !!recordingBlob;
+
+  const canStart = !!currentSongIdResolved && !isRecording && !isUploadingRecording;
+  elements.startButton.disabled = !canStart;
+  elements.stopButton.disabled = !isRecording;
+  elements.uploadButton.disabled = !hasRecording || isUploadingRecording;
+  elements.discardButton.disabled = !hasRecording || isRecording || isUploadingRecording;
+  elements.titleInput.disabled = isRecording || isUploadingRecording;
+
+  if (elements.previewEl) {
+    elements.previewEl.classList.toggle('recorder-section__preview--visible', hasRecording && !!recordingObjectUrl);
+    if (!hasRecording) {
+      elements.previewEl.pause();
+      elements.previewEl.removeAttribute('src');
+      elements.previewEl.load();
+    } else if (recordingObjectUrl) {
+      elements.previewEl.src = recordingObjectUrl;
+    }
+  }
+}
+
+function cleanupRecorderStream() {
+  if (recorderStream) {
+    try {
+      recorderStream.getTracks().forEach((track) => track.stop());
+    } catch (err) {
+      console.debug('No se pudieron detener todas las pistas de la grabación:', err);
+    }
+  }
+  recorderStream = null;
+}
+
+function resetRecordingState(options = {}) {
+  const { keepInput = true, silent = false } = options;
+  if (recordingObjectUrl) {
+    URL.revokeObjectURL(recordingObjectUrl);
+    recordingObjectUrl = null;
+  }
+  recordingBlob = null;
+  recordedChunks = [];
+  const elements = ensureRecorderElements();
+  if (elements) {
+    if (!keepInput) {
+      elements.titleInput.value = '';
+    }
+    if (elements.previewEl) {
+      elements.previewEl.pause();
+      elements.previewEl.removeAttribute('src');
+      elements.previewEl.load();
+      elements.previewEl.classList.remove('recorder-section__preview--visible');
+    }
+  }
+  if (!silent) {
+    setDefaultRecorderStatus();
+  }
+  updateRecorderUi();
+}
+
+function handleRecorderDataAvailable(event) {
+  if (event?.data && event.data.size > 0) {
+    recordedChunks.push(event.data);
+  }
+}
+
+function handleRecorderStopped() {
+  cleanupRecorderStream();
+  if (mediaRecorder) {
+    mediaRecorder.removeEventListener('dataavailable', handleRecorderDataAvailable);
+    mediaRecorder.removeEventListener('stop', handleRecorderStopped);
+  }
+  mediaRecorder = null;
+
+  if (!recordedChunks.length) {
+    resetRecordingState({ keepInput: true, silent: true });
+  setRecorderStatus('No audio was captured. Please try again.', 'warning');
+    return;
+  }
+
+  recordingBlob = new Blob(recordedChunks, { type: recorderMimeType || 'audio/webm' });
+  recordedChunks = [];
+  if (recordingObjectUrl) {
+    URL.revokeObjectURL(recordingObjectUrl);
+  }
+  recordingObjectUrl = URL.createObjectURL(recordingBlob);
+  updateRecorderUi();
+  setRecorderStatus('Recording ready. Play it back, upload it, or discard it.', 'success');
+}
+
+function determineFileExtension(mimeType) {
+  if (!mimeType) return 'webm';
+  if (mimeType.includes('ogg')) return 'ogg';
+  if (mimeType.includes('mp3')) return 'mp3';
+  if (mimeType.includes('wav')) return 'wav';
+  if (mimeType.includes('m4a') || mimeType.includes('mp4')) return 'm4a';
+  return 'webm';
+}
+
+function slugifyFileName(input) {
+  if (!input) return '';
+  return input
+    .toString()
+    .normalize('NFD')
+    .replace(/[\u0300-\u036f]/g, '')
+    .replace(/[^a-zA-Z0-9]+/g, '-')
+    .replace(/^-+|-+$/g, '')
+    .toLowerCase();
+}
+
+async function fetchNextAudioId() {
+  try {
+    const { data, error } = await supabase
+      .from('audios')
+      .select('id')
+      .order('id', { ascending: false })
+      .limit(1);
+
+    if (error) throw error;
+
+    const lastId = data && data[0] ? Number(data[0].id) : 0;
+    const nextId = Number.isFinite(lastId) && lastId > 0 ? lastId + 1 : 1;
+    return nextId;
+  } catch (err) {
+    console.error('Unable to obtain the next audio id:', err);
+    return null;
+  }
+}
+
+async function startRecording() {
+  const elements = ensureRecorderElements();
+  if (!elements) return;
+
+  if (!currentSongIdResolved) {
+    setRecorderStatus('Select a track before recording.', 'warning');
+    return;
+  }
+
+  const titleValue = elements.titleInput.value.trim();
+  if (!titleValue) {
+  setRecorderStatus('Enter a recording title before you start.', 'warning');
+    elements.titleInput.focus();
+    return;
+  }
+
+  if (!navigator.mediaDevices?.getUserMedia) {
+  setRecorderStatus('This browser does not support audio recording.', 'error');
+    return;
+  }
+
+  if (mediaRecorder && mediaRecorder.state === 'recording') {
+  setRecorderStatus('There is already a recording in progress.', 'warning');
+    return;
+  }
+
+  resetRecordingState({ keepInput: true, silent: true });
+  updateRecorderUi();
+  setRecorderStatus('Requesting microphone access...', 'info');
+
+  try {
+    const stream = await navigator.mediaDevices.getUserMedia({ audio: true });
+    recorderStream = stream;
+    recordedChunks = [];
+
+    let selectedMimeType = '';
+    if (typeof MediaRecorder !== 'undefined' && MediaRecorder.isTypeSupported) {
+      selectedMimeType = RECORDER_MIME_TYPES.find((type) => MediaRecorder.isTypeSupported(type)) || '';
+    }
+
+    mediaRecorder = selectedMimeType ? new MediaRecorder(stream, { mimeType: selectedMimeType }) : new MediaRecorder(stream);
+    recorderMimeType = mediaRecorder.mimeType || selectedMimeType || 'audio/webm';
+
+    mediaRecorder.addEventListener('dataavailable', handleRecorderDataAvailable);
+    mediaRecorder.addEventListener('stop', handleRecorderStopped);
+
+    mediaRecorder.start();
+  setRecorderStatus('Recording... press "Stop" when you are done.', 'info');
+  } catch (err) {
+  console.error('Unable to start recording:', err);
+    cleanupRecorderStream();
+    mediaRecorder = null;
+    resetRecordingState({ keepInput: true, silent: true });
+  setRecorderStatus('Could not access the microphone. Check your permissions.', 'error');
+  }
+
+  updateRecorderUi();
+}
+
+function stopRecording() {
+  if (!mediaRecorder || mediaRecorder.state !== 'recording') return;
+  try {
+    mediaRecorder.stop();
+  setRecorderStatus('Processing the recording...', 'info');
+  } catch (err) {
+  console.error('Error while stopping the recording:', err);
+  setRecorderStatus('The recording could not be stopped.', 'error');
+  }
+  updateRecorderUi();
+}
+
+function discardRecording() {
+  if (mediaRecorder && mediaRecorder.state === 'recording') {
+  setRecorderStatus('Stop the recording before discarding it.', 'warning');
+    return;
+  }
+  resetRecordingState({ keepInput: true, silent: true });
+  setRecorderStatus('Recording discarded. You can try again.', 'info');
+}
+
+async function uploadRecording() {
+  if (!recordingBlob) {
+  setRecorderStatus('There is no recording to upload.', 'warning');
+    return;
+  }
+  if (!currentSongIdResolved) {
+  setRecorderStatus('Select a track before uploading the recording.', 'warning');
+    return;
+  }
+
+  const elements = ensureRecorderElements();
+  if (!elements) return;
+
+  const titleValue = elements.titleInput.value.trim();
+  if (!titleValue) {
+  setRecorderStatus('Enter a recording title before uploading.', 'warning');
+    elements.titleInput.focus();
+    return;
+  }
+
+  const nextAudioId = await fetchNextAudioId();
+  if (!nextAudioId) {
+    setRecorderStatus('Could not prepare the new audio record. Please try again later.', 'error');
+    return;
+  }
+
+  const extension = determineFileExtension(recordingBlob.type || recorderMimeType);
+  const timestamp = new Date().toISOString().replace(/[:.]/g, '-');
+  const safeName = slugifyFileName(titleValue).slice(0, 48) || 'recording';
+  const fileName = `${timestamp}-${safeName}.${extension}`;
+  const filePath = `recordings/${currentSongIdResolved}/${fileName}`;
+  const uploaderId = (() => {
+    if (!userId) return null;
+    const numericId = Number(userId);
+    return Number.isFinite(numericId) ? numericId : userId;
+  })();
+
+  isUploadingRecording = true;
+  updateRecorderUi();
+  setRecorderStatus('Uploading recording...', 'info');
+
+  try {
+    const { error: uploadError } = await supabase
+      .storage
+      .from(AUDIO_BUCKET)
+      .upload(filePath, recordingBlob, {
+        cacheControl: '3600',
+        upsert: false,
+        contentType: recordingBlob.type || recorderMimeType || 'audio/webm'
+      });
+
+    if (uploadError) {
+  console.error('Error uploading the recording:', uploadError);
+  setRecorderStatus('The recording could not be uploaded. Please try again.', 'error');
+      return;
+    }
+
+    const { error: insertError } = await supabase
+      .from('audios')
+      .insert({
+        id: nextAudioId,
+        instrument: titleValue,
+        detail: 'recording',
+        name: fileName,
+        uploader_id: uploaderId,
+        relational_song_id: currentSongIdResolved,
+        url: filePath
+      });
+
+    if (insertError) {
+  console.error('Error saving the recording record:', insertError);
+  setRecorderStatus('The recording was uploaded, but could not be saved in the database.', 'error');
+      return;
+    }
+
+  setRecorderStatus('Recording uploaded successfully.', 'success');
+    resetRecordingState({ keepInput: false, silent: true });
+    loadAudios({ skipRealtimeSetup: true });
+  } catch (err) {
+  console.error('Unexpected error while uploading the recording:', err);
+  setRecorderStatus('An error occurred while uploading the recording.', 'error');
+  } finally {
+    isUploadingRecording = false;
+    updateRecorderUi();
+  }
+}
+
+function initRecorderControls() {
+  const elements = ensureRecorderElements();
+  if (!elements || elements.initialized) return;
+  elements.initialized = true;
+
+  elements.startButton.addEventListener('click', (event) => {
+    event.preventDefault();
+    startRecording();
+  });
+  elements.stopButton.addEventListener('click', (event) => {
+    event.preventDefault();
+    stopRecording();
+  });
+  elements.uploadButton.addEventListener('click', (event) => {
+    event.preventDefault();
+    uploadRecording();
+  });
+  elements.discardButton.addEventListener('click', (event) => {
+    event.preventDefault();
+    discardRecording();
+  });
+
+  setDefaultRecorderStatus();
+  updateRecorderUi();
+}
+
 function scheduleAudiosRefresh() {
   if (audiosRefreshTimeout) {
     clearTimeout(audiosRefreshTimeout);
@@ -804,6 +1289,8 @@ async function loadAudios(options = {}) {
 
     if (!songRecord || !songId) {
       console.warn('No se encontró la canción para cargar audios.');
+      setRecorderStatus('No se encontró la canción para grabar.', 'warning');
+      updateRecorderUi();
       return;
     }
 
@@ -813,6 +1300,8 @@ async function loadAudios(options = {}) {
 
     const previousSongId = currentSongIdResolved;
     currentSongIdResolved = songId;
+    setDefaultRecorderStatus();
+    updateRecorderUi();
 
     const { data: audios, error: audiosError } = await supabase
       .from('audios')
@@ -834,6 +1323,8 @@ async function loadAudios(options = {}) {
       emptyState.textContent = 'Aún no hay pistas registradas para esta canción.';
       container.appendChild(emptyState);
       clearPlaybackCache();
+      updateRecorderUi();
+      setDefaultRecorderStatus();
 
       if (!skipRealtimeSetup && (previousSongId !== currentSongIdResolved || !audiosChannel)) {
         initAudiosRealtime();
@@ -886,15 +1377,20 @@ async function loadAudios(options = {}) {
       });
       container.appendChild(audioElement);
     });
+    setDefaultRecorderStatus();
+    updateRecorderUi();
 
     if (!skipRealtimeSetup && (previousSongId !== currentSongIdResolved || !audiosChannel)) {
       initAudiosRealtime();
     }
   } catch (err) {
     console.error('Error general al cargar audios:', err);
+    setRecorderStatus('Ocurrió un error al cargar las pistas.', 'error');
+    updateRecorderUi();
   }
 }
 
+initRecorderControls();
 loadAudios();
 initUploadFab();
 
