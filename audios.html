@@ -324,6 +324,8 @@ const WAVEFORM_VIEW_WINDOW_SECONDS = 4;
 const WAVEFORM_HALF_WINDOW_SECONDS = WAVEFORM_VIEW_WINDOW_SECONDS / 2;
 const SEEK_OFFSET_SECONDS = 3;
 const RECORDER_MIME_TYPES = [
+  'audio/mpeg',
+  'audio/mp3',
   'audio/webm;codecs=opus',
   'audio/webm',
   'audio/ogg;codecs=opus',
@@ -1066,6 +1068,7 @@ function handleRecorderStopped() {
 function determineFileExtension(mimeType) {
   if (!mimeType) return 'webm';
   if (mimeType.includes('ogg')) return 'ogg';
+  if (mimeType.includes('mpeg')) return 'mp3';
   if (mimeType.includes('mp3')) return 'mp3';
   if (mimeType.includes('wav')) return 'wav';
   if (mimeType.includes('m4a') || mimeType.includes('mp4')) return 'm4a';
@@ -1238,10 +1241,10 @@ async function uploadRecording() {
   }
 
   const extension = determineFileExtension(recordingBlob.type || recorderMimeType);
-  const timestamp = new Date().toISOString().replace(/[:.]/g, '-');
   const safeName = slugifyFileName(titleValue).slice(0, 48) || 'recording';
-  const fileName = `${timestamp}-${safeName}.${extension}`;
-  const filePath = `recordings/${currentSongIdResolved}/${fileName}`;
+  const fileName = `${safeName}.${extension}`;
+  const storageName = `${nextAudioId}-${fileName}`;
+  const filePath = `audios/${storageName}`;
   const uploaderId = (() => {
     if (!userId) return null;
     const numericId = Number(userId);
@@ -1274,7 +1277,7 @@ async function uploadRecording() {
         id: nextAudioId,
         instrument: titleValue,
         detail: 'recording',
-        name: fileName,
+  name: storageName,
         uploader_id: uploaderId,
         relational_song_id: currentSongIdResolved,
         url: filePath
