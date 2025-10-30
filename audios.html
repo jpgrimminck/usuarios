@@ -329,6 +329,11 @@ const RECORDER_MIME_TYPES = [
   'audio/ogg;codecs=opus',
   'audio/mp4;codecs=mp4a.40.2'
 ];
+const RECORDING_COUNTDOWN_SECONDS = 3;
+
+let recorderCountdownTimer = null;
+let recorderCountdownRemaining = 0;
+let isRecorderCountdownActive = false;
 
 const backLink = document.getElementById('back-to-songs');
 if (backLink) {
@@ -882,30 +887,87 @@ function setDefaultRecorderStatus() {
   setRecorderStatus('Press "Record" to start and add a title when you are ready.', 'neutral');
 }
 
+function cancelRecordingCountdown(options = {}) {
+  const { silent = false, skipUiUpdate = false } = options;
+  if (recorderCountdownTimer) {
+    clearInterval(recorderCountdownTimer);
+    recorderCountdownTimer = null;
+  }
+  const wasActive = isRecorderCountdownActive;
+  recorderCountdownRemaining = 0;
+  isRecorderCountdownActive = false;
+  if (wasActive && !silent) {
+    setDefaultRecorderStatus();
+  }
+  if (!skipUiUpdate) {
+    updateRecorderUi();
+  }
+}
+
+function beginRecordingCountdown() {
+  cancelRecordingCountdown({ silent: true, skipUiUpdate: true });
+  isRecorderCountdownActive = true;
+  recorderCountdownRemaining = RECORDING_COUNTDOWN_SECONDS;
+  setRecorderStatus(`Recording starts in ${recorderCountdownRemaining}...`, 'info');
+  updateRecorderUi();
+
+  if (recorderCountdownRemaining <= 0) {
+    cancelRecordingCountdown({ silent: true, skipUiUpdate: true });
+    void startRecordingCore();
+    return;
+  }
+
+  recorderCountdownTimer = window.setInterval(() => {
+    recorderCountdownRemaining -= 1;
+    if (recorderCountdownRemaining <= 0) {
+      cancelRecordingCountdown({ silent: true, skipUiUpdate: true });
+      setRecorderStatus('Starting recording...', 'info');
+      void startRecordingCore();
+      return;
+    }
+    setRecorderStatus(`Recording starts in ${recorderCountdownRemaining}...`, 'info');
+    updateRecorderUi();
+  }, 1000);
+}
+
 function updateRecorderUi() {
   const elements = ensureRecorderElements();
   if (!elements) return;
   const isRecording = mediaRecorder && mediaRecorder.state === 'recording';
   const hasRecording = !!recordingBlob;
+  const isCountingDown = isRecorderCountdownActive;
 
   if (elements.toggleButton) {
-    const showToggle = isRecording || !hasRecording;
+    const showToggle = isRecording || !hasRecording || isCountingDown;
     elements.toggleButton.hidden = !showToggle;
     if (!showToggle && document.activeElement === elements.toggleButton) {
       elements.toggleButton.blur();
     }
 
-    const canRecord = !!currentSongIdResolved && !isRecording && !isUploadingRecording && !hasRecording;
-    elements.toggleButton.disabled = isRecording ? false : !canRecord;
-  elements.toggleButton.setAttribute('aria-pressed', isRecording ? 'true' : 'false');
-  elements.toggleButton.setAttribute('aria-label', isRecording ? 'Stop' : 'Start recording');
-    if (isRecording) {
-      elements.toggleButton.innerHTML = '<span>Stop</span><span class="recorder-button__subtext">Recording...</span>';
+    if (isCountingDown) {
+      elements.toggleButton.disabled = false;
+      const displayNumber = recorderCountdownRemaining > 0 ? recorderCountdownRemaining : 0;
+      elements.toggleButton.textContent = String(displayNumber);
+      elements.toggleButton.setAttribute('aria-pressed', 'false');
+      elements.toggleButton.setAttribute('aria-label', `Recording starts in ${displayNumber}`);
+      elements.toggleButton.classList.add('recorder-button--primary');
+      elements.toggleButton.classList.remove('recorder-button--destructive');
+    } else if (isRecording) {
+      elements.toggleButton.disabled = false;
+      elements.toggleButton.textContent = 'Stop';
+      elements.toggleButton.setAttribute('aria-pressed', 'true');
+      elements.toggleButton.setAttribute('aria-label', 'Stop');
+      elements.toggleButton.classList.add('recorder-button--destructive');
+      elements.toggleButton.classList.remove('recorder-button--primary');
     } else {
+      const canRecord = !!currentSongIdResolved && !isUploadingRecording && !hasRecording;
+      elements.toggleButton.disabled = !canRecord;
       elements.toggleButton.textContent = 'Record';
+      elements.toggleButton.setAttribute('aria-pressed', 'false');
+      elements.toggleButton.setAttribute('aria-label', 'Start recording');
+      elements.toggleButton.classList.add('recorder-button--primary');
+      elements.toggleButton.classList.remove('recorder-button--destructive');
     }
-    elements.toggleButton.classList.toggle('recorder-button--primary', !isRecording);
-    elements.toggleButton.classList.toggle('recorder-button--destructive', isRecording);
   }
   if (elements.conditionalButtons?.length) {
     elements.conditionalButtons.forEach((button) => {
@@ -946,6 +1008,7 @@ function cleanupRecorderStream() {
 
 function resetRecordingState(options = {}) {
   const { keepInput = true, silent = false } = options;
+  cancelRecordingCountdown({ silent: true, skipUiUpdate: true });
   if (recordingObjectUrl) {
     URL.revokeObjectURL(recordingObjectUrl);
     recordingObjectUrl = null;
@@ -1043,8 +1106,19 @@ async function startRecording() {
   const elements = ensureRecorderElements();
   if (!elements) return;
 
+  if (isRecorderCountdownActive) {
+    cancelRecordingCountdown();
+    setRecorderStatus('Recording countdown canceled.', 'info');
+    return;
+  }
+
   if (!currentSongIdResolved) {
     setRecorderStatus('Select a track before recording.', 'warning');
+    return;
+  }
+
+  if (recordingBlob) {
+    setRecorderStatus('Upload or discard the current recording before making a new one.', 'warning');
     return;
   }
 
@@ -1058,11 +1132,34 @@ async function startRecording() {
     return;
   }
 
+  if (isUploadingRecording) {
+    setRecorderStatus('Wait for the current upload to finish before starting a new recording.', 'warning');
+    return;
+  }
+
   resetRecordingState({ keepInput: true, silent: true });
   updateRecorderUi();
-  setRecorderStatus('Requesting microphone access...', 'info');
+  beginRecordingCountdown();
+}
+
+async function startRecordingCore() {
+  const elements = ensureRecorderElements();
+  if (!elements) return;
+
+  if (!currentSongIdResolved) {
+    setRecorderStatus('Select a track before recording.', 'warning');
+    updateRecorderUi();
+    return;
+  }
+
+  if (!navigator.mediaDevices?.getUserMedia) {
+    setRecorderStatus('This browser does not support audio recording.', 'error');
+    updateRecorderUi();
+    return;
+  }
 
   try {
+    setRecorderStatus('Requesting microphone access...', 'info');
     const stream = await navigator.mediaDevices.getUserMedia({ audio: true });
     recorderStream = stream;
     recordedChunks = [];
@@ -1092,6 +1189,7 @@ async function startRecording() {
 }
 
 function stopRecording() {
+  cancelRecordingCountdown({ silent: true, skipUiUpdate: true });
   if (!mediaRecorder || mediaRecorder.state !== 'recording') return;
   try {
     mediaRecorder.stop();
@@ -1104,6 +1202,7 @@ function stopRecording() {
 }
 
 function discardRecording() {
+  cancelRecordingCountdown({ silent: true, skipUiUpdate: true });
   if (mediaRecorder && mediaRecorder.state === 'recording') {
   setRecorderStatus('Stop the recording before discarding it.', 'warning');
     return;
