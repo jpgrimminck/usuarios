@@ -268,6 +268,9 @@
 </header>
 <main class="p-4">
 <h2 class="text-3xl font-bold text-white mb-6">Pistas de Práctica</h2>
+<div class="mb-4" data-song-status-container hidden>
+  <button type="button" class="song-status-button" data-song-status-button disabled>Not started</button>
+</div>
 <div class="space-y-4">
 </div>
 <section class="recorder-section" data-recorder-section>
@@ -301,6 +304,17 @@ const urlParams = new URLSearchParams(window.location.search);
 const userId = urlParams.get('id');
 const title = urlParams.get('title');
 const songIdParam = urlParams.get('songId');
+const normalizedUserId = coerceNumericId(userId);
+
+const STATUS_CYCLE = ['Not started', 'Practicing', 'Completed'];
+const DEFAULT_STATUS = STATUS_CYCLE[0];
+const songStatusUi = {
+  container: document.querySelector('[data-song-status-container]'),
+  button: document.querySelector('[data-song-status-button]')
+};
+let currentSongStatus = DEFAULT_STATUS;
+let songStatusFetchToken = 0;
+let songStatusClickBound = false;
 
 const AUDIO_BUCKET = 'audios';
 const playbackCache = new Map();
@@ -418,6 +432,203 @@ if (songIdParam) {
   const mainH2 = document.querySelector('main h2');
   if (headerH1) headerH1.textContent = title;
   if (mainH2) mainH2.textContent = title;
+}
+
+function coerceNumericId(value) {
+  if (value === null || value === undefined) return value;
+  if (typeof value === 'number') {
+    return Number.isFinite(value) ? value : value;
+  }
+  if (typeof value === 'string' && /^\d+$/.test(value)) {
+    const asNumber = Number(value);
+    return Number.isSafeInteger(asNumber) ? asNumber : value;
+  }
+  return value;
+}
+
+function normalizeStatusTag(value) {
+  return (value || '').toLowerCase().replace(/\s+/g, '-');
+}
+
+function getNextStatusTag(currentStatus) {
+  const index = STATUS_CYCLE.indexOf(currentStatus);
+  if (index === -1 || index === STATUS_CYCLE.length - 1) {
+    return STATUS_CYCLE[0];
+  }
+  return STATUS_CYCLE[index + 1];
+}
+
+function applyStatusStyles(button, statusTag) {
+  if (!button) return;
+  const resolvedStatus = STATUS_CYCLE.includes(statusTag) ? statusTag : DEFAULT_STATUS;
+  const normalized = normalizeStatusTag(resolvedStatus);
+  button.textContent = resolvedStatus;
+  button.dataset.status = resolvedStatus;
+  STATUS_CYCLE.forEach(state => {
+    button.classList.remove(`song-status-button--${normalizeStatusTag(state)}`);
+  });
+  button.classList.add(`song-status-button--${normalized}`);
+}
+
+function setSongStatusLoading(isLoading) {
+  if (!songStatusUi.button) return;
+  if (isLoading) {
+    songStatusUi.button.disabled = true;
+    songStatusUi.button.dataset.loading = 'true';
+  } else {
+    delete songStatusUi.button.dataset.loading;
+    songStatusUi.button.disabled = songStatusUi.container ? songStatusUi.container.hidden : true;
+  }
+}
+
+async function fetchUserSongStatusTag(songId) {
+  if (!normalizedUserId || songId === null || songId === undefined) {
+    return null;
+  }
+  const normalizedSongId = coerceNumericId(songId);
+  const { data, error } = await supabase
+    .from('user_songs')
+    .select('status_tag')
+    .eq('user_id', normalizedUserId)
+    .eq('song_id', normalizedSongId)
+    .maybeSingle();
+
+  if (error) {
+    throw error;
+  }
+
+  if (!data) {
+    return null;
+  }
+
+  return data.status_tag || DEFAULT_STATUS;
+}
+
+async function persistUserSongStatus(songId, nextStatus) {
+  if (!normalizedUserId) {
+    throw new Error('No user selected.');
+  }
+  const normalizedSongId = coerceNumericId(songId);
+  const { data, error } = await supabase
+    .from('user_songs')
+    .update({ status_tag: nextStatus })
+    .eq('user_id', normalizedUserId)
+    .eq('song_id', normalizedSongId)
+    .select('status_tag')
+    .maybeSingle();
+
+  if (error) {
+    throw error;
+  }
+
+  if (!data) {
+    throw new Error('No matching user_songs row was updated.');
+  }
+
+  return data.status_tag || nextStatus;
+}
+
+async function refreshSongStatusUi(songId) {
+  if (!songStatusUi.button) {
+    return;
+  }
+  if (!normalizedUserId || songId === null || songId === undefined) {
+    if (songStatusUi.container) {
+      songStatusUi.container.hidden = true;
+    }
+    currentSongStatus = DEFAULT_STATUS;
+    applyStatusStyles(songStatusUi.button, currentSongStatus);
+    setSongStatusLoading(false);
+    return;
+  }
+
+  const fetchToken = ++songStatusFetchToken;
+  setSongStatusLoading(true);
+
+  try {
+    const statusTag = await fetchUserSongStatusTag(songId);
+    if (songStatusFetchToken !== fetchToken) {
+      return;
+    }
+
+    if (!statusTag) {
+      currentSongStatus = DEFAULT_STATUS;
+      applyStatusStyles(songStatusUi.button, currentSongStatus);
+      if (songStatusUi.container) {
+        songStatusUi.container.hidden = true;
+      }
+      return;
+    }
+
+    currentSongStatus = STATUS_CYCLE.includes(statusTag) ? statusTag : DEFAULT_STATUS;
+    applyStatusStyles(songStatusUi.button, currentSongStatus);
+    if (songStatusUi.container) {
+      songStatusUi.container.hidden = false;
+    }
+  } catch (err) {
+    if (songStatusFetchToken !== fetchToken) {
+      return;
+    }
+    console.error('Error fetching status_tag:', err);
+    currentSongStatus = DEFAULT_STATUS;
+    applyStatusStyles(songStatusUi.button, currentSongStatus);
+    if (songStatusUi.container) {
+      songStatusUi.container.hidden = true;
+    }
+  } finally {
+    if (songStatusFetchToken === fetchToken) {
+      setSongStatusLoading(false);
+    }
+  }
+}
+
+function initSongStatusControls() {
+  if (!songStatusUi.button) {
+    return;
+  }
+
+  applyStatusStyles(songStatusUi.button, currentSongStatus);
+  songStatusUi.button.disabled = true;
+
+  if (!normalizedUserId) {
+    if (songStatusUi.container) {
+      songStatusUi.container.hidden = true;
+    }
+    return;
+  }
+
+  if (songStatusClickBound) {
+    return;
+  }
+  songStatusClickBound = true;
+
+  songStatusUi.button.addEventListener('click', async (event) => {
+    event.preventDefault();
+    if (!normalizedUserId || currentSongIdResolved === null || currentSongIdResolved === undefined) {
+      return;
+    }
+
+    const currentStatus = songStatusUi.button.dataset.status || currentSongStatus || DEFAULT_STATUS;
+    const nextStatus = getNextStatusTag(currentStatus);
+
+    applyStatusStyles(songStatusUi.button, nextStatus);
+    setSongStatusLoading(true);
+
+    try {
+      const persisted = await persistUserSongStatus(currentSongIdResolved, nextStatus);
+      currentSongStatus = STATUS_CYCLE.includes(persisted) ? persisted : DEFAULT_STATUS;
+      applyStatusStyles(songStatusUi.button, currentSongStatus);
+      if (songStatusUi.container) {
+        songStatusUi.container.hidden = false;
+      }
+    } catch (err) {
+      console.error('Error updating status_tag:', err);
+      currentSongStatus = STATUS_CYCLE.includes(currentStatus) ? currentStatus : DEFAULT_STATUS;
+      applyStatusStyles(songStatusUi.button, currentSongStatus);
+    } finally {
+      setSongStatusLoading(false);
+    }
+  });
 }
 
 function setCardControlsVisibility(card, visible) {
@@ -1433,6 +1644,7 @@ async function loadAudios(options = {}) {
       console.warn('No se encontró la canción para cargar audios.');
       setRecorderStatus('No se encontró la canción para grabar.', 'warning');
       updateRecorderUi();
+      await refreshSongStatusUi(null);
       return;
     }
 
@@ -1444,6 +1656,7 @@ async function loadAudios(options = {}) {
     currentSongIdResolved = songId;
     setDefaultRecorderStatus();
     updateRecorderUi();
+    await refreshSongStatusUi(songId);
 
     const { data: audios, error: audiosError } = await supabase
       .from('audios')
@@ -1532,6 +1745,7 @@ async function loadAudios(options = {}) {
   }
 }
 
+initSongStatusControls();
 initRecorderControls();
 loadAudios();
 initUploadFab();
