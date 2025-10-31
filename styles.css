@@ -720,6 +720,44 @@ img {
   width: 100%;
 }
 
+.song-status-button {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  padding: 0.25rem 0.75rem;
+  border-radius: 9999px;
+  font-size: 0.75rem;
+  font-weight: 500;
+  border: 1px solid transparent;
+  transition: background-color 0.2s ease, color 0.2s ease, border-color 0.2s ease, opacity 0.2s ease;
+  color: #e5e7eb;
+  background-color: rgba(55, 65, 81, 0.4);
+  flex-shrink: 0;
+}
+
+.song-status-button:disabled {
+  opacity: 0.6;
+  cursor: wait;
+}
+
+.song-status-button--not-started {
+  background-color: rgba(75, 85, 99, 0.35);
+  border-color: rgba(156, 163, 175, 0.5);
+  color: #e5e7eb;
+}
+
+.song-status-button--practicing {
+  background-color: rgba(217, 119, 6, 0.25);
+  border-color: rgba(245, 158, 11, 0.5);
+  color: #fbbf24;
+}
+
+.song-status-button--completed {
+  background-color: rgba(22, 163, 74, 0.25);
+  border-color: rgba(34, 197, 94, 0.5);
+  color: #4ade80;
+}
+
 .modal-field {
   display: flex;
   align-items: center;

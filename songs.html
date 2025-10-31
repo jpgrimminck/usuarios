@@ -103,6 +103,52 @@ const sampleSongs = [
   { title: 'Brisa Mística', artist: 'Isla Tiburón' }
 ];
 
+const STATUS_CYCLE = ['Not started', 'Practicing', 'Completed'];
+const DEFAULT_STATUS = STATUS_CYCLE[0];
+
+function normalizeStatusTag(value) {
+  return (value || '').toLowerCase().replace(/\s+/g, '-');
+}
+
+function getNextStatusTag(currentStatus) {
+  const index = STATUS_CYCLE.indexOf(currentStatus);
+  if (index === -1 || index === STATUS_CYCLE.length - 1) {
+    return STATUS_CYCLE[0];
+  }
+  return STATUS_CYCLE[index + 1];
+}
+
+function applyStatusStyles(button, statusTag) {
+  if (!button) return;
+  const resolvedStatus = STATUS_CYCLE.includes(statusTag) ? statusTag : DEFAULT_STATUS;
+  const normalized = normalizeStatusTag(resolvedStatus);
+  button.textContent = resolvedStatus;
+  button.dataset.status = resolvedStatus;
+  STATUS_CYCLE.forEach(state => {
+    button.classList.remove(`song-status-button--${normalizeStatusTag(state)}`);
+  });
+  button.classList.add(`song-status-button--${normalized}`);
+}
+
+async function persistStatusTag(songId, nextStatus) {
+  const query = supabase
+    .from('user_songs')
+    .update({ status_tag: nextStatus })
+    .eq('user_id', selectedUserId)
+    .eq('song_id', songId)
+    .select('song_id, status_tag')
+    .maybeSingle();
+
+  const { data, error } = await query;
+  if (error) {
+    throw error;
+  }
+  if (!data) {
+    throw new Error('No matching user_songs row was updated.');
+  }
+  return data.status_tag || nextStatus;
+}
+
 async function updateSongsTitle() {
   const titleEl = document.querySelector('#site-header h1');
   if (!titleEl) return;
@@ -325,11 +371,13 @@ async function loadSongs() {
   try {
     let songs = null;
 
+    const statusBySongId = new Map();
+
     if (selectedUserId) {
       // 1) Get song IDs linked to this user from user_songs
       const { data: userSongs, error: usErr } = await supabase
         .from('user_songs')
-        .select('song_id')
+        .select('song_id, status_tag')
         .eq('user_id', selectedUserId);
 
       if (usErr) {
@@ -338,6 +386,10 @@ async function loadSongs() {
       }
 
       const songIds = (userSongs || []).map(r => r.song_id).filter(Boolean);
+      (userSongs || []).forEach(record => {
+        if (!record || !record.song_id) return;
+        statusBySongId.set(record.song_id, record.status_tag || DEFAULT_STATUS);
+      });
       if (!songIds.length) {
         container.innerHTML = '<p class="text-gray-400 p-4">No hay canciones para este usuario.</p>';
         return;
@@ -388,16 +440,44 @@ async function loadSongs() {
       }
       songElement.href = `audios.html?${audioParams.toString()}`;
       songElement.className = 'song-card flex items-center gap-4 px-4 py-3 hover:bg-white/5 transition-colors duration-200';
+      const statusTag = statusBySongId.get(song.id) || DEFAULT_STATUS;
+      const statusClassSuffix = normalizeStatusTag(statusTag);
+      const statusButtonHtml = selectedUserId
+        ? `<button type="button" class="song-status-button song-status-button--${statusClassSuffix}" data-song-id="${song.id}" data-status="${statusTag}">${statusTag}</button>`
+        : '';
       songElement.innerHTML = `
         <div class="bg-[var(--primary-color)] flex items-center justify-center text-white font-bold text-xl rounded-lg size-20">${firstLetter}</div>
         <div class="flex-1">
           <p class="text-white text-base font-medium leading-normal">${songTitle}</p>
           <p class="text-gray-400 text-sm font-normal leading-normal">${artistName}</p>
         </div>
+        ${statusButtonHtml}
         <button class="flex items-center justify-center rounded-full h-10 w-10 text-gray-400 hover:text-white hover:bg-white/10 transition-colors">
           <span class="material-symbols-outlined">more_vert</span>
         </button>
       `;
+      const statusButton = songElement.querySelector('.song-status-button');
+      if (statusButton && selectedUserId) {
+        applyStatusStyles(statusButton, statusTag);
+        statusButton.addEventListener('click', async (event) => {
+          event.preventDefault();
+          event.stopPropagation();
+          const currentStatus = statusButton.dataset.status || DEFAULT_STATUS;
+          const nextStatus = getNextStatusTag(currentStatus);
+          statusButton.disabled = true;
+          applyStatusStyles(statusButton, nextStatus);
+          try {
+            const persistedStatus = await persistStatusTag(song.id, nextStatus);
+            applyStatusStyles(statusButton, persistedStatus);
+            statusBySongId.set(song.id, persistedStatus);
+          } catch (err) {
+            console.error('Error updating status_tag:', err);
+            applyStatusStyles(statusButton, currentStatus);
+          } finally {
+            statusButton.disabled = false;
+          }
+        });
+      }
       container.appendChild(songElement);
     });
   } catch (err) {
