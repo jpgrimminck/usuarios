@@ -333,6 +333,7 @@ let currentSongIdResolved = null;
 let audiosChannel = null;
 let audiosRefreshTimeout = null;
 let currentExpandedCard = null;
+let currentAudioCacheEntry = null;
 let audiosSongColumn = 'relational_song_id';
 const AUDIO_SONG_COLUMN_CANDIDATES = ['relational_song_id', 'song_id', 'cancion_id'];
 
@@ -380,6 +381,27 @@ function getWaveformAudioContext() {
     waveformAudioContext = null;
   }
   return waveformAudioContext;
+}
+
+function stopWaveformAnimation(cacheEntry) {
+  if (!cacheEntry) return;
+  if (cacheEntry.waveformAnimationId) {
+    cancelAnimationFrame(cacheEntry.waveformAnimationId);
+    cacheEntry.waveformAnimationId = null;
+  }
+}
+
+function startWaveformAnimation(cacheEntry) {
+  if (!cacheEntry || cacheEntry.waveformAnimationId) return;
+  const step = () => {
+    if (!cacheEntry.player || cacheEntry.player.paused) {
+      cacheEntry.waveformAnimationId = null;
+      return;
+    }
+    applyWaveformPosition(cacheEntry.waveform, cacheEntry.player.currentTime, cacheEntry.player.duration);
+    cacheEntry.waveformAnimationId = requestAnimationFrame(step);
+  };
+  cacheEntry.waveformAnimationId = requestAnimationFrame(step);
 }
 
 function ensureWaveformBarElements(state, count) {
@@ -853,8 +875,15 @@ function stopCurrentAudio() {
     }
     if (audioId && playbackCache.has(audioId)) {
       const cached = playbackCache.get(audioId);
+  } else if (currentAudioCacheEntry) {
+    stopWaveformAnimation(currentAudioCacheEntry);
+    if (currentAudioCacheEntry.waveform) {
+      resetWaveformState(currentAudioCacheEntry.waveform);
+    }
       if (cached?.waveform) {
-        resetWaveformState(cached.waveform);
+      if (cached) {
+        stopWaveformAnimation(cached);
+      }
       }
     }
   }
@@ -862,6 +891,7 @@ function stopCurrentAudio() {
   currentAudioButton = null;
 }
 
+  currentAudioCacheEntry = null;
 function computeWaveformMetrics(viewportEl) {
   if (!viewportEl) return null;
   const width = viewportEl.getBoundingClientRect().width || viewportEl.offsetWidth || 0;
@@ -994,7 +1024,9 @@ function expandCard(card) {
 
 function clearPlaybackCache() {
   stopCurrentAudio();
-  playbackCache.forEach(({ player, revoke, waveform, cleanup }) => {
+  playbackCache.forEach((entry) => {
+    const { player, revoke, waveform, cleanup } = entry;
+    stopWaveformAnimation(entry);
     try {
       if (player) {
         player.pause();
@@ -1023,6 +1055,7 @@ function clearPlaybackCache() {
   });
   playbackCache.clear();
   collapseCurrentCard();
+  currentAudioCacheEntry = null;
 }
 
 function isHttpUrl(path) {
@@ -1058,9 +1091,9 @@ async function prepareAudioPlayer(audio, button, waveformElements) {
       return null;
     }
 
-  let sourceUrl = null;
-  let revoke = null;
-  let downloadBlob = null;
+    let sourceUrl = null;
+    let revoke = null;
+    let downloadBlob = null;
 
     if (isHttpUrl(storagePath)) {
       sourceUrl = storagePath;
@@ -1120,6 +1153,7 @@ async function prepareAudioPlayer(audio, button, waveformElements) {
       sourceUrl,
       sourceBlob: downloadBlob || null,
       storagePath,
+      waveformAnimationId: null,
       cleanup: null
     };
 
@@ -1131,6 +1165,7 @@ async function prepareAudioPlayer(audio, button, waveformElements) {
         const card = cacheEntry.playButtonRef.closest('.audio-card');
         setCardControlsVisibility(card, false);
       }
+      stopWaveformAnimation(cacheEntry);
       if (cacheEntry.waveform) {
         resetWaveformState(cacheEntry.waveform);
       }
@@ -1146,6 +1181,7 @@ async function prepareAudioPlayer(audio, button, waveformElements) {
     audioElement.addEventListener('emptied', handleProgress);
 
     cacheEntry.cleanup = () => {
+      stopWaveformAnimation(cacheEntry);
       audioElement.removeEventListener('ended', handleEnded);
       audioElement.removeEventListener('timeupdate', handleProgress);
       audioElement.removeEventListener('loadedmetadata', handleLoadedMetadata);
@@ -1209,19 +1245,24 @@ async function togglePlayback(button, audio, waveformElements) {
       await player.play();
       currentAudioInstance = player;
       currentAudioButton = button;
+      currentAudioCacheEntry = cached;
       setButtonPlaying(button, true);
       setCardControlsVisibility(button.closest('.audio-card'), true);
       applyWaveformPosition(cached.waveform, player.currentTime, player.duration);
+      startWaveformAnimation(cached);
     } catch (err) {
       console.error('No se pudo reproducir el audio:', err);
       setButtonPlaying(button, false);
       if (cached.waveform) {
         resetWaveformState(cached.waveform);
       }
+      stopWaveformAnimation(cached);
     }
   } else {
     player.pause();
     setButtonPlaying(button, false);
+    stopWaveformAnimation(cached);
+    currentAudioCacheEntry = null;
   }
 }
 
@@ -1980,9 +2021,9 @@ async function loadAudios(options = {}) {
       const playButton = audioElement.querySelector('[data-role="play-button"]');
       const rewindButton = audioElement.querySelector('[data-role="rewind-button"]');
       const forwardButton = audioElement.querySelector('[data-role="forward-button"]');
-    const waveformViewport = audioElement.querySelector('[data-role="waveform-viewport"]');
-    const waveformContent = audioElement.querySelector('[data-role="waveform-content"]');
-    buildWaveformState({ viewportEl: waveformViewport, contentEl: waveformContent }, audio.id);
+      const waveformViewport = audioElement.querySelector('[data-role="waveform-viewport"]');
+      const waveformContent = audioElement.querySelector('[data-role="waveform-content"]');
+      buildWaveformState({ viewportEl: waveformViewport, contentEl: waveformContent }, audio.id);
       attachPlayback(playButton, audio, audioElement, { viewportEl: waveformViewport, contentEl: waveformContent });
       attachSeekControl(rewindButton, audio, audioElement, -SEEK_OFFSET_SECONDS, { viewportEl: waveformViewport, contentEl: waveformContent });
       attachSeekControl(forwardButton, audio, audioElement, SEEK_OFFSET_SECONDS, { viewportEl: waveformViewport, contentEl: waveformContent });
