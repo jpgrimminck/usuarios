@@ -364,6 +364,8 @@ async function loadAudios(options = {}) {
   clearPlaybackCache();
   collapseCurrentCard();
 
+    const seekSeconds = Math.abs(getSeekOffsetSeconds()) || Math.abs(SEEK_OFFSET_SECONDS);
+
     audios.forEach((audio) => {
       const audioElement = buildAudioCard(audio);
       const playButton = audioElement.querySelector('[data-role="play-button"]');
