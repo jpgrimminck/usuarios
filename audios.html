@@ -82,7 +82,7 @@
       width: 100%;
       height: 120px;
       border-radius: 14px;
-      background: linear-gradient(180deg, rgba(148, 163, 184, 0.12) 0%, rgba(30, 41, 59, 0.45) 100%);
+      background: transparent;
       overflow: hidden;
       opacity: 0;
       max-height: 0;
@@ -123,7 +123,7 @@
       align-items: flex-end;
       gap: 3px;
       padding: 14px 80px;
-      background: radial-gradient(circle at top, rgba(148, 163, 184, 0.32) 0%, rgba(15, 23, 42, 0.65) 55%, rgba(15, 23, 42, 0.9) 100%);
+      background: transparent;
       opacity: 0.9;
       will-change: transform;
       transform: translateX(0px);
@@ -348,13 +348,15 @@ let recorderElements = null;
 
 const WAVEFORM_VIEW_WINDOW_SECONDS = 4;
 const WAVEFORM_HALF_WINDOW_SECONDS = WAVEFORM_VIEW_WINDOW_SECONDS / 2;
+const WAVEFORM_SYNC_OFFSET_SECONDS = 3;
 const WAVEFORM_BAR_WIDTH = 4;
-const WAVEFORM_BAR_GAP = 3;
+const WAVEFORM_BAR_GAP = 0;
 const WAVEFORM_BAR_STEP = WAVEFORM_BAR_WIDTH + WAVEFORM_BAR_GAP;
 const WAVEFORM_MIN_BAR_COUNT = 160;
 const WAVEFORM_MAX_BAR_COUNT = 1024;
 const WAVEFORM_SAMPLES_PER_SECOND = 32;
-const SEEK_OFFSET_SECONDS = 3;
+const WAVEFORM_AMPLITUDE_FLOOR = 0.001;
+const SEEK_OFFSET_SECONDS = 0;
 const RECORDER_MIME_TYPES = [
   'audio/mpeg',
   'audio/mp3',
@@ -441,15 +443,45 @@ function placeholderWaveformValue(index, total) {
 
 function applyWaveformValues(state, values, options = {}) {
   if (!state || !state.contentEl) return;
+  const { peak: providedPeak, amplitudeFloor = WAVEFORM_AMPLITUDE_FLOOR, duration: providedDuration } = options;
+  let peak = 0;
   const sanitized = Array.isArray(values) && values.length
-    ? values.map((v) => Math.max(0, Math.min(1, Number(v) || 0)))
+    ? values.map((v) => {
+        const clamped = Math.max(0, Math.min(1, Number(v) || 0));
+        const floored = Math.max(0, clamped - amplitudeFloor);
+        peak = Math.max(peak, floored);
+        return floored;
+      })
     : null;
+  if (sanitized) {
+    const normalizedProvidedPeak = Number.isFinite(providedPeak) ? Math.max(0, providedPeak - amplitudeFloor) : null;
+    const resolvedPeak = normalizedProvidedPeak && normalizedProvidedPeak > 0 ? normalizedProvidedPeak : peak;
+    state.waveformPeak = Math.max(resolvedPeak, 0.0001);
+  } else if (!state.waveformPeak) {
+    state.waveformPeak = 1;
+  }
   const targetCount = sanitized ? sanitized.length : Math.max(WAVEFORM_MIN_BAR_COUNT, options.placeholderCount || 0);
   const bars = ensureWaveformBarElements(state, targetCount);
 
   const totalBars = bars.length || 1;
+  const resolvedDuration = Number.isFinite(providedDuration) && providedDuration > 0 ? providedDuration : null;
+  if (resolvedDuration && sanitized) {
+    state.waveformDuration = resolvedDuration;
+    state.secondsPerBar = resolvedDuration / totalBars;
+  } else if (!state.waveformDuration) {
+    state.waveformDuration = null;
+    state.secondsPerBar = null;
+  }
+  const secondsPerBar = state.secondsPerBar && state.secondsPerBar > 0
+    ? state.secondsPerBar
+    : WAVEFORM_VIEW_WINDOW_SECONDS / totalBars;
+  state.pixelsPerSecond = WAVEFORM_BAR_STEP / Math.max(secondsPerBar, 0.0001);
+
   for (let index = 0; index < bars.length; index += 1) {
-    const amplitude = sanitized ? sanitized[index] : placeholderWaveformValue(index, totalBars);
+    let amplitude = sanitized ? sanitized[index] : placeholderWaveformValue(index, totalBars);
+    if (sanitized && state.waveformPeak > 0) {
+      amplitude = Math.max(0, amplitude / state.waveformPeak);
+    }
     const height = 24 + amplitude * 92;
     bars[index].style.height = `${Math.max(12, Math.min(120, height))}px`;
     bars[index].style.opacity = `${0.4 + amplitude * 0.5}`;
@@ -464,7 +496,10 @@ async function populateWaveformFromSource(cacheEntry, explicitUrl, explicitBlob)
   if (!cacheEntry) return null;
   if (cacheEntry.waveformData?.values?.length) {
     if (cacheEntry.waveform) {
-      applyWaveformValues(cacheEntry.waveform, cacheEntry.waveformData.values);
+      applyWaveformValues(cacheEntry.waveform, cacheEntry.waveformData.values, {
+        peak: cacheEntry.waveformData.peak,
+        duration: cacheEntry.waveformData.duration
+      });
     }
     return cacheEntry.waveformData;
   }
@@ -472,7 +507,10 @@ async function populateWaveformFromSource(cacheEntry, explicitUrl, explicitBlob)
     try {
       const existing = await cacheEntry.waveformDataPromise;
       if (cacheEntry.waveform && existing?.values) {
-        applyWaveformValues(cacheEntry.waveform, existing.values);
+        applyWaveformValues(cacheEntry.waveform, existing.values, {
+          peak: existing.peak,
+          duration: existing.duration
+        });
       }
       return existing;
     } catch (err) {
@@ -523,6 +561,7 @@ async function populateWaveformFromSource(cacheEntry, explicitUrl, explicitBlob)
       );
       const blockSize = Math.max(1, Math.floor(totalSamples / desiredCount));
       const amplitudes = [];
+      let maxAmplitude = 0;
 
       for (let i = 0; i < desiredCount; i += 1) {
         const start = i * blockSize;
@@ -531,10 +570,12 @@ async function populateWaveformFromSource(cacheEntry, explicitUrl, explicitBlob)
           sum += Math.abs(channelData[start + j]);
         }
         const avg = sum / blockSize;
-        amplitudes.push(Math.min(1, Math.max(0, avg * 2.8)));
+        const amplitude = Math.min(1, Math.max(0, avg * 2.8));
+        amplitudes.push(amplitude);
+        maxAmplitude = Math.max(maxAmplitude, amplitude);
       }
 
-      return { values: amplitudes, duration };
+  return { values: amplitudes, duration, peak: maxAmplitude };
     } catch (err) {
       console.error('No se pudo generar la forma de onda real:', err);
       return null;
@@ -549,7 +590,10 @@ async function populateWaveformFromSource(cacheEntry, explicitUrl, explicitBlob)
     if (result?.values?.length) {
       cacheEntry.waveformData = result;
       if (cacheEntry.waveform) {
-        applyWaveformValues(cacheEntry.waveform, result.values);
+        applyWaveformValues(cacheEntry.waveform, result.values, {
+          peak: result.peak,
+          duration: result.duration
+        });
         if (!cacheEntry.waveform.duration && result.duration) {
           cacheEntry.waveform.duration = result.duration;
         }
@@ -919,7 +963,8 @@ function updateWaveformDimensions(state, duration) {
     return;
   }
   const effectiveDuration = Number.isFinite(duration) && duration > 0 ? duration : 0;
-  const totalWidth = metrics.initialOffset + (effectiveDuration + WAVEFORM_HALF_WINDOW_SECONDS) * metrics.pixelsPerSecond;
+  const pixelsPerSecond = state.pixelsPerSecond || metrics.pixelsPerSecond;
+  const totalWidth = metrics.initialOffset + (effectiveDuration + WAVEFORM_HALF_WINDOW_SECONDS) * pixelsPerSecond;
   const minWidth = Math.max(state.minContentWidth || 0, metrics.viewportWidth * 1.5);
   state.contentEl.style.width = `${Math.max(totalWidth, minWidth)}px`;
 }
@@ -931,14 +976,16 @@ function applyWaveformPosition(state, currentTime, duration) {
     requestAnimationFrame(() => applyWaveformPosition(state, currentTime, duration));
     return;
   }
-  const effectiveTime = Math.max(0, Number(currentTime) || 0);
+  const rawTime = Number(currentTime) || 0;
+  const effectiveTime = Math.max(0, rawTime + WAVEFORM_SYNC_OFFSET_SECONDS);
   const effectiveDuration = Number.isFinite(duration) && duration > 0 ? duration : 0;
   state.duration = effectiveDuration;
   state.lastCurrentTime = effectiveTime;
   updateWaveformDimensions(state, effectiveDuration);
   const contentWidth = state.contentEl.offsetWidth || 0;
   const minOffset = metrics.viewportWidth - contentWidth;
-  const offset = Math.max(minOffset, metrics.initialOffset - (effectiveTime * metrics.pixelsPerSecond));
+  const pixelsPerSecond = state.pixelsPerSecond || metrics.pixelsPerSecond;
+  const offset = Math.max(minOffset, metrics.initialOffset - (effectiveTime * pixelsPerSecond));
   state.contentEl.style.transform = `translateX(${offset}px)`;
 }
 
@@ -966,7 +1013,11 @@ function buildWaveformState(waveformElements, seed) {
     lastCurrentTime: 0,
     barCount: 0,
     minContentWidth: 0,
-    waveformValues: null
+    waveformValues: null,
+    waveformPeak: 1,
+    waveformDuration: null,
+    secondsPerBar: null,
+    pixelsPerSecond: null
   };
   applyWaveformValues(state, null, { placeholderCount: WAVEFORM_MIN_BAR_COUNT });
   if (state.metrics) {
@@ -1202,7 +1253,10 @@ async function prepareAudioPlayer(audio, button, waveformElements) {
     if (rebuiltState) {
       cached.waveform = rebuiltState;
       if (cached.waveformData?.values?.length) {
-        applyWaveformValues(cached.waveform, cached.waveformData.values);
+        applyWaveformValues(cached.waveform, cached.waveformData.values, {
+          peak: cached.waveformData.peak,
+          duration: cached.waveformData.duration
+        });
       } else {
         populateWaveformFromSource(cached).catch((err) => {
           console.debug('No se pudo actualizar la forma de onda para el audio', audio.id, err?.message || err);
