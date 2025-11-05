@@ -438,7 +438,7 @@ async function loadSongs() {
       if (selectedUserId) {
         audioParams.set('id', selectedUserId);
       }
-      songElement.href = `audios.html?${audioParams.toString()}`;
+  songElement.href = `audios/audios.html?${audioParams.toString()}`;
       songElement.className = 'song-card flex items-center gap-4 px-4 py-3 hover:bg-white/5 transition-colors duration-200';
       const statusTag = statusBySongId.get(song.id) || DEFAULT_STATUS;
       const statusClassSuffix = normalizeStatusTag(statusTag);

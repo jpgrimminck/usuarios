@@ -1,0 +1,57 @@
+<!DOCTYPE html>
+<html lang="es">
+<head>
+  <meta charset="utf-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+  <link rel="preconnect" href="https://fonts.gstatic.com/" crossorigin />
+  <link rel="preload" href="https://fonts.googleapis.com/css2?display=swap&amp;family=Inter%3Awght%40400%3B500%3B700%3B900&amp;family=Noto+Sans%3Awght%40400%3B500%3B700%3B900" as="style" onload="this.rel='stylesheet'" />
+  <link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=Material+Symbols+Outlined" />
+  <title>Stitch Design</title>
+  <link rel="icon" type="image/x-icon" href="data:image/x-icon;base64," />
+  <link rel="stylesheet" href="../styles.css" />
+  <link rel="stylesheet" href="./audios.css" />
+</head>
+<body class="bg-gray-900">
+  <div class="relative flex h-auto min-h-screen w-full flex-col bg-gray-900 justify-between group/design-root" style="font-family: Inter, 'Noto Sans', sans-serif;">
+    <div>
+      <header class="sticky top-0 z-10 bg-gray-900/80 backdrop-blur-sm" style="height: 60px;">
+        <div class="flex items-center p-4">
+          <a href="../songs.html" id="back-to-songs" class="text-white">
+            <span class="material-symbols-outlined text-3xl">arrow_back_ios_new</span>
+          </a>
+          <h1 class="flex-1 text-center text-xl font-bold text-white pr-8">Pistas de práctica</h1>
+        </div>
+      </header>
+      <main class="p-4">
+        <h2 class="text-3xl font-bold text-white mb-6">Pistas de Práctica</h2>
+        <div class="mb-4" data-song-status-container hidden>
+          <button type="button" class="song-status-button" data-song-status-button disabled>Not started</button>
+        </div>
+        <div class="space-y-4"></div>
+        <section class="recorder-section" data-recorder-section>
+          <h3 class="text-xl font-semibold text-white">Record New Audio</h3>
+          <label class="recorder-section__label">
+            <input type="text" class="recorder-section__input" placeholder="Enter a title please" data-recorder-field="title" />
+          </label>
+          <div class="recorder-section__status" data-recorder-status data-tone="neutral">Press "Record" to start and add a title when you are ready.</div>
+          <div class="recorder-section__controls">
+            <button type="button" class="recorder-button recorder-button--primary recorder-button--round" data-recorder-action="toggle">Record</button>
+            <button type="button" class="recorder-button recorder-button--accent" data-recorder-action="upload" data-recorder-visibility="hasRecording" hidden disabled>Upload recording</button>
+            <button type="button" class="recorder-button recorder-button--destructive" data-recorder-action="discard" data-recorder-visibility="hasRecording" hidden disabled>Discard</button>
+          </div>
+          <audio class="recorder-section__preview" data-recorder-preview controls preload="metadata"></audio>
+        </section>
+      </main>
+    </div>
+  </div>
+
+  <button id="upload-audio-fab" class="fixed bottom-6 right-6 flex h-14 w-14 items-center justify-center rounded-full bg-red-500 text-white shadow-lg" style="z-index:25;">
+    <span class="material-symbols-outlined text-3xl">add</span>
+  </button>
+  <input id="audio-file-input" type="file" accept="audio/*" class="hidden" />
+
+  <script src="https://cdn.jsdelivr.net/npm/@supabase/supabase-js@2"></script>
+  <script src="../config.js"></script>
+  <script type="module" src="./main.js"></script>
+</body>
+</html>
