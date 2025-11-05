@@ -7,6 +7,22 @@ export const WAVEFORM_MIN_BAR_COUNT = 160;
 export const WAVEFORM_MAX_BAR_COUNT = 1024;
 export const WAVEFORM_SAMPLES_PER_SECOND = 32;
 export const WAVEFORM_AMPLITUDE_FLOOR = 0.001;
+export const WAVEFORM_CONTENT_PADDING = 160;
+
+export const WAVEFORM_STYLE = {
+  barMinHeight: 12,
+  barMaxHeight: 120,
+  barBaseHeight: 10,
+  barHeightScale: 92,
+  minOpacity: 0.4,
+  maxOpacityDelta: 0.5,
+  placeholderBase: 0.15,
+  placeholderOscillation: 0.25,
+  placeholderEnvelopeBase: 0.2,
+  placeholderEnvelopeScale: 0.8,
+  placeholderMix: 0.3,
+  placeholderFloor: 0.1
+};
 
 let waveformAudioContext = null;
 
@@ -24,7 +40,7 @@ export function getWaveformAudioContext() {
     waveformAudioContext = null;
   }
   return waveformAudioContext;
-}
+  }
 
 export function stopWaveformAnimation(cacheEntry) {
   if (!cacheEntry) return;
@@ -70,16 +86,17 @@ export function ensureWaveformBarElements(state, count) {
 
   state.barElements = bars;
   state.barCount = bars.length;
-  state.minContentWidth = Math.max(state.minContentWidth || 0, bars.length * WAVEFORM_BAR_STEP + 160);
+  state.minContentWidth = Math.max(state.minContentWidth || 0, bars.length * WAVEFORM_BAR_STEP + WAVEFORM_CONTENT_PADDING);
   return bars;
 }
 
 function placeholderWaveformValue(index, total) {
-  if (!Number.isFinite(total) || total <= 0) return 0.3;
+  if (!Number.isFinite(total) || total <= 0) return WAVEFORM_STYLE.placeholderBase;
   const t = index / total;
-  const base = 0.35 + 0.25 * Math.sin(t * Math.PI * 4);
-  const envelope = 0.2 + 0.8 * Math.sin(Math.PI * Math.min(t, 1 - t));
-  return Math.max(0.1, Math.min(1, base + envelope * 0.3));
+  const base = WAVEFORM_STYLE.placeholderBase + WAVEFORM_STYLE.placeholderOscillation * Math.sin(t * Math.PI * 4);
+  const envelope = WAVEFORM_STYLE.placeholderEnvelopeBase + WAVEFORM_STYLE.placeholderEnvelopeScale * Math.sin(Math.PI * Math.min(t, 1 - t));
+  const mix = base + envelope * WAVEFORM_STYLE.placeholderMix;
+  return Math.max(WAVEFORM_STYLE.placeholderFloor, Math.min(1, mix));
 }
 
 export function applyWaveformValues(state, values, options = {}) {
@@ -113,24 +130,78 @@ export function applyWaveformValues(state, values, options = {}) {
     state.waveformDuration = null;
     state.secondsPerBar = null;
   }
-  const secondsPerBar = state.secondsPerBar && state.secondsPerBar > 0
-    ? state.secondsPerBar
-    : WAVEFORM_VIEW_WINDOW_SECONDS / totalBars;
-  state.pixelsPerSecond = WAVEFORM_BAR_STEP / Math.max(secondsPerBar, 0.0001);
+  const {
+    barBaseHeight,
+    barHeightScale,
+    barMinHeight,
+    barMaxHeight,
+    minOpacity,
+    maxOpacityDelta
+  } = WAVEFORM_STYLE;
 
   for (let index = 0; index < bars.length; index += 1) {
     let amplitude = sanitized ? sanitized[index] : placeholderWaveformValue(index, totalBars);
     if (sanitized && state.waveformPeak > 0) {
       amplitude = Math.max(0, amplitude / state.waveformPeak);
     }
-    const height = 24 + amplitude * 92;
-    bars[index].style.height = `${Math.max(12, Math.min(120, height))}px`;
-    bars[index].style.opacity = `${0.4 + amplitude * 0.5}`;
+    const height = barBaseHeight + amplitude * barHeightScale;
+    bars[index].style.height = `${Math.max(barMinHeight, Math.min(barMaxHeight, height))}px`;
+    bars[index].style.opacity = `${minOpacity + amplitude * maxOpacityDelta}`;
   }
 
   state.waveformValues = sanitized;
   state.barCount = bars.length;
-  state.minContentWidth = Math.max(state.minContentWidth || 0, bars.length * WAVEFORM_BAR_STEP + 160);
+  state.minContentWidth = Math.max(state.minContentWidth || 0, bars.length * WAVEFORM_BAR_STEP + WAVEFORM_CONTENT_PADDING);
+  state.pixelsPerSecond = null;
+  state.pixelsPerSecondDuration = null;
+}
+
+function resolveWaveformPixelsPerSecond(state, duration) {
+  if (!state) return 0;
+
+  const effectiveDuration = Number.isFinite(duration) && duration > 0
+    ? duration
+    : (Number.isFinite(state.waveformDuration) && state.waveformDuration > 0 ? state.waveformDuration : null);
+
+  let secondsPerBar = state.secondsPerBar && state.secondsPerBar > 0 ? state.secondsPerBar : null;
+  if (!secondsPerBar && effectiveDuration && effectiveDuration > 0 && state.barCount > 0) {
+    secondsPerBar = effectiveDuration / state.barCount;
+  }
+
+  let computed = null;
+
+  if (secondsPerBar && secondsPerBar > 0) {
+    computed = WAVEFORM_BAR_STEP / Math.max(secondsPerBar, 0.0001);
+  }
+
+  if ((!computed || !Number.isFinite(computed) || computed <= 0) && effectiveDuration && effectiveDuration > 0) {
+    const measuredWidth = state.contentEl
+      ? Math.max(state.contentEl.scrollWidth || 0, state.contentEl.offsetWidth || 0)
+      : 0;
+    const totalBarWidth = state.barCount > 0 ? state.barCount * WAVEFORM_BAR_STEP : 0;
+    const referenceWidth = Math.max(measuredWidth, totalBarWidth);
+    if (referenceWidth > 0) {
+      computed = referenceWidth / Math.max(effectiveDuration, 0.0001);
+    }
+  }
+
+  if ((!computed || !Number.isFinite(computed) || computed <= 0) && state.barCount > 0) {
+    const totalBarWidth = state.barCount * WAVEFORM_BAR_STEP;
+    const referenceDuration = effectiveDuration && effectiveDuration > 0
+      ? effectiveDuration
+      : (Number.isFinite(state.waveformDuration) && state.waveformDuration > 0 ? state.waveformDuration : null);
+    if (referenceDuration && referenceDuration > 0) {
+      computed = totalBarWidth / Math.max(referenceDuration, 0.0001);
+    }
+  }
+
+  if (!computed || !Number.isFinite(computed) || computed <= 0) {
+    computed = (WAVEFORM_MIN_BAR_COUNT * WAVEFORM_BAR_STEP) / Math.max(WAVEFORM_VIEW_WINDOW_SECONDS, 0.0001);
+  }
+
+  state.pixelsPerSecond = computed;
+  state.pixelsPerSecondDuration = effectiveDuration || null;
+  return computed;
 }
 
 export async function populateWaveformFromSource(cacheEntry, explicitUrl, explicitBlob) {
@@ -276,8 +347,10 @@ export function updateWaveformDimensions(state, duration) {
     requestAnimationFrame(() => updateWaveformDimensions(state, duration));
     return;
   }
-  const effectiveDuration = Number.isFinite(duration) && duration > 0 ? duration : 0;
-  const pixelsPerSecond = state.pixelsPerSecond || metrics.pixelsPerSecond;
+  const effectiveDuration = Number.isFinite(duration) && duration > 0
+    ? duration
+    : (Number.isFinite(state.waveformDuration) && state.waveformDuration > 0 ? state.waveformDuration : 0);
+  const pixelsPerSecond = resolveWaveformPixelsPerSecond(state, effectiveDuration);
   const totalWidth = metrics.initialOffset + (effectiveDuration + WAVEFORM_HALF_WINDOW_SECONDS) * pixelsPerSecond;
   const minWidth = Math.max(state.minContentWidth || 0, metrics.viewportWidth * 1.5);
   state.contentEl.style.width = `${Math.max(totalWidth, minWidth)}px`;
@@ -293,13 +366,32 @@ export function applyWaveformPosition(state, currentTime, duration) {
   const paddingLeft = state.contentPaddingLeft || 0;
   const rawTime = Number(currentTime) || 0;
   const effectiveTime = Math.max(0, rawTime);
-  const effectiveDuration = Number.isFinite(duration) && duration > 0 ? duration : 0;
-  state.duration = effectiveDuration;
+  const resolvedDuration = Number.isFinite(duration) && duration > 0
+    ? duration
+    : (Number.isFinite(state.duration) && state.duration > 0 ? state.duration : 0);
+  if (resolvedDuration > 0) {
+    if (!Number.isFinite(state.duration) || Math.abs(state.duration - resolvedDuration) > 0.001) {
+      state.duration = resolvedDuration;
+    }
+    if (
+      state.barCount > 0 &&
+      state.waveformValues &&
+      state.waveformValues.length === state.barCount
+    ) {
+      const computedSecondsPerBar = resolvedDuration / state.barCount;
+      if (!Number.isFinite(state.secondsPerBar) || Math.abs(state.secondsPerBar - computedSecondsPerBar) > 0.001) {
+        state.secondsPerBar = computedSecondsPerBar;
+        state.waveformDuration = resolvedDuration;
+        state.pixelsPerSecond = null;
+        state.pixelsPerSecondDuration = null;
+      }
+    }
+  }
   state.lastCurrentTime = effectiveTime;
-  updateWaveformDimensions(state, effectiveDuration);
+  updateWaveformDimensions(state, resolvedDuration);
   const contentWidth = state.contentEl.offsetWidth || 0;
   const minOffset = metrics.viewportWidth - contentWidth;
-  const pixelsPerSecond = state.pixelsPerSecond || metrics.pixelsPerSecond;
+  const pixelsPerSecond = resolveWaveformPixelsPerSecond(state, resolvedDuration);
   const baseOffset = metrics.initialOffset - paddingLeft;
   const offset = Math.max(minOffset, baseOffset - (effectiveTime * pixelsPerSecond));
   state.contentEl.style.transform = `translateX(${offset}px)`;
@@ -339,6 +431,7 @@ export function buildWaveformState(waveformElements, seed) {
     waveformDuration: null,
     secondsPerBar: null,
     pixelsPerSecond: null,
+    pixelsPerSecondDuration: null,
     contentPaddingLeft: paddingLeft,
     contentPaddingRight: paddingRight
   };
