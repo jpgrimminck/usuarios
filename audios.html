@@ -348,7 +348,6 @@ let recorderElements = null;
 
 const WAVEFORM_VIEW_WINDOW_SECONDS = 4;
 const WAVEFORM_HALF_WINDOW_SECONDS = WAVEFORM_VIEW_WINDOW_SECONDS / 2;
-const WAVEFORM_SYNC_OFFSET_SECONDS = 3;
 const WAVEFORM_BAR_WIDTH = 4;
 const WAVEFORM_BAR_GAP = 0;
 const WAVEFORM_BAR_STEP = WAVEFORM_BAR_WIDTH + WAVEFORM_BAR_GAP;
@@ -565,12 +564,14 @@ async function populateWaveformFromSource(cacheEntry, explicitUrl, explicitBlob)
 
       for (let i = 0; i < desiredCount; i += 1) {
         const start = i * blockSize;
-        let sum = 0;
+        let peak = 0;
         for (let j = 0; j < blockSize && (start + j) < totalSamples; j += 1) {
-          sum += Math.abs(channelData[start + j]);
+          const sample = Math.abs(channelData[start + j]);
+          if (sample > peak) {
+            peak = sample;
+          }
         }
-        const avg = sum / blockSize;
-        const amplitude = Math.min(1, Math.max(0, avg * 2.8));
+        const amplitude = Math.min(1, Math.max(0, peak));
         amplitudes.push(amplitude);
         maxAmplitude = Math.max(maxAmplitude, amplitude);
       }
@@ -976,8 +977,9 @@ function applyWaveformPosition(state, currentTime, duration) {
     requestAnimationFrame(() => applyWaveformPosition(state, currentTime, duration));
     return;
   }
+  const paddingLeft = state.contentPaddingLeft || 0;
   const rawTime = Number(currentTime) || 0;
-  const effectiveTime = Math.max(0, rawTime + WAVEFORM_SYNC_OFFSET_SECONDS);
+  const effectiveTime = Math.max(0, rawTime);
   const effectiveDuration = Number.isFinite(duration) && duration > 0 ? duration : 0;
   state.duration = effectiveDuration;
   state.lastCurrentTime = effectiveTime;
@@ -985,7 +987,8 @@ function applyWaveformPosition(state, currentTime, duration) {
   const contentWidth = state.contentEl.offsetWidth || 0;
   const minOffset = metrics.viewportWidth - contentWidth;
   const pixelsPerSecond = state.pixelsPerSecond || metrics.pixelsPerSecond;
-  const offset = Math.max(minOffset, metrics.initialOffset - (effectiveTime * pixelsPerSecond));
+  const baseOffset = metrics.initialOffset - paddingLeft;
+  const offset = Math.max(minOffset, baseOffset - (effectiveTime * pixelsPerSecond));
   state.contentEl.style.transform = `translateX(${offset}px)`;
 }
 
@@ -998,13 +1001,18 @@ function resetWaveformState(state) {
   }
   state.lastCurrentTime = 0;
   updateWaveformDimensions(state, state.duration || 0);
-  state.contentEl.style.transform = `translateX(${metrics.initialOffset}px)`;
+  const paddingLeft = state.contentPaddingLeft || 0;
+  const baseOffset = metrics.initialOffset - paddingLeft;
+  state.contentEl.style.transform = `translateX(${baseOffset}px)`;
 }
 
 function buildWaveformState(waveformElements, seed) {
   if (!waveformElements) return null;
   const { viewportEl, contentEl } = waveformElements;
   if (!viewportEl || !contentEl) return null;
+  const computedStyle = window.getComputedStyle(contentEl);
+  const paddingLeft = parseFloat(computedStyle.paddingLeft || '0') || 0;
+  const paddingRight = parseFloat(computedStyle.paddingRight || '0') || 0;
   const state = {
     viewportEl,
     contentEl,
@@ -1017,16 +1025,20 @@ function buildWaveformState(waveformElements, seed) {
     waveformPeak: 1,
     waveformDuration: null,
     secondsPerBar: null,
-    pixelsPerSecond: null
+    pixelsPerSecond: null,
+    contentPaddingLeft: paddingLeft,
+    contentPaddingRight: paddingRight
   };
   applyWaveformValues(state, null, { placeholderCount: WAVEFORM_MIN_BAR_COUNT });
   if (state.metrics) {
-    state.contentEl.style.transform = `translateX(${state.metrics.initialOffset}px)`;
+    const baseOffset = state.metrics.initialOffset - paddingLeft;
+    state.contentEl.style.transform = `translateX(${baseOffset}px)`;
   } else {
     requestAnimationFrame(() => {
       const metrics = refreshWaveformMetrics(state);
       if (metrics) {
-        state.contentEl.style.transform = `translateX(${metrics.initialOffset}px)`;
+        const refreshedOffset = metrics.initialOffset - paddingLeft;
+        state.contentEl.style.transform = `translateX(${refreshedOffset}px)`;
       }
     });
   }
