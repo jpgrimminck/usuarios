@@ -34,7 +34,7 @@ import {
 
 const AUDIO_BUCKET = 'audios';
 const AUDIO_SONG_COLUMN_CANDIDATES = ['relational_song_id', 'song_id', 'cancion_id'];
-const SEEK_OFFSET_SECONDS = 0;
+const SEEK_OFFSET_SECONDS = 3;
 
 const state = {
   supabase: null,
