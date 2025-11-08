@@ -16,8 +16,9 @@ import {
   buildWaveformState,
   refreshWaveformMetrics,
   resetWaveformState,
-  populateWaveformFromSource
-} from './waveform.js';
+  populateWaveformFromSource,
+  getVisualizerMode
+} from './visualizer.js';
 import {
   initializeStatusModule,
   initSongStatusControls,
@@ -272,12 +273,28 @@ function buildAudioCard(audio) {
         </button>
       </div>
     </div>
-    <div class="waveform" data-role="waveform">
+    <div class="waveform" data-role="waveform" data-visualizer="waveform">
       <div class="waveform-viewport" data-role="waveform-viewport">
         <div class="waveform-content" data-role="waveform-content"></div>
       </div>
     </div>
+    <div class="audio-slider" data-visualizer="slider">
+      <div class="audio-slider__track" data-role="slider-track">
+        <div class="audio-slider__fill" data-role="slider-fill"></div>
+      </div>
+    </div>
   `;
+
+  const visualizerMode = getVisualizerMode();
+  container.dataset.visualizerMode = visualizerMode;
+  container.querySelectorAll('[data-visualizer]').forEach((element) => {
+    if (!element) return;
+    if (element.dataset.visualizer === visualizerMode) {
+      element.removeAttribute('hidden');
+    } else {
+      element.setAttribute('hidden', 'true');
+    }
+  });
   return container;
 }
 
@@ -386,30 +403,39 @@ async function loadAudios(options = {}) {
       const forwardButton = audioElement.querySelector('[data-role="forward-button"]');
       const waveformViewport = audioElement.querySelector('[data-role="waveform-viewport"]');
       const waveformContent = audioElement.querySelector('[data-role="waveform-content"]');
-      buildWaveformState({ viewportEl: waveformViewport, contentEl: waveformContent }, audio.id);
+      const sliderTrack = audioElement.querySelector('[data-role="slider-track"]');
+      const sliderFill = audioElement.querySelector('[data-role="slider-fill"]');
+      const visualizerMode = getVisualizerMode();
+      const visualizerElements = visualizerMode === 'slider'
+        ? { viewportEl: sliderTrack, contentEl: sliderFill }
+        : { viewportEl: waveformViewport, contentEl: waveformContent };
+
+      if (visualizerElements.viewportEl && visualizerElements.contentEl) {
+        buildWaveformState(visualizerElements, audio.id);
+      }
 
       playButton.addEventListener('click', (event) => {
         event.stopPropagation();
         expandCard(audioElement);
-        togglePlayback(playButton, audio, { viewportEl: waveformViewport, contentEl: waveformContent });
+        togglePlayback(playButton, audio, visualizerElements);
       });
       if (seekSeconds > 0) {
         rewindButton.addEventListener('click', async (event) => {
           event.stopPropagation();
           expandCard(audioElement);
-          await seekPlayback(audio, -seekSeconds, { viewportEl: waveformViewport, contentEl: waveformContent });
+          await seekPlayback(audio, -seekSeconds, visualizerElements);
         });
         forwardButton.addEventListener('click', async (event) => {
           event.stopPropagation();
           expandCard(audioElement);
-          await seekPlayback(audio, seekSeconds, { viewportEl: waveformViewport, contentEl: waveformContent });
+          await seekPlayback(audio, seekSeconds, visualizerElements);
         });
       } else {
         rewindButton.disabled = true;
         forwardButton.disabled = true;
       }
 
-      prepareAudioPlayer(audio, null, { viewportEl: waveformViewport, contentEl: waveformContent })
+      prepareAudioPlayer(audio, null, visualizerElements)
         .catch((err) => {
           console.debug('No se pudo preparar la forma de onda para el audio', audio.id, err?.message || err);
         });

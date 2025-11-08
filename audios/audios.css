@@ -96,6 +96,31 @@
   transition: max-height 0.25s ease, opacity 0.25s ease, margin-top 0.25s ease;
 }
 
+.audio-card .audio-slider {
+  position: relative;
+  width: 100%;
+  height: 6px;
+  border-radius: 9999px;
+  background: rgba(148, 163, 184, 0.25);
+  overflow: hidden;
+  opacity: 0;
+  max-height: 0;
+  margin-top: 0;
+  transition: max-height 0.25s ease, opacity 0.25s ease, margin-top 0.25s ease;
+}
+
+.audio-card .audio-slider__track {
+  width: 100%;
+  height: 100%;
+}
+
+.audio-card .audio-slider__fill {
+  width: 0%;
+  height: 100%;
+  background: var(--primary-color, #137fec);
+  transition: width 0.1s linear;
+}
+
 .audio-card .waveform::after {
   content: '';
   position: absolute;
@@ -152,6 +177,12 @@
 .audio-card--expanded .waveform {
   opacity: 1;
   max-height: 120px;
+  margin-top: 20px;
+}
+
+.audio-card--expanded .audio-slider {
+  opacity: 1;
+  max-height: 6px;
   margin-top: 20px;
 }
 

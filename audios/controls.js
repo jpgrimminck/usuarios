@@ -6,7 +6,7 @@ import {
   applyWaveformPosition,
   resetWaveformState,
   applyWaveformValues
-} from './waveform.js';
+} from './visualizer.js';
 
 let supabaseClient = null;
 let audioBucket = 'audios';
@@ -164,11 +164,6 @@ export async function prepareAudioPlayer(audio, button, waveformElements) {
 
       if (normalizedPath) candidatePaths.push(normalizedPath);
       if (rawCandidate && !candidatePaths.includes(rawCandidate)) candidatePaths.push(rawCandidate);
-
-      if (!candidatePaths.length) {
-        console.warn('No se pudo normalizar la ruta de almacenamiento para el audio:', audio.id);
-        return null;
-      }
 
       let lastError = null;
 
