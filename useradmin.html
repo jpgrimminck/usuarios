@@ -81,7 +81,8 @@
         let ipContentHTML = '<div class="text-sm text-gray-300">Sin IP asignada</div>';
 
         if (assignedEntries.length > 0) {
-          const entriesHTML = assignedEntries.map((entry, index) => {
+          const sortedEntries = [...assignedEntries].sort((a, b) => new Date(b.created_at) - new Date(a.created_at));
+          const entriesHTML = sortedEntries.map((entry, index) => {
             const days = Math.max(0, Math.floor((Date.now() - new Date(entry.created_at)) / (1000 * 60 * 60 * 24)));
             const timeAgo = days === 0 ? 'hoy' : `${days} días`;
             const commentLine = entry.comment ? ` | ${entry.comment}` : '';
