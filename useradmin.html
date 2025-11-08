@@ -78,29 +78,52 @@
 
       usersToRender.forEach((user) => {
         const assignedEntries = assignmentsMap.get(user.id) || [];
-        let ipInfo = 'Sin IP asignada';
+        let ipContentHTML = '<div class="text-sm text-gray-300">Sin IP asignada</div>';
 
         if (assignedEntries.length > 0) {
-          ipInfo = assignedEntries.map((entry) => {
+          const entriesHTML = assignedEntries.map((entry, index) => {
             const days = Math.max(0, Math.floor((Date.now() - new Date(entry.created_at)) / (1000 * 60 * 60 * 24)));
             const timeAgo = days === 0 ? 'hoy' : `${days} días`;
             const commentLine = entry.comment ? ` | ${entry.comment}` : '';
             const deviceCodeLine = entry.device_code ? ` | ${entry.device_code}` : '';
-            return `IP: ${entry.ip} (${entry.device_model}) (${timeAgo})${commentLine}${deviceCodeLine}`;
-          }).join('<br>');
+            const rowClasses = ['ip-entry', 'text-sm', 'leading-snug', 'text-gray-200'];
+            if (index > 0) rowClasses.push('extra-ip', 'hidden');
+            return `<div class="${rowClasses.join(' ')}">IP: ${entry.ip} (${entry.device_model}) (${timeAgo})${commentLine}${deviceCodeLine}</div>`;
+          }).join('');
+          ipContentHTML = `<div class="space-y-1">${entriesHTML}</div>`;
         }
 
         const borderClass = assignedEntries.length > 0 ? 'border-4 border-green-500' : 'border-4 border-gray-500';
+        let expandButton = '';
+        if (assignedEntries.length > 1) {
+          expandButton = '<button class="expand-btn bg-blue-500 hover:bg-blue-700 text-white px-2 py-1 rounded text-sm">More IPs</button>';
+        }
         const card = document.createElement('div');
-        card.className = `bg-gray-800 p-4 rounded ${borderClass} cursor-pointer h-35`;
+        card.className = `bg-gray-800 p-4 rounded ${borderClass} cursor-pointer h-25`;
         card.dataset.userId = user.id;
         card.dataset.hasIp = (assignedEntries.length > 0).toString();
-        card.innerHTML = `
+        let headerHTML;
+        if (assignedEntries.length > 1) {
+          headerHTML = `
+            <div class="flex justify-between items-center mb-2">
+              <p class="text-2xl font-bold">${user.name}</p>
+              <div class="flex items-center gap-2">
+                ${expandButton}
+                <p class="text-sm text-gray-400">${user.id}</p>
+              </div>
+            </div>
+          `;
+        } else {
+          headerHTML = `
             <div class="relative" style="padding-right:60px;">
               <p class="text-2xl font-bold" style="margin:0;">${user.name}</p>
               <p class="text-sm text-gray-400" style="position:absolute; top:0; right:0; margin:0;">${user.id}</p>
             </div>
-            <p class="text-sm" style="margin:2px 0 0 0;">${ipInfo}</p>
+          `;
+        }
+        card.innerHTML = `
+            ${headerHTML}
+            <div class="mt-1">${ipContentHTML}</div>
           `;
         card.addEventListener('click', () => {
           if (card.classList.contains('selected')) {
@@ -117,6 +140,24 @@
           }
           updateAccessButton();
         });
+        const expandBtn = card.querySelector('.expand-btn');
+        if (expandBtn) {
+          const extraRows = card.querySelectorAll('.extra-ip');
+          expandBtn.addEventListener('click', (e) => {
+            e.stopPropagation();
+            if (card.classList.contains('expanded')) {
+              card.classList.remove('expanded');
+              card.style.height = '';
+              expandBtn.textContent = 'More IPs';
+              extraRows.forEach((row) => row.classList.add('hidden'));
+            } else {
+              card.classList.add('expanded');
+              card.style.height = 'auto';
+              expandBtn.textContent = 'Hide IPs';
+              extraRows.forEach((row) => row.classList.remove('hidden'));
+            }
+          });
+        }
         container.appendChild(card);
       });
     }
