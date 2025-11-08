@@ -31,6 +31,13 @@
   margin: 0;
 }
 
+.audio-card__format {
+  color: #60a5fa;
+  font-size: 1rem;
+  padding-left: 0.75rem;
+  padding-right: 0.75rem;
+}
+
 .audio-card__controls {
   display: flex;
   align-items: center;

@@ -243,10 +243,23 @@ function buildAudioCard(audio) {
   const container = document.createElement('div');
   container.className = 'audio-card flex flex-col gap-4 rounded-lg bg-gray-800 p-4';
   container.dataset.audioId = audio.id;
+  const formatLabel = (() => {
+    const rawUrl = typeof audio.url === 'string' ? audio.url : '';
+    if (!rawUrl.includes('.')) return null;
+    const withoutQuery = rawUrl.split('?')[0];
+    const extension = withoutQuery.split('.').pop();
+    if (!extension) return null;
+    const normalized = extension.trim().toLowerCase();
+    if (!normalized || normalized.length > 5) return null;
+    return normalized;
+  })();
   const seekSeconds = Math.abs(getSeekOffsetSeconds()) || Math.abs(SEEK_OFFSET_SECONDS);
   container.innerHTML = `
     <div class="audio-card__header">
-      <p class="audio-card__title text-lg font-semibold text-white">${audio.instrument || 'Instrumento sin nombre'}</p>
+      <p class="audio-card__title text-lg font-semibold text-white">
+        ${audio.instrument || 'Instrumento sin nombre'}
+        ${formatLabel ? `<span class="ml-2 inline-flex items-center rounded-full bg-gray-700 px-2 py-0.5 text-[0.6rem] font-semibold uppercase tracking-wide text-blue-300 audio-card__format">${formatLabel}</span>` : ''}
+      </p>
       <div class="audio-card__controls" data-role="controls">
         <button type="button" class="flex items-center justify-center rounded-full bg-gray-700 text-white transition-colors hover:bg-gray-600" data-role="rewind-button" aria-label="Retroceder ${seekSeconds} segundos" title="Retroceder ${seekSeconds} segundos">
           <span class="material-symbols-outlined text-3xl">fast_rewind</span>
