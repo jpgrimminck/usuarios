@@ -61,7 +61,14 @@
         <div id="suggested-songs-container" class="suggested-grid"></div>
       </div>
       <div class="suggested-actions">
-        <button type="button" id="add-selected-songs" class="suggested-primary" disabled>Añadir a mi lista</button>
+        <div class="suggested-field">
+          <input type="text" id="new-song-title" class="suggested-input" placeholder="Nuevo título de canción" autocomplete="off"/>
+        </div>
+        <div class="suggested-field">
+          <input type="text" id="new-song-artist" class="suggested-input" placeholder="Nombre del artista" autocomplete="off"/>
+        </div>
+        <button type="button" id="create-new-song" class="suggested-primary">Crear canción</button>
+        <button type="button" id="add-selected-songs" class="suggested-secondary" disabled>Añadir a mi lista</button>
       </div>
     </div>
   </div>
@@ -109,6 +116,48 @@ const sampleSongs = [
 const STATUS_CYCLE = ['Not started', 'Practicing', 'Completed'];
 const DEFAULT_STATUS = STATUS_CYCLE[0];
 const selectedLibrarySongs = new Map();
+let modalWorking = false;
+let modalSongsFetchToken = 0;
+
+function getModalElements() {
+  return {
+    createButton: document.getElementById('create-new-song'),
+    addButton: document.getElementById('add-selected-songs'),
+    titleInput: document.getElementById('new-song-title'),
+    artistInput: document.getElementById('new-song-artist')
+  };
+}
+
+function updateModalButtonsDisabledState() {
+  const { createButton, addButton, titleInput, artistInput } = getModalElements();
+  if (createButton) {
+    createButton.disabled = modalWorking;
+  }
+  if (titleInput) {
+    titleInput.disabled = modalWorking;
+  }
+  if (artistInput) {
+    artistInput.disabled = modalWorking;
+  }
+  if (addButton) {
+    addButton.disabled = modalWorking || !selectedUserId || selectedLibrarySongs.size === 0;
+  }
+}
+
+function setModalWorkingState(isWorking) {
+  modalWorking = !!isWorking;
+  updateModalButtonsDisabledState();
+}
+
+function resetNewSongForm() {
+  const { titleInput, artistInput } = getModalElements();
+  if (titleInput) {
+    titleInput.value = '';
+  }
+  if (artistInput) {
+    artistInput.value = '';
+  }
+}
 
 function normalizeStatusTag(value) {
   return (value || '').toLowerCase().replace(/\s+/g, '-');
@@ -153,6 +202,59 @@ async function persistStatusTag(songId, nextStatus) {
   return data.status_tag || nextStatus;
 }
 
+async function getOrCreateArtistId(artistName) {
+  const trimmedName = (artistName || '').trim();
+  if (!trimmedName) {
+    throw new Error('Artist name is required.');
+  }
+
+  const { data: existingArtist, error: existingError } = await supabase
+    .from('artists')
+    .select('id')
+    .eq('name', trimmedName)
+    .maybeSingle();
+
+  if (existingError) {
+    throw existingError;
+  }
+
+  if (existingArtist?.id) {
+    return existingArtist.id;
+  }
+
+  try {
+    const { data: insertedArtist, error: insertError } = await supabase
+      .from('artists')
+      .insert({ name: trimmedName })
+      .select('id')
+      .single();
+
+    if (insertError) {
+      throw insertError;
+    }
+
+    return insertedArtist.id;
+  } catch (err) {
+    if (err?.code === '23505') {
+      const { data: retryArtist, error: retryError } = await supabase
+        .from('artists')
+        .select('id')
+        .eq('name', trimmedName)
+        .maybeSingle();
+
+      if (retryError) {
+        throw retryError;
+      }
+
+      if (retryArtist?.id) {
+        return retryArtist.id;
+      }
+    }
+
+    throw err;
+  }
+}
+
 async function updateSongsTitle() {
   const titleEl = document.querySelector('#site-header h1');
   if (!titleEl) return;
@@ -194,10 +296,7 @@ function renderSuggestedSongs(onSelect) {
   const container = document.getElementById('suggested-songs-container');
   if (!container) return;
   container.innerHTML = '';
-  const addButton = document.getElementById('add-selected-songs');
-  if (addButton) {
-    addButton.disabled = !selectedUserId || selectedLibrarySongs.size === 0;
-  }
+  updateModalButtonsDisabledState();
   // fallback to sampleSongs if no list provided
   const sourceSongs = renderSuggestedSongs._lastList || sampleSongs;
   const sortedSongs = [...sourceSongs].sort((a, b) => {
@@ -255,10 +354,7 @@ function renderSuggestedSongs(onSelect) {
         if (typeof onSelect === 'function') {
           onSelect(null);
         }
-        const footerButton = document.getElementById('add-selected-songs');
-        if (footerButton && !footerButton.dataset.working) {
-          footerButton.disabled = selectedLibrarySongs.size === 0;
-        }
+        updateModalButtonsDisabledState();
         return;
       }
 
@@ -286,10 +382,7 @@ function renderSuggestedSongs(onSelect) {
 
       addButton.dataset.animTimeout = String(timeoutId);
 
-          const footerButton = document.getElementById('add-selected-songs');
-          if (footerButton && !footerButton.dataset.working) {
-            footerButton.disabled = selectedLibrarySongs.size === 0;
-          }
+          updateModalButtonsDisabledState();
     });
 
     card.appendChild(titleSpan);
@@ -325,6 +418,9 @@ function initAddSongModal() {
   if (!fab || !modal) return;
 
   const addSelectedButton = document.getElementById('add-selected-songs');
+  const createSongButton = document.getElementById('create-new-song');
+  const newSongTitleInput = document.getElementById('new-song-title');
+  const newSongArtistInput = document.getElementById('new-song-artist');
 
   const handleSuggestionSelect = (song) => {
     if (!song) return;
@@ -332,26 +428,31 @@ function initAddSongModal() {
   };
 
   function openModal() {
+    setModalWorkingState(false);
+    const fetchToken = ++modalSongsFetchToken;
     // Fetch library songs and render them in the modal
     fetchLibrarySongs().then(list => {
+      if (modalSongsFetchToken !== fetchToken) {
+        return;
+      }
       renderSuggestedSongs._lastList = list.length ? list : sampleSongs;
       renderSuggestedSongs(handleSuggestionSelect);
     }).catch(() => {
+      if (modalSongsFetchToken !== fetchToken) {
+        return;
+      }
       renderSuggestedSongs._lastList = sampleSongs;
       renderSuggestedSongs(handleSuggestionSelect);
     });
-    if (addSelectedButton) {
-      addSelectedButton.disabled = !selectedUserId || selectedLibrarySongs.size === 0;
-    }
+    updateModalButtonsDisabledState();
     modal.classList.remove('hidden');
   }
 
   function closeModal() {
     modal.classList.add('hidden');
     selectedLibrarySongs.clear();
-    if (addSelectedButton) {
-      addSelectedButton.disabled = true;
-    }
+    resetNewSongForm();
+    setModalWorkingState(false);
   }
 
   fab.addEventListener('click', openModal);
@@ -368,22 +469,108 @@ function initAddSongModal() {
 
   // Render initially so the modal is ready if opened via other triggers
   // prefetch library songs for faster open
+  const prefetchToken = ++modalSongsFetchToken;
   fetchLibrarySongs().then(list => {
+    if (modalSongsFetchToken !== prefetchToken) {
+      return;
+    }
     renderSuggestedSongs._lastList = list.length ? list : sampleSongs;
     renderSuggestedSongs(handleSuggestionSelect);
   }).catch(() => {
+    if (modalSongsFetchToken !== prefetchToken) {
+      return;
+    }
     renderSuggestedSongs._lastList = sampleSongs;
     renderSuggestedSongs(handleSuggestionSelect);
   });
 
-  if (addSelectedButton) {
-    addSelectedButton.addEventListener('click', async () => {
-      if (!selectedUserId || selectedLibrarySongs.size === 0) {
+  if (createSongButton) {
+    createSongButton.addEventListener('click', async () => {
+      if (modalWorking) {
         return;
       }
-    addSelectedButton.disabled = true;
-    addSelectedButton.dataset.working = 'true';
-    addSelectedButton.textContent = 'Añadiendo...';
+
+      const titleValue = (newSongTitleInput?.value || '').trim();
+      const artistValue = (newSongArtistInput?.value || '').trim();
+
+      if (!titleValue || !artistValue) {
+        console.warn('Debe agregar título y artista para crear una canción.');
+        return;
+      }
+
+      const originalText = createSongButton.textContent;
+      setModalWorkingState(true);
+      createSongButton.textContent = 'Guardando...';
+
+      try {
+        const artistId = await getOrCreateArtistId(artistValue);
+
+        const { data: insertedSong, error: songInsertError } = await supabase
+          .from('songs')
+          .insert({ title: titleValue, artist_id: artistId })
+          .select('id, title, artists ( name )')
+          .single();
+
+        let songRecord = insertedSong;
+
+        if (songInsertError) {
+          if (songInsertError.code === '23505') {
+            const { data: existingSong, error: existingSongError } = await supabase
+              .from('songs')
+              .select('id, title, artists ( name )')
+              .eq('title', titleValue)
+              .eq('artist_id', artistId)
+              .maybeSingle();
+
+            if (existingSongError) {
+              throw existingSongError;
+            }
+
+            if (existingSong) {
+              songRecord = existingSong;
+            } else {
+              throw songInsertError;
+            }
+          } else {
+            throw songInsertError;
+          }
+        }
+
+        if (!songRecord?.id) {
+          throw new Error('No se pudo obtener la canción creada.');
+        }
+
+        const displayArtist = songRecord?.artists?.name || artistValue;
+        selectedLibrarySongs.set(songRecord.id, { id: songRecord.id, title: songRecord.title, artist: displayArtist });
+
+        const baseList = Array.isArray(renderSuggestedSongs._lastList) ? [...renderSuggestedSongs._lastList] : [];
+        const filtered = baseList.filter(item => item?.id !== songRecord.id);
+        filtered.push({ id: songRecord.id, title: songRecord.title, artists: { name: displayArtist } });
+        renderSuggestedSongs._lastList = filtered;
+  modalSongsFetchToken += 1;
+        renderSuggestedSongs(handleSuggestionSelect);
+
+        if (newSongTitleInput) newSongTitleInput.value = '';
+        if (newSongArtistInput) newSongArtistInput.value = '';
+        updateModalButtonsDisabledState();
+      } catch (err) {
+        console.error('Error creating song:', err);
+      } finally {
+        createSongButton.textContent = originalText;
+        setModalWorkingState(false);
+      }
+    });
+  }
+
+  if (addSelectedButton) {
+    addSelectedButton.addEventListener('click', async () => {
+      if (!selectedUserId || selectedLibrarySongs.size === 0 || modalWorking) {
+        return;
+      }
+
+      const originalText = addSelectedButton.textContent;
+      setModalWorkingState(true);
+      addSelectedButton.textContent = 'Añadiendo...';
 
       try {
         const additions = Array.from(selectedLibrarySongs.values())
@@ -391,8 +578,8 @@ function initAddSongModal() {
           .filter(id => id !== null && id !== undefined);
 
         if (!additions.length) {
-          addSelectedButton.textContent = 'Añadir a mi lista';
-          addSelectedButton.disabled = false;
+          addSelectedButton.textContent = originalText;
+          setModalWorkingState(false);
           return;
         }
 
@@ -427,9 +614,14 @@ function initAddSongModal() {
       } catch (err) {
         console.error('Error adding songs to list:', err);
       } finally {
-        delete addSelectedButton.dataset.working;
-        addSelectedButton.textContent = 'Añadir a mi lista';
-        addSelectedButton.disabled = !selectedUserId || selectedLibrarySongs.size === 0;
+        if (!modal.classList.contains('hidden')) {
+          addSelectedButton.textContent = originalText;
+          setModalWorkingState(false);
+        } else {
+          addSelectedButton.textContent = originalText;
+          modalWorking = false;
+          updateModalButtonsDisabledState();
+        }
       }
     });
   }
@@ -587,6 +779,7 @@ async function loadSongs() {
 
 loadSongs();
 updateSongsTitle();
+updateModalButtonsDisabledState();
 initAddSongModal();
 initSongsRealtime();
 </script>

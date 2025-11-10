@@ -722,8 +722,36 @@ img {
 
 .suggested-actions {
   display: flex;
-  justify-content: center;
+  flex-direction: column;
+  gap: 0.75rem;
   margin-top: 1rem;
+}
+
+.suggested-field {
+  display: flex;
+  flex-direction: column;
+  gap: 0.25rem;
+}
+
+.suggested-input {
+  width: 100%;
+  border-radius: 0.5rem;
+  border: 1px solid rgba(148, 163, 184, 0.25);
+  background: rgba(31, 41, 55, 0.8);
+  color: #f9fafb;
+  padding: 0.6rem 0.75rem;
+  font-size: 0.9rem;
+  transition: border-color 0.2s ease, box-shadow 0.2s ease;
+}
+
+.suggested-input::placeholder {
+  color: rgba(156, 163, 175, 0.75);
+}
+
+.suggested-input:focus {
+  outline: none;
+  border-color: rgba(37, 99, 235, 0.65);
+  box-shadow: 0 0 0 2px rgba(37, 99, 235, 0.25);
 }
 
 .suggested-primary {
@@ -744,6 +772,27 @@ img {
 
 .suggested-primary:not(:disabled):hover {
   background-color: #1d4ed8;
+  transform: translateY(-1px);
+}
+
+.suggested-secondary {
+  background-color: rgba(55, 65, 81, 0.9);
+  color: #f9fafb;
+  border: none;
+  border-radius: 9999px;
+  padding: 0.6rem 1.5rem;
+  font-weight: 600;
+  font-size: 0.95rem;
+  transition: background-color 0.2s ease, transform 0.15s ease;
+}
+
+.suggested-secondary:disabled {
+  opacity: 0.45;
+  cursor: not-allowed;
+}
+
+.suggested-secondary:not(:disabled):hover {
+  background-color: rgba(75, 85, 99, 0.95);
   transform: translateY(-1px);
 }
 
