@@ -720,6 +720,33 @@ img {
   width: 100%;
 }
 
+.suggested-actions {
+  display: flex;
+  justify-content: center;
+  margin-top: 1rem;
+}
+
+.suggested-primary {
+  background-color: #2563eb;
+  color: #ffffff;
+  border: none;
+  border-radius: 9999px;
+  padding: 0.6rem 1.5rem;
+  font-weight: 600;
+  font-size: 0.95rem;
+  transition: background-color 0.2s ease, transform 0.15s ease;
+}
+
+.suggested-primary:disabled {
+  opacity: 0.5;
+  cursor: not-allowed;
+}
+
+.suggested-primary:not(:disabled):hover {
+  background-color: #1d4ed8;
+  transform: translateY(-1px);
+}
+
 .song-status-button {
   display: inline-flex;
   align-items: center;

@@ -8,6 +8,7 @@ const VISUALIZER_MODULES = {
 
 const FORCED_VISUALIZER_MODE = 'slider'; // Cambia a 'slider' o 'waveform' para forzar el modo
 
+
 function normalizeMode(value) {
   if (typeof value !== 'string') return null;
   const normalized = value.trim().toLowerCase();

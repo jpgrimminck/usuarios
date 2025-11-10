@@ -60,6 +60,9 @@
       <div class="suggested-wrapper">
         <div id="suggested-songs-container" class="suggested-grid"></div>
       </div>
+      <div class="suggested-actions">
+        <button type="button" id="add-selected-songs" class="suggested-primary" disabled>Añadir a mi lista</button>
+      </div>
     </div>
   </div>
 </div>
@@ -105,6 +108,7 @@ const sampleSongs = [
 
 const STATUS_CYCLE = ['Not started', 'Practicing', 'Completed'];
 const DEFAULT_STATUS = STATUS_CYCLE[0];
+const selectedLibrarySongs = new Map();
 
 function normalizeStatusTag(value) {
   return (value || '').toLowerCase().replace(/\s+/g, '-');
@@ -190,6 +194,10 @@ function renderSuggestedSongs(onSelect) {
   const container = document.getElementById('suggested-songs-container');
   if (!container) return;
   container.innerHTML = '';
+  const addButton = document.getElementById('add-selected-songs');
+  if (addButton) {
+    addButton.disabled = !selectedUserId || selectedLibrarySongs.size === 0;
+  }
   // fallback to sampleSongs if no list provided
   const sourceSongs = renderSuggestedSongs._lastList || sampleSongs;
   const sortedSongs = [...sourceSongs].sort((a, b) => {
@@ -218,6 +226,15 @@ function renderSuggestedSongs(onSelect) {
     addButton.setAttribute('aria-pressed', 'false');
     addButton.innerHTML = '<span class="material-symbols-outlined">add</span>';
 
+    const songId = song.id;
+    const key = songId ?? songTitle;
+    if (selectedLibrarySongs.has(key)) {
+      addButton.classList.add('suggested-add--selected');
+      addButton.setAttribute('aria-pressed', 'true');
+      const iconSpanInit = addButton.querySelector('.material-symbols-outlined');
+      if (iconSpanInit) iconSpanInit.textContent = 'check';
+    }
+
     addButton.addEventListener('click', () => {
       const iconSpan = addButton.querySelector('.material-symbols-outlined');
       const existingTimeout = addButton.dataset.animTimeout;
@@ -227,11 +244,20 @@ function renderSuggestedSongs(onSelect) {
         delete addButton.dataset.animTimeout;
       }
 
-      if (addButton.classList.contains('suggested-add--selected')) {
+          const wasSelected = addButton.classList.contains('suggested-add--selected');
+      if (wasSelected) {
         addButton.classList.remove('suggested-add--selected', 'suggested-add--animating');
         addButton.setAttribute('aria-pressed', 'false');
         if (iconSpan) {
           iconSpan.textContent = 'add';
+        }
+        selectedLibrarySongs.delete(key);
+        if (typeof onSelect === 'function') {
+          onSelect(null);
+        }
+        const footerButton = document.getElementById('add-selected-songs');
+        if (footerButton && !footerButton.dataset.working) {
+          footerButton.disabled = selectedLibrarySongs.size === 0;
         }
         return;
       }
@@ -247,6 +273,8 @@ function renderSuggestedSongs(onSelect) {
         onSelect(song);
       }
 
+      selectedLibrarySongs.set(key, { id: songId, title: songTitle, artist: song.artist || song.artists?.name || '' });
+
       // Force the radial fill to begin immediately before locking the selected state
       void addButton.offsetWidth;
       addButton.classList.add('suggested-add--selected');
@@ -257,6 +285,11 @@ function renderSuggestedSongs(onSelect) {
       }, 320);
 
       addButton.dataset.animTimeout = String(timeoutId);
+
+          const footerButton = document.getElementById('add-selected-songs');
+          if (footerButton && !footerButton.dataset.working) {
+            footerButton.disabled = selectedLibrarySongs.size === 0;
+          }
     });
 
     card.appendChild(titleSpan);
@@ -291,6 +324,8 @@ function initAddSongModal() {
 
   if (!fab || !modal) return;
 
+  const addSelectedButton = document.getElementById('add-selected-songs');
+
   const handleSuggestionSelect = (song) => {
     if (!song) return;
     console.log('Seleccionar canción sugerida:', song.title, '/', song.artist);
@@ -305,11 +340,18 @@ function initAddSongModal() {
       renderSuggestedSongs._lastList = sampleSongs;
       renderSuggestedSongs(handleSuggestionSelect);
     });
+    if (addSelectedButton) {
+      addSelectedButton.disabled = !selectedUserId || selectedLibrarySongs.size === 0;
+    }
     modal.classList.remove('hidden');
   }
 
   function closeModal() {
     modal.classList.add('hidden');
+    selectedLibrarySongs.clear();
+    if (addSelectedButton) {
+      addSelectedButton.disabled = true;
+    }
   }
 
   fab.addEventListener('click', openModal);
@@ -333,6 +375,64 @@ function initAddSongModal() {
     renderSuggestedSongs._lastList = sampleSongs;
     renderSuggestedSongs(handleSuggestionSelect);
   });
+
+  if (addSelectedButton) {
+    addSelectedButton.addEventListener('click', async () => {
+      if (!selectedUserId || selectedLibrarySongs.size === 0) {
+        return;
+      }
+    addSelectedButton.disabled = true;
+    addSelectedButton.dataset.working = 'true';
+    addSelectedButton.textContent = 'Añadiendo...';
+
+      try {
+        const additions = Array.from(selectedLibrarySongs.values())
+          .map(entry => entry?.id)
+          .filter(id => id !== null && id !== undefined);
+
+        if (!additions.length) {
+          addSelectedButton.textContent = 'Añadir a mi lista';
+          addSelectedButton.disabled = false;
+          return;
+        }
+
+        const { data: existingRows, error: existingError } = await supabase
+          .from('user_songs')
+          .select('song_id')
+          .eq('user_id', selectedUserId)
+          .in('song_id', additions);
+
+        if (existingError) {
+          throw existingError;
+        }
+
+        const existingIds = new Set((existingRows || []).map(row => row.song_id));
+        const insertPayload = additions
+          .filter(songId => !existingIds.has(songId))
+          .map(songId => ({ user_id: selectedUserId, song_id: songId, status_tag: DEFAULT_STATUS }));
+
+        if (insertPayload.length) {
+          const { error: insertError } = await supabase
+            .from('user_songs')
+            .insert(insertPayload);
+
+          if (insertError) {
+            throw insertError;
+          }
+        }
+
+        selectedLibrarySongs.clear();
+        await loadSongs();
+        closeModal();
+      } catch (err) {
+        console.error('Error adding songs to list:', err);
+      } finally {
+        delete addSelectedButton.dataset.working;
+        addSelectedButton.textContent = 'Añadir a mi lista';
+        addSelectedButton.disabled = !selectedUserId || selectedLibrarySongs.size === 0;
+      }
+    });
+  }
 }
 
 function scheduleSongsRefresh() {
