@@ -26,17 +26,17 @@
     }
   </style>
   </head>
-<body class="bg-gray-900">
-<div class="relative flex size-full min-h-screen flex-col justify-between group/design-root overflow-x-hidden text-white">
-  <!-- Header: keep separate from scrollable area -->
-  <div id="site-header" class="bg-gray-900/95 backdrop-blur-sm" style="position: fixed; top: 0; left: 0; right: 0; height: 40px; z-index: 30;">
-    <div class="flex items-center p-4 pb-2 justify-between">
+<body class="bg-gray-900 min-h-screen">
+
+  <!-- Header -->
+  <div id="site-header" class="bg-gray-900 border-b border-gray-800">
+    <div class="max-w-5xl mx-auto flex items-center p-4 pb-2 justify-between">
       <div class="w-12 flex items-center">
         <button id="back-button" aria-label="Volver" class="flex items-center justify-center rounded-full h-10 w-10 text-white hover:bg-white/10 transition-colors">
           <span class="material-symbols-outlined text-2xl">arrow_back</span>
         </button>
       </div>
-      <h1 class="text-xl font-bold leading-tight tracking-tight flex-1 text-center">Canciones</h1>
+      <h1 class="text-xl font-bold leading-tight tracking-tight flex-1 text-center text-white">Canciones</h1>
       <div class="flex w-12 items-center justify-end">
         <button class="flex items-center justify-center rounded-full h-10 w-10 text-white hover:bg-white/10 transition-colors">
           <span class="material-symbols-outlined text-2xl">add</span>
@@ -45,12 +45,13 @@
     </div>
   </div>
 
-  <!-- Scrollable list area separated from header -->
-  <div id="songs-scroll" class="flex-1 overflow-y-auto" style="padding-top: 80px;">
-    <div id="songs-container" class="flex flex-col songs-list">
+  <!-- Scrollable list area -->
+  <div id="songs-scroll" class="overflow-y-auto" style="height: calc(100vh - 60px); -webkit-overflow-scrolling: touch;">
+    <div id="songs-container" class="flex flex-col songs-list max-w-5xl mx-auto" style="padding: 16px 0 120px 0;">
       <!-- cards will be injected here -->
     </div>
   </div>
+  
   <button id="add-song-fab" class="fixed bg-blue-500 hover:bg-blue-700 text-white rounded-full flex items-center justify-center" style="bottom:24px; right:24px; width:56px; height:56px; z-index:25;">
     <span class="material-symbols-outlined text-3xl">add</span>
   </button>
@@ -78,7 +79,7 @@
       </div>
     </div>
   </div>
-</div>
+
 <script src="https://cdn.jsdelivr.net/npm/@supabase/supabase-js@2"></script>
 <script src="config.js"></script>
 <script>
