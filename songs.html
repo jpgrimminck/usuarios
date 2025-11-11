@@ -507,7 +507,7 @@ function initAddSongModal() {
 
         const { data: insertedSong, error: songInsertError } = await supabase
           .from('songs')
-          .insert({ title: titleValue, artist_id: artistId })
+          .insert({ title: titleValue, artist_id: artistId, created_by: selectedUserId })
           .select('id, title, artists ( name )')
           .single();
 
