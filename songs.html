@@ -413,7 +413,29 @@ async function fetchLibrarySongs() {
       console.error('Error fetching library songs:', error);
       return [];
     }
-    return data || [];
+    
+    let allSongs = data || [];
+    
+    // If a user is selected, filter out songs they already have
+    if (selectedUserId && allSongs.length > 0) {
+      const songIds = allSongs.map(s => s.id).filter(Boolean);
+      
+      const { data: userSongs, error: userSongsError } = await supabase
+        .from('user_songs')
+        .select('song_id')
+        .eq('user_id', selectedUserId)
+        .in('song_id', songIds);
+      
+      if (userSongsError) {
+        console.error('Error fetching user songs:', userSongsError);
+        return allSongs;
+      }
+      
+      const userSongIds = new Set((userSongs || []).map(us => us.song_id));
+      allSongs = allSongs.filter(song => !userSongIds.has(song.id));
+    }
+    
+    return allSongs;
   } catch (err) {
     console.error('Unexpected error fetching library songs:', err);
     return [];
@@ -792,9 +814,6 @@ async function loadSongs() {
           <p class="text-gray-400 text-sm font-normal leading-normal">${artistName}</p>
         </div>
         ${statusButtonHtml}
-        <button class="flex items-center justify-center rounded-full h-10 w-10 text-gray-400 hover:text-white hover:bg-white/10 transition-colors">
-          <span class="material-symbols-outlined">more_vert</span>
-        </button>
       `;
       const statusButton = songElement.querySelector('.song-status-button');
       if (statusButton && selectedUserId) {
