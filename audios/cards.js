@@ -28,7 +28,6 @@ import {
 import {
   initializeUploadModule,
   initRecorderControls,
-  initUploadFab,
   setDefaultRecorderStatus,
   updateRecorderUi
 } from './upload.js';
@@ -541,7 +540,6 @@ export function initializeCards(options = {}) {
   setNormalizedUserId(state.normalizedUserId);
   initSongStatusControls();
   initRecorderControls();
-  initUploadFab();
   setDefaultRecorderStatus();
   updateRecorderUi();
 

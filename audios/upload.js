@@ -513,22 +513,3 @@ export function initRecorderControls() {
   setDefaultRecorderStatus();
   updateRecorderUi();
 }
-
-export function initUploadFab() {
-  const fab = document.getElementById('upload-audio-fab');
-  const fileInput = document.getElementById('audio-file-input');
-
-  if (!fab || !fileInput) return;
-
-  fab.addEventListener('click', () => {
-    fileInput.value = '';
-    fileInput.click();
-  });
-
-  fileInput.addEventListener('change', (event) => {
-    const file = event.target.files && event.target.files[0];
-    if (!file) return;
-    console.log('Archivo de audio seleccionado:', file.name, file.type, file.size);
-    // TODO: manejar carga de audio y UI relacionada
-  });
-}
