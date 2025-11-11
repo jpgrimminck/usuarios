@@ -54,21 +54,27 @@
   <button id="add-song-fab" class="fixed bg-blue-500 hover:bg-blue-700 text-white rounded-full flex items-center justify-center" style="bottom:24px; right:24px; width:56px; height:56px; z-index:25;">
     <span class="material-symbols-outlined text-3xl">add</span>
   </button>
-  <div id="add-song-modal" class="fixed inset-0 bg-black bg-opacity-50 flex items-center justify-center hidden" style="z-index:30;">
+  <div id="add-song-modal" class="fixed inset-0 bg-black bg-opacity-50 flex items-start justify-center hidden" style="z-index:30; padding-top: 10vh;">
     <div class="bg-gray-800 p-6 rounded-lg text-white w-full" style="max-width:350px; position:relative;">
-      <h2 class="text-xl font-bold" style="margin:0 0 16px 0; text-align:center;">Agregar canción</h2>
+      <h2 class="text-xl font-bold" style="margin:0 0 16px 0; text-align:center;">Songs List</h2>
       <div class="suggested-wrapper">
         <div id="suggested-songs-container" class="suggested-grid"></div>
       </div>
       <div class="suggested-actions">
-        <div class="suggested-field">
-          <input type="text" id="new-song-title" class="suggested-input" placeholder="Nuevo título de canción" autocomplete="off"/>
+        <button type="button" id="toggle-create-song" class="suggested-toggle-create">
+          <span class="material-symbols-outlined">add</span>
+          <span>Create a new song</span>
+        </button>
+        <div id="create-song-form" class="suggested-create-form" hidden>
+          <div class="suggested-field">
+            <input type="text" id="new-song-title" class="suggested-input" placeholder="Nuevo título de canción" autocomplete="off"/>
+          </div>
+          <div class="suggested-field">
+            <input type="text" id="new-song-artist" class="suggested-input" placeholder="Nombre del artista" autocomplete="off"/>
+          </div>
+          <button type="button" id="create-new-song" class="suggested-secondary">Add</button>
         </div>
-        <div class="suggested-field">
-          <input type="text" id="new-song-artist" class="suggested-input" placeholder="Nombre del artista" autocomplete="off"/>
-        </div>
-        <button type="button" id="create-new-song" class="suggested-primary">Crear canción</button>
-        <button type="button" id="add-selected-songs" class="suggested-secondary" disabled>Añadir a mi lista</button>
+        <button type="button" id="add-selected-songs" class="suggested-primary" disabled>Añadir a mi lista</button>
       </div>
     </div>
   </div>
@@ -156,6 +162,10 @@ function resetNewSongForm() {
   }
   if (artistInput) {
     artistInput.value = '';
+  }
+  const createSongForm = document.getElementById('create-song-form');
+  if (createSongForm) {
+    createSongForm.hidden = true;
   }
 }
 
@@ -421,6 +431,8 @@ function initAddSongModal() {
   const createSongButton = document.getElementById('create-new-song');
   const newSongTitleInput = document.getElementById('new-song-title');
   const newSongArtistInput = document.getElementById('new-song-artist');
+  const toggleCreateButton = document.getElementById('toggle-create-song');
+  const createSongForm = document.getElementById('create-song-form');
 
   const handleSuggestionSelect = (song) => {
     if (!song) return;
@@ -429,6 +441,9 @@ function initAddSongModal() {
 
   function openModal() {
     setModalWorkingState(false);
+    if (createSongForm) {
+      createSongForm.hidden = true;
+    }
     const fetchToken = ++modalSongsFetchToken;
     // Fetch library songs and render them in the modal
     fetchLibrarySongs().then(list => {
@@ -452,6 +467,9 @@ function initAddSongModal() {
     modal.classList.add('hidden');
     selectedLibrarySongs.clear();
     resetNewSongForm();
+    if (createSongForm) {
+      createSongForm.hidden = true;
+    }
     setModalWorkingState(false);
   }
 
@@ -459,6 +477,25 @@ function initAddSongModal() {
 
   if (closeBtn) {
     closeBtn.addEventListener('click', closeModal);
+  }
+
+  if (toggleCreateButton) {
+    toggleCreateButton.addEventListener('click', () => {
+      if (createSongForm) {
+        const isExpanded = !createSongForm.hidden;
+        createSongForm.hidden = isExpanded;
+        
+        const icon = toggleCreateButton.querySelector('.material-symbols-outlined');
+        const text = toggleCreateButton.querySelector('span:last-child');
+        
+        if (icon) {
+          icon.textContent = isExpanded ? 'add' : 'remove';
+        }
+        if (text) {
+          text.textContent = isExpanded ? 'Create a new song' : 'Create a new song';
+        }
+      }
+    });
   }
 
   modal.addEventListener('click', function (event) {
@@ -547,11 +584,22 @@ function initAddSongModal() {
         const filtered = baseList.filter(item => item?.id !== songRecord.id);
         filtered.push({ id: songRecord.id, title: songRecord.title, artists: { name: displayArtist } });
         renderSuggestedSongs._lastList = filtered;
-  modalSongsFetchToken += 1;
+        modalSongsFetchToken += 1;
         renderSuggestedSongs(handleSuggestionSelect);
 
         if (newSongTitleInput) newSongTitleInput.value = '';
         if (newSongArtistInput) newSongArtistInput.value = '';
+        
+        if (createSongForm) {
+          createSongForm.hidden = true;
+        }
+        if (toggleCreateButton) {
+          const icon = toggleCreateButton.querySelector('.material-symbols-outlined');
+          const text = toggleCreateButton.querySelector('span:last-child');
+          if (icon) icon.textContent = 'add';
+          if (text) text.textContent = 'Create a new song';
+        }
+        
         updateModalButtonsDisabledState();
       } catch (err) {
         console.error('Error creating song:', err);

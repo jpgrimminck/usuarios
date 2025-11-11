@@ -727,6 +727,54 @@ img {
   margin-top: 1rem;
 }
 
+.suggested-toggle-create {
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  gap: 0.5rem;
+  padding: 0.6rem 1rem;
+  background-color: rgba(55, 65, 81, 0.6);
+  color: #e5e7eb;
+  border: 1px solid rgba(148, 163, 184, 0.3);
+  border-radius: 0.5rem;
+  font-weight: 500;
+  font-size: 0.9rem;
+  transition: background-color 0.2s ease, transform 0.15s ease;
+  cursor: pointer;
+}
+
+.suggested-toggle-create:hover {
+  background-color: rgba(75, 85, 99, 0.7);
+  transform: translateY(-1px);
+}
+
+.suggested-toggle-create .material-symbols-outlined {
+  font-size: 1.25rem;
+}
+
+.suggested-create-form {
+  display: flex;
+  flex-direction: column;
+  gap: 0.75rem;
+  padding-top: 0.75rem;
+  overflow: hidden;
+  max-height: 0;
+  opacity: 0;
+  transition: max-height 0.3s ease, opacity 0.3s ease, padding 0.3s ease;
+}
+
+.suggested-create-form[hidden] {
+  max-height: 0;
+  opacity: 0;
+  padding-top: 0;
+}
+
+.suggested-create-form:not([hidden]) {
+  max-height: 300px;
+  opacity: 1;
+  padding-top: 0.75rem;
+}
+
 .suggested-field {
   display: flex;
   flex-direction: column;
