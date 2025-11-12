@@ -9,44 +9,41 @@
   <script src="config.js"></script>
 </head>
 <body class="bg-gray-900 text-white">
-  <div class="flex items-center justify-center min-h-screen">
-    <button id="practicar-btn" class="border border-gray-500 bg-transparent text-gray-500 font-bold py-2 px-4 rounded">
+  <div class="min-h-screen flex flex-col items-center justify-center">
+    <button id="practicar-btn" class="border border-gray-500 bg-transparent text-gray-500 font-bold py-2 px-4 rounded" style="margin-bottom:40px;">
       Practicar
     </button>
+    <div class="bg-gray-800 rounded-lg p-4 shadow-md">
+      <table class="min-w-[280px] text-sm text-white">
+        <thead>
+          <tr>
+            <th class="text-left px-4 py-2"></th>
+            <th class="text-left px-4 py-2">Local</th>
+            <th class="text-left px-4 py-2">Supabase</th>
+          </tr>
+        </thead>
+        <tbody>
+          <tr>
+            <td class="px-4 py-2 text-gray-300">Public IP</td>
+            <td class="px-4 py-2" id="local-ip">-</td>
+            <td class="px-4 py-2 font-semibold" id="remote-ip">-</td>
+          </tr>
+          <tr>
+            <td class="px-4 py-2 text-gray-300">Resolution</td>
+            <td class="px-4 py-2" id="local-resolution">-</td>
+            <td class="px-4 py-2 font-semibold" id="remote-resolution">-</td>
+          </tr>
+        </tbody>
+      </table>
+    </div>
   </div>
   <script>
     const supabase = window.supabase.createClient(window.SUPABASE_URL, window.SUPABASE_ANON_KEY);
 
-    const DEVICE_CODE_KEY = 'device_code';
-    let cachedDeviceCode = null;
-
-    function getDeviceCode() {
-      if (cachedDeviceCode) {
-        return cachedDeviceCode;
-      }
-      try {
-        let code = localStorage.getItem(DEVICE_CODE_KEY);
-        if (!code || !/^[A-Z][0-9]$/.test(code)) {
-          const letter = String.fromCharCode(65 + Math.floor(Math.random() * 26));
-          const digit = Math.floor(Math.random() * 10);
-          code = letter + digit;
-          localStorage.setItem(DEVICE_CODE_KEY, code);
-        }
-        cachedDeviceCode = code;
-        return cachedDeviceCode;
-      } catch (err) {
-        console.warn('No se pudo acceder a localStorage para guardar el código del dispositivo:', err);
-        const letter = String.fromCharCode(65 + Math.floor(Math.random() * 26));
-        const digit = Math.floor(Math.random() * 10);
-        cachedDeviceCode = letter + digit;
-        return cachedDeviceCode;
-      }
-    }
-
   let currentState = 1;
   let approvedId = null;
   let clientIp = null;
-  const localDeviceCode = getDeviceCode();
+  let localResolution = `${window.screen.width}x${window.screen.height}`;
   const userNameCache = {};
 
     async function getUserNameById(userId) {
@@ -69,12 +66,23 @@
     }
 
     async function applyApprovedState(record, animate = false) {
+      if (!record) return false;
+
+      const ipMatches = Boolean(record.ip && clientIp && record.ip === clientIp);
+      const resolutionMatches = Boolean(record.resolution && localResolution && record.resolution === localResolution);
+
+      if (!ipMatches || !resolutionMatches) {
+        setState1();
+        return false;
+      }
+
       const targetId = record.selected_user_id || record.id;
       let displayName = null;
       if (record.selected_user_id) {
         displayName = await getUserNameById(record.selected_user_id);
       }
       setState3(targetId, displayName, animate);
+      return true;
     }
 
     function setState1() {
@@ -112,6 +120,8 @@
       btn.onclick = () => {
         document.getElementById('pending-modal').classList.remove('hidden');
       };
+
+      updateLocalInfo();
     }
 
     function setState3(id, name = null, animate = false) {
@@ -172,66 +182,92 @@
       try {
         const ipResponse = await fetch('https://api.ipify.org?format=json');
         const ipData = await ipResponse.json();
-        const ip = ipData.ip;
-        clientIp = ip;
-        console.log('Checking approval for IP:', ip, 'con código de dispositivo:', localDeviceCode);
+  const ip = ipData.ip;
+  clientIp = ip;
+  console.log('Checking approval for IP:', ip);
+
+        updateLocalInfo();
+
+        let matchingRecord = null;
+        let approvedApplied = false;
 
         // Check for approved
         const { data: approvedData, error: aError } = await supabase
           .from('user_ip')
-          .select('id, selected_user_id')
+          .select('id, selected_user_id, ip, resolution')
           .eq('ip', ip)
-          .eq('device_code', localDeviceCode)
           .eq('approved', true)
           .limit(1);
         if (approvedData && approvedData.length > 0 && !aError) {
-          // Use the assigned user id for redirect
-          await applyApprovedState(approvedData[0], false);
-        } else {
+          matchingRecord = approvedData[0];
+          approvedApplied = await applyApprovedState(approvedData[0], false);
+        }
+
+        if (!approvedApplied) {
           // Check for pending
           const { data: pendingData, error: pError } = await supabase
             .from('user_ip')
             .select('*')
             .eq('ip', ip)
-            .eq('device_code', localDeviceCode)
             .eq('approved', false)
+            .eq('resolution', localResolution)
             .order('created_at', { ascending: false })
             .limit(1);
           if (pendingData && pendingData.length > 0 && !pError) {
+            matchingRecord = pendingData[0];
             setState2(pendingData[0]);
-          } else {
+          } else if (!matchingRecord) {
             setState1();
           }
         }
 
+        updateSupabaseInfo(matchingRecord);
+
         // Subscribe to real-time updates
-        const matchesCurrentDevice = (entry) => entry && entry.ip === clientIp && entry.device_code === localDeviceCode;
+  const matchesCurrentDevice = (entry) => entry && entry.ip === clientIp;
 
         const channel = supabase.channel('user_ip_changes')
           .on('postgres_changes', { event: 'INSERT', schema: 'public', table: 'user_ip' }, async (payload) => {
             if (matchesCurrentDevice(payload.new)) {
               if (payload.new.approved) {
-                await applyApprovedState(payload.new, false);
-              } else {
+                const applied = await applyApprovedState(payload.new, false);
+                if (!applied) {
+                  // Stay in state1 unless a matching pending record arrives.
+                  updateSupabaseInfo(payload.new);
+                  return;
+                }
+              } else if (payload.new.resolution === localResolution) {
                 setState2(payload.new);
+              } else {
+                setState1();
               }
+              updateSupabaseInfo(payload.new);
             }
           })
           .on('postgres_changes', { event: 'UPDATE', schema: 'public', table: 'user_ip' }, async (payload) => {
             if (matchesCurrentDevice(payload.new)) {
               if (payload.new.approved) {
                 const wasApproved = payload.old && payload.old.approved === true;
-                await applyApprovedState(payload.new, !wasApproved);
-              } else {
+                const applied = await applyApprovedState(payload.new, !wasApproved);
+                if (!applied) {
+                  updateSupabaseInfo(payload.new);
+                  return;
+                }
+              } else if (payload.new.resolution === localResolution) {
                 setState2(payload.new);
+              } else {
+                setState1();
               }
+              updateSupabaseInfo(payload.new);
             } else if (matchesCurrentDevice(payload.old)) {
               setState1();
+              updateSupabaseInfo(null);
             }
           })
           .on('postgres_changes', { event: 'DELETE', schema: 'public', table: 'user_ip' }, (payload) => {
             if (matchesCurrentDevice(payload.old)) {
               setState1();
+              updateSupabaseInfo(null);
             }
           })
           .subscribe();
@@ -397,7 +433,6 @@
       data.inner_height = innerHeight;
       data.approved = false;
       data.created_at = new Date().toISOString();
-      data.device_code = getDeviceCode();
       return data;
     }
 
@@ -515,7 +550,43 @@
       } else {
         console.log('Solicitud enviada correctamente');
       }
+      updateSupabaseInfo(null);
     });
+
+    function updateLocalInfo() {
+      localResolution = `${window.screen.width}x${window.screen.height}`;
+      const ipEl = document.getElementById('local-ip');
+      const resolutionEl = document.getElementById('local-resolution');
+      if (ipEl) ipEl.textContent = clientIp ? clientIp : '-';
+      if (resolutionEl) resolutionEl.textContent = localResolution ? localResolution : '-';
+    }
+
+    function updateSupabaseInfo(record) {
+      const remoteIpEl = document.getElementById('remote-ip');
+      const remoteResolutionEl = document.getElementById('remote-resolution');
+      if (!remoteIpEl || !remoteResolutionEl) return;
+
+      const ipMatch = record && record.ip && clientIp && record.ip === clientIp;
+      const resolutionMatch = record && record.resolution && localResolution && record.resolution === localResolution;
+
+      if (record && record.ip) {
+        remoteIpEl.textContent = record.ip;
+        remoteIpEl.style.color = ipMatch ? '#34d399' : '#f87171';
+        if (!ipMatch) remoteIpEl.textContent = 'x';
+      } else {
+        remoteIpEl.textContent = 'x';
+        remoteIpEl.style.color = '#f87171';
+      }
+
+      if (record && record.resolution) {
+        remoteResolutionEl.textContent = record.resolution;
+        remoteResolutionEl.style.color = resolutionMatch ? '#34d399' : '#f87171';
+        if (!resolutionMatch) remoteResolutionEl.textContent = 'x';
+      } else {
+        remoteResolutionEl.textContent = 'x';
+        remoteResolutionEl.style.color = '#f87171';
+      }
+    }
   </script>
 </body>
 </html>
