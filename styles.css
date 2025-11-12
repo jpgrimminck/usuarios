@@ -4,10 +4,12 @@
 
 html, body {
   height: 100%;
+  touch-action: manipulation;
 }
 
 *, *::before, *::after {
   box-sizing: border-box;
+  touch-action: pan-y pan-x;
 }
 
 body {
