@@ -243,19 +243,21 @@
 }
 
 .recorder-button--round {
-  width: 5rem;
-  height: 5rem;
+  width: 6rem;
+  height: 6rem;
   padding: 0;
   border-radius: 50%;
-  font-size: 0.9rem;
+  font-size: 1.1rem;
   font-weight: 600;
 }
 
 .recorder-button--square {
-  width: 5rem;
-  height: 5rem;
+  width: 6rem;
+  height: 6rem;
   padding: 0;
   border-radius: 0.5rem;
+  font-size: 1.1rem;
+  font-weight: 600;
 }
 
 .recorder-button-erase {
