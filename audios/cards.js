@@ -424,12 +424,22 @@ async function loadAudios(options = {}) {
       }
     });
 
+    // Sort both arrays alphabetically by instrument name
+    const sortByInstrument = (a, b) => {
+      const nameA = (a.instrument || '').toLowerCase();
+      const nameB = (b.instrument || '').toLowerCase();
+      return nameA.localeCompare(nameB);
+    };
+    
+    userAudios.sort(sortByInstrument);
+    otherAudios.sort(sortByInstrument);
+
     // Render user's uploads section
     if (userAudios.length > 0) {
       const userSection = document.createElement('div');
       userSection.className = 'mb-6';
       const userLabel = userName ? `Uploaded by ${userName}` : 'Uploaded by you';
-      userSection.innerHTML = `<h3 class="text-lg font-semibold text-white mb-3">${userLabel}</h3>`;
+      userSection.innerHTML = `<h3 class="text-2xl font-semibold text-white mb-3">${userLabel}</h3>`;
       container.appendChild(userSection);
       
       userAudios.forEach((audio) => {
@@ -493,7 +503,7 @@ async function loadAudios(options = {}) {
     if (otherAudios.length > 0) {
       const otherSection = document.createElement('div');
       otherSection.className = 'mb-6';
-      otherSection.innerHTML = '<h3 class="text-lg font-semibold text-white mb-3">Uploaded by other users</h3>';
+      otherSection.innerHTML = '<h3 class="text-2xl font-semibold text-white mb-3">Uploaded by other users</h3>';
       container.appendChild(otherSection);
       
       otherAudios.forEach((audio) => {
