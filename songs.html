@@ -785,6 +785,15 @@ async function loadSongs() {
       songs = data;
     }
 
+    // Sort songs alphabetically by title
+    if (songs && songs.length > 0) {
+      songs.sort((a, b) => {
+        const titleA = (a.title || '').toLowerCase();
+        const titleB = (b.title || '').toLowerCase();
+        return titleA.localeCompare(titleB);
+      });
+    }
+
     // Render songs (same rendering logic as before)
     songs.forEach(song => {
       if (!song || !song.id) return;
