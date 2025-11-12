@@ -140,7 +140,7 @@ async function fetchSongAudiosByCandidates(songId) {
     try {
       const { data, error } = await state.supabase
         .from('audios')
-        .select('id, instrument, url')
+        .select('id, instrument, url, uploader_id')
         .eq(column, songId)
         .order('instrument', { ascending: true });
 
@@ -303,8 +303,25 @@ async function loadAudios(options = {}) {
   let headingTitle = state.title || '';
   let songId = state.songIdParam ? Number(state.songIdParam) : null;
   let songRecord = null;
+  let userName = null;
 
   try {
+    // Fetch current user's name if userId is available
+    if (state.normalizedUserId) {
+      try {
+        const { data: userData, error: userError } = await state.supabase
+          .from('users')
+          .select('name')
+          .eq('id', state.normalizedUserId)
+          .single();
+        
+        if (!userError && userData) {
+          userName = userData.name;
+        }
+      } catch (err) {
+        console.debug('Could not fetch user name:', err);
+      }
+    }
     if (songId) {
       try {
         const probed = await fetchAndApplySongTitle(songId);
@@ -395,8 +412,92 @@ async function loadAudios(options = {}) {
 
     const seekSeconds = Math.abs(getSeekOffsetSeconds()) || Math.abs(SEEK_OFFSET_SECONDS);
 
+    // Split audios into user's uploads and others
+    const userAudios = [];
+    const otherAudios = [];
+    
     audios.forEach((audio) => {
-      const audioElement = buildAudioCard(audio);
+      if (state.normalizedUserId && audio.uploader_id === state.normalizedUserId) {
+        userAudios.push(audio);
+      } else {
+        otherAudios.push(audio);
+      }
+    });
+
+    // Render user's uploads section
+    if (userAudios.length > 0) {
+      const userSection = document.createElement('div');
+      userSection.className = 'mb-6';
+      const userLabel = userName ? `Uploaded by ${userName}` : 'Uploaded by you';
+      userSection.innerHTML = `<h3 class="text-lg font-semibold text-white mb-3">${userLabel}</h3>`;
+      container.appendChild(userSection);
+      
+      userAudios.forEach((audio) => {
+        const audioElement = buildAudioCard(audio);
+        const playButton = audioElement.querySelector('[data-role="play-button"]');
+        const rewindButton = audioElement.querySelector('[data-role="rewind-button"]');
+        const forwardButton = audioElement.querySelector('[data-role="forward-button"]');
+        const waveformViewport = audioElement.querySelector('[data-role="waveform-viewport"]');
+        const waveformContent = audioElement.querySelector('[data-role="waveform-content"]');
+        const sliderTrack = audioElement.querySelector('[data-role="slider-track"]');
+        const sliderFill = audioElement.querySelector('[data-role="slider-fill"]');
+        const visualizerMode = getVisualizerMode();
+        const visualizerElements = visualizerMode === 'slider'
+          ? { viewportEl: sliderTrack, contentEl: sliderFill }
+          : { viewportEl: waveformViewport, contentEl: waveformContent };
+
+        if (visualizerElements.viewportEl && visualizerElements.contentEl) {
+          buildWaveformState(visualizerElements, audio.id);
+        }
+
+        playButton.addEventListener('click', (event) => {
+          event.stopPropagation();
+          expandCard(audioElement);
+          togglePlayback(playButton, audio, visualizerElements);
+        });
+        if (seekSeconds > 0) {
+          rewindButton.addEventListener('click', async (event) => {
+            event.stopPropagation();
+            expandCard(audioElement);
+            await seekPlayback(audio, -seekSeconds, visualizerElements);
+          });
+          forwardButton.addEventListener('click', async (event) => {
+            event.stopPropagation();
+            expandCard(audioElement);
+            await seekPlayback(audio, seekSeconds, visualizerElements);
+          });
+        } else {
+          rewindButton.disabled = true;
+          forwardButton.disabled = true;
+        }
+
+        prepareAudioPlayer(audio, null, visualizerElements)
+          .catch((err) => {
+            console.debug('No se pudo preparar la forma de onda para el audio', audio.id, err?.message || err);
+          });
+
+        audioElement.addEventListener('click', (event) => {
+          if (event.target.closest('[data-role="play-button"], [data-role="rewind-button"], [data-role="forward-button"], .audio-card__controls')) return;
+          if (state.currentExpandedCard === audioElement) {
+            collapseCurrentCard();
+            return;
+          }
+          expandCard(audioElement);
+        });
+
+        container.appendChild(audioElement);
+      });
+    }
+
+    // Render other users' uploads section
+    if (otherAudios.length > 0) {
+      const otherSection = document.createElement('div');
+      otherSection.className = 'mb-6';
+      otherSection.innerHTML = '<h3 class="text-lg font-semibold text-white mb-3">Uploaded by other users</h3>';
+      container.appendChild(otherSection);
+      
+      otherAudios.forEach((audio) => {
+        const audioElement = buildAudioCard(audio);
       const playButton = audioElement.querySelector('[data-role="play-button"]');
       const rewindButton = audioElement.querySelector('[data-role="rewind-button"]');
       const forwardButton = audioElement.querySelector('[data-role="forward-button"]');
@@ -449,7 +550,8 @@ async function loadAudios(options = {}) {
       });
 
       container.appendChild(audioElement);
-    });
+      });
+    }
 
     setDefaultRecorderStatus();
     updateRecorderUi();
