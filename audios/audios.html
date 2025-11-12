@@ -29,17 +29,17 @@
         <div class="space-y-4"></div>
         <section class="recorder-section" data-recorder-section>
           <h3 class="text-xl font-semibold text-white">Record New Audio</h3>
+          <div class="recorder-section__timer" data-recorder-timer hidden>0:00</div>
+          <label class="recorder-section__label" data-recorder-title-label hidden>
+            <input type="text" class="recorder-section__input" placeholder="Enter title" data-recorder-field="title" />
+          </label>
+          <audio class="recorder-section__preview" data-recorder-preview controls preload="metadata"></audio>
           <div class="recorder-section__controls">
             <button type="button" class="recorder-button-erase" data-recorder-action="discard" hidden>
               <span class="material-symbols-outlined">delete</span>
             </button>
             <button type="button" class="recorder-button recorder-button--primary recorder-button--round" data-recorder-action="toggle">Record</button>
           </div>
-          <div class="recorder-section__timer" data-recorder-timer hidden>0:00</div>
-          <label class="recorder-section__label" data-recorder-title-label hidden>
-            <input type="text" class="recorder-section__input" placeholder="Enter title" data-recorder-field="title" />
-          </label>
-          <audio class="recorder-section__preview" data-recorder-preview controls preload="metadata"></audio>
         </section>
       </main>
     </div>
