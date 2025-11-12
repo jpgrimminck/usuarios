@@ -6,7 +6,6 @@ const RECORDER_MIME_TYPES = [
   'audio/ogg;codecs=opus',
   'audio/mp4;codecs=mp4a.40.2'
 ];
-const RECORDING_COUNTDOWN_SECONDS = 3;
 
 let supabaseClient = null;
 let audioBucket = 'audios';
@@ -23,9 +22,8 @@ let recordingObjectUrl = null;
 let recorderMimeType = 'audio/webm';
 let isUploadingRecording = false;
 let recorderElements = null;
-let recorderCountdownTimer = null;
-let recorderCountdownRemaining = 0;
-let isRecorderCountdownActive = false;
+let recordingStartTime = null;
+let recordingTimerInterval = null;
 
 export function initializeUploadModule(options = {}) {
   supabaseClient = options.supabase || null;
@@ -43,75 +41,50 @@ function ensureRecorderElements() {
   recorderElements = {
     section,
     titleInput: section.querySelector('[data-recorder-field="title"]'),
+    titleLabel: section.querySelector('[data-recorder-title-label]'),
     toggleButton: section.querySelector('[data-recorder-action="toggle"]'),
-    uploadButton: section.querySelector('[data-recorder-action="upload"]'),
     discardButton: section.querySelector('[data-recorder-action="discard"]'),
-    conditionalButtons: Array.from(section.querySelectorAll('[data-recorder-visibility]')),
+    timerEl: section.querySelector('[data-recorder-timer]'),
     previewEl: section.querySelector('[data-recorder-preview]'),
-    statusEl: section.querySelector('[data-recorder-status]'),
     initialized: false
   };
   return recorderElements;
 }
 
-export function setRecorderStatus(message, tone = 'neutral') {
-  const elements = ensureRecorderElements();
-  if (!elements?.statusEl) return;
-  elements.statusEl.textContent = message;
-  elements.statusEl.dataset.tone = tone;
-}
-
 export function setDefaultRecorderStatus() {
-  if (mediaRecorder && mediaRecorder.state === 'recording') return;
-  if (recordingBlob) return;
-  if (!getSongId()) {
-    setRecorderStatus('Select a track before recording.', 'warning');
-    return;
-  }
-  setRecorderStatus('Press "Record" to start and add a title when you are ready.', 'neutral');
+  // No status messages needed anymore
 }
 
-function cancelRecordingCountdown(options = {}) {
-  const { silent = false, skipUiUpdate = false } = options;
-  if (recorderCountdownTimer) {
-    clearInterval(recorderCountdownTimer);
-    recorderCountdownTimer = null;
-  }
-  const wasActive = isRecorderCountdownActive;
-  recorderCountdownRemaining = 0;
-  isRecorderCountdownActive = false;
-  if (wasActive && !silent) {
-    setDefaultRecorderStatus();
-  }
-  if (!skipUiUpdate) {
-    updateRecorderUi();
-  }
+function updateRecordingTimer() {
+  const elements = ensureRecorderElements();
+  if (!elements?.timerEl || !recordingStartTime) return;
+  
+  const elapsed = Math.floor((Date.now() - recordingStartTime) / 1000);
+  const minutes = Math.floor(elapsed / 60);
+  const seconds = elapsed % 60;
+  elements.timerEl.textContent = `${minutes}:${seconds.toString().padStart(2, '0')}`;
 }
 
-function beginRecordingCountdown() {
-  cancelRecordingCountdown({ silent: true, skipUiUpdate: true });
-  isRecorderCountdownActive = true;
-  recorderCountdownRemaining = RECORDING_COUNTDOWN_SECONDS;
-  setRecorderStatus(`Recording starts in ${recorderCountdownRemaining}...`, 'info');
-  updateRecorderUi();
-
-  if (recorderCountdownRemaining <= 0) {
-    cancelRecordingCountdown({ silent: true, skipUiUpdate: true });
-    void startRecordingCore();
-    return;
+function startRecordingTimer() {
+  recordingStartTime = Date.now();
+  const elements = ensureRecorderElements();
+  if (elements?.timerEl) {
+    elements.timerEl.hidden = false;
+    updateRecordingTimer();
   }
+  recordingTimerInterval = setInterval(updateRecordingTimer, 1000);
+}
 
-  recorderCountdownTimer = window.setInterval(() => {
-    recorderCountdownRemaining -= 1;
-    if (recorderCountdownRemaining <= 0) {
-      cancelRecordingCountdown({ silent: true, skipUiUpdate: true });
-      setRecorderStatus('Starting recording...', 'info');
-      void startRecordingCore();
-      return;
-    }
-    setRecorderStatus(`Recording starts in ${recorderCountdownRemaining}...`, 'info');
-    updateRecorderUi();
-  }, 1000);
+function stopRecordingTimer() {
+  if (recordingTimerInterval) {
+    clearInterval(recordingTimerInterval);
+    recordingTimerInterval = null;
+  }
+  recordingStartTime = null;
+  const elements = ensureRecorderElements();
+  if (elements?.timerEl) {
+    elements.timerEl.hidden = true;
+  }
 }
 
 export function updateRecorderUi() {
@@ -119,53 +92,43 @@ export function updateRecorderUi() {
   if (!elements) return;
   const isRecording = mediaRecorder && mediaRecorder.state === 'recording';
   const hasRecording = !!recordingBlob;
-  const isCountingDown = isRecorderCountdownActive;
 
   if (elements.toggleButton) {
-    const showToggle = isRecording || !hasRecording || isCountingDown;
-    elements.toggleButton.hidden = !showToggle;
-    if (!showToggle && document.activeElement === elements.toggleButton) {
-      elements.toggleButton.blur();
-    }
+    const canRecord = !!getSongId() && !isUploadingRecording;
+    elements.toggleButton.disabled = !canRecord;
 
-    if (isCountingDown) {
-      elements.toggleButton.disabled = false;
-      const displayNumber = recorderCountdownRemaining > 0 ? recorderCountdownRemaining : 0;
-      elements.toggleButton.textContent = String(displayNumber);
-      elements.toggleButton.setAttribute('aria-pressed', 'false');
-      elements.toggleButton.setAttribute('aria-label', `Recording starts in ${displayNumber}`);
-      elements.toggleButton.classList.add('recorder-button--primary');
-      elements.toggleButton.classList.remove('recorder-button--destructive');
-    } else if (isRecording) {
-      elements.toggleButton.disabled = false;
+    if (isRecording) {
+      // Recording in progress - show red square with "Stop"
+      elements.toggleButton.classList.remove('recorder-button--round', 'recorder-button--primary', 'recorder-button--success');
+      elements.toggleButton.classList.add('recorder-button--square', 'recorder-button--primary');
       elements.toggleButton.textContent = 'Stop';
-      elements.toggleButton.setAttribute('aria-pressed', 'true');
-      elements.toggleButton.setAttribute('aria-label', 'Stop');
-      elements.toggleButton.classList.add('recorder-button--destructive');
-      elements.toggleButton.classList.remove('recorder-button--primary');
+    } else if (hasRecording) {
+      // Recording stopped - show green square with "Save"
+      elements.toggleButton.classList.remove('recorder-button--round', 'recorder-button--primary');
+      elements.toggleButton.classList.add('recorder-button--square', 'recorder-button--success');
+      elements.toggleButton.textContent = 'Save';
     } else {
-      const canRecord = !!getSongId() && !isUploadingRecording && !hasRecording;
-      elements.toggleButton.disabled = !canRecord;
+      // Initial state - show red circle with "Record"
+      elements.toggleButton.classList.remove('recorder-button--square', 'recorder-button--success');
+      elements.toggleButton.classList.add('recorder-button--round', 'recorder-button--primary');
       elements.toggleButton.textContent = 'Record';
-      elements.toggleButton.setAttribute('aria-pressed', 'false');
-      elements.toggleButton.setAttribute('aria-label', 'Start recording');
-      elements.toggleButton.classList.add('recorder-button--primary');
-      elements.toggleButton.classList.remove('recorder-button--destructive');
     }
   }
-  if (elements.conditionalButtons?.length) {
-    elements.conditionalButtons.forEach((button) => {
-      const visibility = button.dataset.recorderVisibility;
-      const shouldShow = visibility === 'hasRecording' ? hasRecording : true;
-      button.hidden = !shouldShow;
-      if (!shouldShow && document.activeElement === button) {
-        button.blur();
-      }
-    });
+
+  // Show erase button when recording or has recording
+  if (elements.discardButton) {
+    elements.discardButton.hidden = !isRecording && !hasRecording;
+    elements.discardButton.disabled = isUploadingRecording;
   }
-  elements.uploadButton.disabled = !hasRecording || isUploadingRecording;
-  elements.discardButton.disabled = !hasRecording || isRecording || isUploadingRecording;
-  elements.titleInput.disabled = isRecording || isUploadingRecording;
+
+  // Show title input only after stopping recording
+  if (elements.titleLabel) {
+    elements.titleLabel.hidden = !hasRecording;
+  }
+
+  if (elements.titleInput) {
+    elements.titleInput.disabled = isUploadingRecording;
+  }
 
   if (elements.previewEl) {
     elements.previewEl.classList.toggle('recorder-section__preview--visible', hasRecording && !!recordingObjectUrl);
@@ -191,8 +154,8 @@ function cleanupRecorderStream() {
 }
 
 function resetRecordingState(options = {}) {
-  const { keepInput = true, silent = false } = options;
-  cancelRecordingCountdown({ silent: true, skipUiUpdate: true });
+  const { keepInput = true } = options;
+  stopRecordingTimer();
   if (recordingObjectUrl) {
     URL.revokeObjectURL(recordingObjectUrl);
     recordingObjectUrl = null;
@@ -211,9 +174,6 @@ function resetRecordingState(options = {}) {
       elements.previewEl.classList.remove('recorder-section__preview--visible');
     }
   }
-  if (!silent) {
-    setDefaultRecorderStatus();
-  }
   updateRecorderUi();
 }
 
@@ -224,6 +184,7 @@ function handleRecorderDataAvailable(event) {
 }
 
 function handleRecorderStopped() {
+  stopRecordingTimer();
   cleanupRecorderStream();
   if (mediaRecorder) {
     mediaRecorder.removeEventListener('dataavailable', handleRecorderDataAvailable);
@@ -232,8 +193,7 @@ function handleRecorderStopped() {
   mediaRecorder = null;
 
   if (!recordedChunks.length) {
-    resetRecordingState({ keepInput: true, silent: true });
-    setRecorderStatus('No audio was captured. Please try again.', 'warning');
+    resetRecordingState({ keepInput: true });
     return;
   }
 
@@ -244,7 +204,6 @@ function handleRecorderStopped() {
   }
   recordingObjectUrl = URL.createObjectURL(recordingBlob);
   updateRecorderUi();
-  setRecorderStatus('Recording ready. Add a title, then upload or discard.', 'success');
 }
 
 function determineFileExtension(mimeType) {
@@ -291,60 +250,15 @@ async function startRecording() {
   const elements = ensureRecorderElements();
   if (!elements) return;
 
-  if (isRecorderCountdownActive) {
-    cancelRecordingCountdown();
-    setRecorderStatus('Recording countdown canceled.', 'info');
-    return;
-  }
+  if (!getSongId()) return;
+  if (recordingBlob) return;
+  if (!navigator.mediaDevices?.getUserMedia) return;
+  if (mediaRecorder && mediaRecorder.state === 'recording') return;
+  if (isUploadingRecording) return;
 
-  if (!getSongId()) {
-    setRecorderStatus('Select a track before recording.', 'warning');
-    return;
-  }
-
-  if (recordingBlob) {
-    setRecorderStatus('Upload or discard the current recording before making a new one.', 'warning');
-    return;
-  }
-
-  if (!navigator.mediaDevices?.getUserMedia) {
-    setRecorderStatus('This browser does not support audio recording.', 'error');
-    return;
-  }
-
-  if (mediaRecorder && mediaRecorder.state === 'recording') {
-    setRecorderStatus('There is already a recording in progress.', 'warning');
-    return;
-  }
-
-  if (isUploadingRecording) {
-    setRecorderStatus('Wait for the current upload to finish before starting a new recording.', 'warning');
-    return;
-  }
-
-  resetRecordingState({ keepInput: true, silent: true });
-  updateRecorderUi();
-  beginRecordingCountdown();
-}
-
-async function startRecordingCore() {
-  const elements = ensureRecorderElements();
-  if (!elements) return;
-
-  if (!getSongId()) {
-    setRecorderStatus('Select a track before recording.', 'warning');
-    updateRecorderUi();
-    return;
-  }
-
-  if (!navigator.mediaDevices?.getUserMedia) {
-    setRecorderStatus('This browser does not support audio recording.', 'error');
-    updateRecorderUi();
-    return;
-  }
+  resetRecordingState({ keepInput: true });
 
   try {
-    setRecorderStatus('Requesting microphone access...', 'info');
     const stream = await navigator.mediaDevices.getUserMedia({ audio: true });
     recorderStream = stream;
     recordedChunks = [];
@@ -361,67 +275,61 @@ async function startRecordingCore() {
     mediaRecorder.addEventListener('stop', handleRecorderStopped);
 
     mediaRecorder.start();
-    setRecorderStatus('Recording... tap "Stop" when you are done.', 'info');
+    startRecordingTimer();
+    updateRecorderUi();
   } catch (err) {
     console.error('Unable to start recording:', err);
     cleanupRecorderStream();
     mediaRecorder = null;
-    resetRecordingState({ keepInput: true, silent: true });
-    setRecorderStatus('Could not access the microphone. Check your permissions.', 'error');
+    resetRecordingState({ keepInput: true });
   }
-
-  updateRecorderUi();
 }
 
 function stopRecording() {
-  cancelRecordingCountdown({ silent: true, skipUiUpdate: true });
   if (!mediaRecorder || mediaRecorder.state !== 'recording') return;
   try {
     mediaRecorder.stop();
-    setRecorderStatus('Processing the recording...', 'info');
   } catch (err) {
     console.error('Error while stopping the recording:', err);
-    setRecorderStatus('The recording could not be stopped.', 'error');
   }
   updateRecorderUi();
 }
 
 function discardRecording() {
-  cancelRecordingCountdown({ silent: true, skipUiUpdate: true });
   if (mediaRecorder && mediaRecorder.state === 'recording') {
-    setRecorderStatus('Stop the recording before discarding it.', 'warning');
-    return;
+    // Stop recording without saving
+    if (mediaRecorder) {
+      mediaRecorder.removeEventListener('dataavailable', handleRecorderDataAvailable);
+      mediaRecorder.removeEventListener('stop', handleRecorderStopped);
+      try {
+        mediaRecorder.stop();
+      } catch (err) {
+        console.error('Error stopping recording:', err);
+      }
+    }
+    cleanupRecorderStream();
+    mediaRecorder = null;
+    recordedChunks = [];
   }
-  resetRecordingState({ keepInput: true, silent: true });
-  setRecorderStatus('Recording discarded. You can try again.', 'info');
+  resetRecordingState({ keepInput: true });
 }
 
 async function uploadRecording() {
-  if (!recordingBlob) {
-    setRecorderStatus('There is no recording to upload.', 'warning');
-    return;
-  }
+  if (!recordingBlob) return;
   const songId = getSongId();
-  if (!songId) {
-    setRecorderStatus('Select a track before uploading the recording.', 'warning');
-    return;
-  }
+  if (!songId) return;
 
   const elements = ensureRecorderElements();
   if (!elements) return;
 
   const titleValue = elements.titleInput.value.trim();
   if (!titleValue) {
-    setRecorderStatus("Don't forget to enter a title.", 'warning');
     elements.titleInput.focus();
     return;
   }
 
   const nextAudioId = await fetchNextAudioId();
-  if (!nextAudioId) {
-    setRecorderStatus('Could not prepare the new audio record. Please try again later.', 'error');
-    return;
-  }
+  if (!nextAudioId) return;
 
   const extension = determineFileExtension(recordingBlob.type || recorderMimeType);
   const safeName = slugifyFileName(titleValue).slice(0, 48) || 'recording';
@@ -437,7 +345,6 @@ async function uploadRecording() {
 
   isUploadingRecording = true;
   updateRecorderUi();
-  setRecorderStatus('Uploading recording...', 'info');
 
   try {
     const { error: uploadError } = await supabaseClient
@@ -451,7 +358,6 @@ async function uploadRecording() {
 
     if (uploadError) {
       console.error('Error uploading the recording:', uploadError);
-      setRecorderStatus('The recording could not be uploaded. Please try again.', 'error');
       return;
     }
 
@@ -472,16 +378,13 @@ async function uploadRecording() {
 
     if (insertError) {
       console.error('Error saving the recording record:', insertError);
-      setRecorderStatus('The recording was uploaded, but could not be saved in the database.', 'error');
       return;
     }
 
-    setRecorderStatus('Recording uploaded successfully.', 'success');
-    resetRecordingState({ keepInput: false, silent: true });
+    resetRecordingState({ keepInput: false });
     reloadAudios({ skipRealtimeSetup: true });
   } catch (err) {
     console.error('Unexpected error while uploading the recording:', err);
-    setRecorderStatus('An error occurred while uploading the recording.', 'error');
   } finally {
     isUploadingRecording = false;
     updateRecorderUi();
@@ -497,19 +400,17 @@ export function initRecorderControls() {
     event.preventDefault();
     if (mediaRecorder && mediaRecorder.state === 'recording') {
       stopRecording();
+    } else if (recordingBlob) {
+      uploadRecording();
     } else {
       startRecording();
     }
   });
-  elements.uploadButton.addEventListener('click', (event) => {
-    event.preventDefault();
-    uploadRecording();
-  });
+  
   elements.discardButton.addEventListener('click', (event) => {
     event.preventDefault();
     discardRecording();
   });
 
-  setDefaultRecorderStatus();
   updateRecorderUi();
 }

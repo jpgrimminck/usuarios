@@ -221,20 +221,21 @@
 
 .recorder-section__controls {
   display: flex;
-  flex-wrap: wrap;
-  gap: 0.75rem;
+  align-items: center;
+  gap: 1rem;
+  justify-content: center;
 }
 
 .recorder-button {
   display: inline-flex;
   align-items: center;
   justify-content: center;
-  border-radius: 9999px;
   padding: 0.75rem 1.5rem;
   font-weight: 600;
   background: rgba(55, 65, 81, 0.9);
   color: #f8fafc;
-  transition: transform 0.15s ease, background-color 0.2s ease, opacity 0.2s ease;
+  transition: all 0.2s ease;
+  border-radius: 0.5rem;
 }
 
 .recorder-button[hidden] {
@@ -242,17 +243,50 @@
 }
 
 .recorder-button--round {
-  width: 4rem;
-  height: 4rem;
+  width: 5rem;
+  height: 5rem;
   padding: 0;
   border-radius: 50%;
-  font-size: 0.85rem;
-  line-height: 1.1;
-  text-align: center;
-  word-break: break-word;
-  flex-direction: column;
+  font-size: 0.9rem;
+  font-weight: 600;
+}
+
+.recorder-button--square {
+  width: 5rem;
+  height: 5rem;
+  padding: 0;
+  border-radius: 0.5rem;
+}
+
+.recorder-button-erase {
+  width: 3rem;
+  height: 3rem;
+  display: inline-flex;
+  align-items: center;
   justify-content: center;
-  gap: 0.15rem;
+  border-radius: 50%;
+  background: rgba(239, 68, 68, 0.8);
+  color: #f8fafc;
+  transition: all 0.2s ease;
+  border: none;
+  cursor: pointer;
+}
+
+.recorder-button-erase[hidden] {
+  display: none !important;
+}
+
+.recorder-button-erase:hover {
+  background: rgba(220, 38, 38, 0.9);
+  transform: scale(1.05);
+}
+
+.recorder-section__timer {
+  text-align: center;
+  font-size: 1.5rem;
+  font-weight: 600;
+  color: #f8fafc;
+  font-variant-numeric: tabular-nums;
 }
 
 .recorder-button__subtext {
@@ -273,27 +307,19 @@
 }
 
 .recorder-button--primary {
-  background: var(--primary-color);
+  background: rgba(239, 68, 68, 0.9);
 }
 
 .recorder-button--primary:not(:disabled):hover {
-  background: #0f6ad1;
+  background: rgba(220, 38, 38, 0.95);
 }
 
-.recorder-button--accent {
-  background: rgba(16, 185, 129, 0.85);
+.recorder-button--success {
+  background: rgba(34, 197, 94, 0.9);
 }
 
-.recorder-button--accent:not(:disabled):hover {
-  background: rgba(5, 150, 105, 0.85);
-}
-
-.recorder-button--destructive {
-  background: rgba(239, 68, 68, 0.8);
-}
-
-.recorder-button--destructive:not(:disabled):hover {
-  background: rgba(220, 38, 38, 0.85);
+.recorder-button--success:not(:disabled):hover {
+  background: rgba(22, 163, 74, 0.95);
 }
 
 .recorder-section__status {
