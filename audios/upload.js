@@ -52,6 +52,17 @@ function ensureRecorderElements() {
   return recorderElements;
 }
 
+function focusRecorderTitle() {
+  const elements = ensureRecorderElements();
+  if (!elements?.titleInput) return;
+  try {
+    elements.titleInput.focus({ preventScroll: true });
+  } catch (_) {
+    elements.titleInput.focus();
+  }
+  elements.titleInput.select?.();
+}
+
 export function setDefaultRecorderStatus() {
   // No status messages needed anymore
 }
@@ -216,6 +227,7 @@ function handleRecorderStopped() {
   }
   recordingObjectUrl = URL.createObjectURL(recordingBlob);
   updateRecorderUi();
+  focusRecorderTitle();
 }
 
 function determineFileExtension(mimeType) {
