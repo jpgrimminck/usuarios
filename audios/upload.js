@@ -24,6 +24,7 @@ let isUploadingRecording = false;
 let recorderElements = null;
 let recordingStartTime = null;
 let recordingTimerInterval = null;
+let pendingTitleFocus = false;
 
 export function initializeUploadModule(options = {}) {
   supabaseClient = options.supabase || null;
@@ -54,13 +55,27 @@ function ensureRecorderElements() {
 
 function focusRecorderTitle() {
   const elements = ensureRecorderElements();
-  if (!elements?.titleInput) return;
+  if (!elements?.titleInput || elements.titleInput.disabled) return;
   try {
     elements.titleInput.focus({ preventScroll: true });
   } catch (_) {
     elements.titleInput.focus();
   }
-  elements.titleInput.select?.();
+  if (typeof elements.titleInput.select === 'function') {
+    elements.titleInput.select();
+  } else if (typeof elements.titleInput.setSelectionRange === 'function') {
+    const length = elements.titleInput.value.length;
+    elements.titleInput.setSelectionRange(length, length);
+  }
+}
+
+function queueFocusOnTitle() {
+  const attempt = () => focusRecorderTitle();
+  attempt();
+  if (typeof requestAnimationFrame === 'function') {
+    requestAnimationFrame(attempt);
+  }
+  setTimeout(attempt, 120);
 }
 
 export function setDefaultRecorderStatus() {
@@ -197,6 +212,7 @@ function resetRecordingState(options = {}) {
       elements.dynamicContainer.classList.remove('recorder-section__dynamic--recorded');
     }
   }
+  pendingTitleFocus = false;
   updateRecorderUi();
 }
 
@@ -227,7 +243,10 @@ function handleRecorderStopped() {
   }
   recordingObjectUrl = URL.createObjectURL(recordingBlob);
   updateRecorderUi();
-  focusRecorderTitle();
+  if (pendingTitleFocus) {
+    pendingTitleFocus = false;
+    queueFocusOnTitle();
+  }
 }
 
 function determineFileExtension(mimeType) {
@@ -281,6 +300,7 @@ async function startRecording() {
   if (isUploadingRecording) return;
 
   resetRecordingState({ keepInput: true });
+  pendingTitleFocus = false;
 
   try {
     const stream = await navigator.mediaDevices.getUserMedia({ audio: true });
@@ -423,6 +443,7 @@ export function initRecorderControls() {
   elements.toggleButton.addEventListener('click', (event) => {
     event.preventDefault();
     if (mediaRecorder && mediaRecorder.state === 'recording') {
+      pendingTitleFocus = true;
       stopRecording();
     } else if (recordingBlob) {
       uploadRecording();
