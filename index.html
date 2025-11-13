@@ -33,6 +33,16 @@
             <td class="px-4 py-2" id="local-resolution">-</td>
             <td class="px-4 py-2 font-semibold" id="remote-resolution">-</td>
           </tr>
+          <tr>
+            <td class="px-4 py-2 text-gray-300">Approved</td>
+            <td class="px-4 py-2">-</td>
+            <td class="px-4 py-2 font-semibold" id="approval-status">-</td>
+          </tr>
+          <tr>
+            <td class="px-4 py-2 text-gray-300">Comments</td>
+            <td class="px-4 py-2">-</td>
+            <td class="px-4 py-2 font-semibold" id="comments-list">-</td>
+          </tr>
         </tbody>
       </table>
     </div>
@@ -559,6 +569,49 @@
       const resolutionEl = document.getElementById('local-resolution');
       if (ipEl) ipEl.textContent = clientIp ? clientIp : '-';
       if (resolutionEl) resolutionEl.textContent = localResolution ? localResolution : '-';
+      refreshApprovalInfo();
+    }
+
+    async function refreshApprovalInfo() {
+      const approvedEl = document.getElementById('approval-status');
+      const commentsEl = document.getElementById('comments-list');
+      if (!approvedEl || !commentsEl) return;
+
+      if (!clientIp || !localResolution) {
+        approvedEl.textContent = '-';
+        approvedEl.style.color = '#f87171';
+        commentsEl.textContent = '-';
+        return;
+      }
+
+      try {
+        const { data, error } = await supabase
+          .from('user_ip')
+          .select('id, comment, approved, created_at')
+          .eq('ip', clientIp)
+          .eq('resolution', localResolution)
+          .order('created_at', { ascending: false });
+
+        if (!error && data && data.length > 0) {
+          const isApproved = data.some((row) => row.approved === true);
+          approvedEl.textContent = String(isApproved);
+          approvedEl.style.color = isApproved ? '#34d399' : '#f87171';
+
+          const comments = data
+            .map((row) => (row.comment || '').trim())
+            .filter((text) => text.length > 0);
+          commentsEl.textContent = comments.length > 0 ? comments.join(' • ') : 'No comments';
+        } else {
+          approvedEl.textContent = 'false';
+          approvedEl.style.color = '#f87171';
+          commentsEl.textContent = 'No comments';
+        }
+      } catch (err) {
+        console.warn('No se pudo actualizar el estado aprobado:', err);
+        approvedEl.textContent = 'false';
+        approvedEl.style.color = '#f87171';
+        commentsEl.textContent = 'No comments';
+      }
     }
 
     function updateSupabaseInfo(record) {
@@ -586,6 +639,8 @@
         remoteResolutionEl.textContent = 'x';
         remoteResolutionEl.style.color = '#f87171';
       }
+
+      refreshApprovalInfo();
     }
   </script>
 </body>

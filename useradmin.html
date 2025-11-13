@@ -24,6 +24,7 @@
     let timeInterval;
   // Ajuste horario para mostrar la hora local (ej: UTC-3). Cambia este valor si tu zona es distinta.
   const DISPLAY_TIME_OFFSET_HOURS = 3; // resta 3 horas al horario UTC recibido
+  const makeApprovedKey = (ip, deviceModel) => `${(ip || '').trim().toLowerCase()}__${(deviceModel || '').trim().toLowerCase()}`;
 
     function updateAccessButton() {
       const btn = document.getElementById('dar-acceso');
@@ -179,6 +180,23 @@
         wrapper.textContent = 'Error cargando solicitudes';
         return;
       }
+
+      const approvedSet = new Set();
+      try {
+        const { data: approvedEntries, error: approvedError } = await supabase
+          .from('user_ip')
+          .select('ip, device_model')
+          .eq('approved', true);
+        if (approvedError) {
+          console.error('Error cargando aprobados:', approvedError);
+        } else if (approvedEntries) {
+          approvedEntries.forEach((entry) => {
+            approvedSet.add(makeApprovedKey(entry.ip, entry.device_model));
+          });
+        }
+      } catch (approvedFetchErr) {
+        console.error('Error inesperado cargando aprobados:', approvedFetchErr);
+      }
       if (!pending || pending.length === 0) {
         wrapper.textContent = 'No hay solicitudes pendientes';
         pendingId = null;
@@ -205,11 +223,13 @@
 
       pending.forEach((p, index) => {
         const createdAtRaw = new Date(p.created_at); // UTC
-        const hora = new Date(createdAtRaw.getTime() - 3 * 60 * 60 * 1000).toLocaleTimeString('es-ES', { hour: '2-digit', minute: '2-digit', timeZone: 'UTC' });
+    const hora = new Date(createdAtRaw.getTime() - 3 * 60 * 60 * 1000).toLocaleTimeString('es-ES', { hour: '2-digit', minute: '2-digit', timeZone: 'UTC' });
+    const hasApprovedMatchForEntry = approvedSet.has(makeApprovedKey(p.ip, p.device_model));
         const el = document.createElement('button');
         el.type = 'button';
         el.className = 'pending-item bg-gray-700 hover:bg-gray-600 px-3 py-1 rounded transition-colors';
         el.dataset.id = p.id;
+    el.dataset.hasApproved = hasApprovedMatchForEntry ? 'true' : 'false';
   el.innerHTML = `<span class="font-semibold">${p.comment || 'Sin nombre'}</span><span class="text-gray-300" style="margin-left:3px;">(${hora})</span>`;
         el.addEventListener('click', () => {
           if (el.classList.contains('pending-selected')) {
@@ -243,6 +263,7 @@
             const detailsEl = document.getElementById('pending-details');
             if (!detailsEl.classList.contains('hidden')) {
               const hora = new Date(createdAtRaw.getTime() - 3 * 60 * 60 * 1000).toLocaleTimeString('es-ES', { hour: '2-digit', minute: '2-digit', timeZone: 'UTC' });
+              const hasApprovedMatch = approvedSet.has(makeApprovedKey(p.ip, p.device_model));
               detailsEl.innerHTML = `
                 <div class="text-yellow-400 font-semibold mb-1">Detalle Seleccionado</div>
                 <div><span class="font-semibold">IP:</span> ${p.ip}</div>
@@ -251,6 +272,7 @@
                 <div><span class="font-semibold">Código:</span> ${p.device_code || 'Sin código'}</div>
                 <div><span class="font-semibold">Tipo:</span> ${p.device_type}</div>
                 <div><span class="font-semibold">Pantalla:</span> ${p.resolution} (${p.screen_format})</div>
+                <div><span class="font-semibold">Registro aprobado previo:</span> ${hasApprovedMatch ? 'Sí' : 'No'}</div>
                 <div><span class="font-semibold">PPI:</span> ${p.ppi}</div>
                 <div><span class="font-semibold">SO:</span> ${p.os} ${p.os_version}</div>
                 <div><span class="font-semibold">Browser:</span> ${p.browser} ${p.browser_version}</div>
@@ -291,6 +313,7 @@
             if (selectedP) {
               const createdAtRaw = new Date(selectedP.created_at);
               const hora = new Date(createdAtRaw.getTime() - 3 * 60 * 60 * 1000).toLocaleTimeString('es-ES', { hour: '2-digit', minute: '2-digit', timeZone: 'UTC' });
+              const hasApprovedMatch = approvedSet.has(makeApprovedKey(selectedP.ip, selectedP.device_model));
               detailsEl.innerHTML = `
                 <div class="text-yellow-400 font-semibold mb-1">Detalle Seleccionado</div>
                 <div><span class="font-semibold">IP:</span> ${selectedP.ip}</div>
@@ -299,6 +322,7 @@
                 <div><span class="font-semibold">Código:</span> ${selectedP.device_code || 'Sin código'}</div>
                 <div><span class="font-semibold">Tipo:</span> ${selectedP.device_type}</div>
                 <div><span class="font-semibold">Pantalla:</span> ${selectedP.resolution} (${selectedP.screen_format})</div>
+                <div><span class="font-semibold">Registro aprobado previo:</span> ${hasApprovedMatch ? 'Sí' : 'No'}</div>
                 <div><span class="font-semibold">PPI:</span> ${selectedP.ppi}</div>
                 <div><span class="font-semibold">SO:</span> ${selectedP.os} ${selectedP.os_version}</div>
                 <div><span class="font-semibold">Browser:</span> ${selectedP.browser} ${selectedP.browser_version}</div>
