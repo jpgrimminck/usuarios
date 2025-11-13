@@ -206,7 +206,9 @@
           .from('user_ip')
           .select('id, selected_user_id, ip, resolution')
           .eq('ip', ip)
+          .eq('resolution', localResolution)
           .eq('approved', true)
+          .order('created_at', { ascending: false })
           .limit(1);
         if (approvedData && approvedData.length > 0 && !aError) {
           matchingRecord = approvedData[0];
