@@ -196,13 +196,6 @@
   gap: 1rem;
 }
 
-.recorder-section__label span {
-  display: block;
-  margin-bottom: 0.35rem;
-  font-size: 0.9rem;
-  color: rgba(226, 232, 240, 0.8);
-}
-
 .recorder-section__input {
   width: 100%;
   border-radius: 0.5rem;

@@ -51,6 +51,20 @@ function ensureRecorderElements() {
   return recorderElements;
 }
 
+function scrollRecorderIntoView(block = 'center') {
+  const elements = ensureRecorderElements();
+  if (!elements?.section) return;
+  const target = elements.toggleButton || elements.section;
+  const align = block;
+  try {
+    target.scrollIntoView({ behavior: 'smooth', block: align, inline: 'nearest' });
+  } catch (err) {
+    const rect = target.getBoundingClientRect();
+    const offset = window.scrollY + rect.top - (window.innerHeight * 0.5);
+    window.scrollTo({ top: offset, behavior: 'smooth' });
+  }
+}
+
 export function setDefaultRecorderStatus() {
   // No status messages needed anymore
 }
@@ -204,6 +218,7 @@ function handleRecorderStopped() {
   }
   recordingObjectUrl = URL.createObjectURL(recordingBlob);
   updateRecorderUi();
+  requestAnimationFrame(() => scrollRecorderIntoView('center'));
 }
 
 function determineFileExtension(mimeType) {
@@ -277,6 +292,7 @@ async function startRecording() {
     mediaRecorder.start();
     startRecordingTimer();
     updateRecorderUi();
+    requestAnimationFrame(() => scrollRecorderIntoView('center'));
   } catch (err) {
     console.error('Unable to start recording:', err);
     cleanupRecorderStream();
