@@ -60,13 +60,18 @@
       if (userIds.length > 0) {
         const { data: assignments, error: assignmentsError } = await supabase
           .from('user_ip')
-          .select('ip, device_model, created_at, device_code, comment, selected_user_id')
-          .in('selected_user_id', userIds)
-          .eq('approved', true);
+          .select('ip, device_model, created_at, comment, selected_user_id')
+          .in('selected_user_id', userIds);
 
         if (assignmentsError) {
           console.error(assignmentsError);
         } else if (assignments && assignments.length > 0) {
+          const debugAssignmentsUser7 = assignments.filter((assignment) => assignment?.selected_user_id === 7);
+          if (debugAssignmentsUser7.length > 0) {
+            console.log('Debug user 7 assignments:', debugAssignmentsUser7);
+          } else {
+            console.log('Debug user 7 assignments: none found');
+          }
           assignments.forEach((assignment) => {
             if (!assignment?.selected_user_id) return;
             const list = assignmentsMap.get(assignment.selected_user_id) || [];
@@ -86,10 +91,9 @@
             const days = Math.max(0, Math.floor((Date.now() - new Date(entry.created_at)) / (1000 * 60 * 60 * 24)));
             const timeAgo = days === 0 ? 'hoy' : `${days} días`;
             const commentLine = entry.comment ? ` | ${entry.comment}` : '';
-            const deviceCodeLine = entry.device_code ? ` | ${entry.device_code}` : '';
             const rowClasses = ['ip-entry', 'text-sm', 'leading-snug', 'text-gray-200'];
             if (index > 0) rowClasses.push('extra-ip', 'hidden');
-            return `<div class="${rowClasses.join(' ')}">IP: ${entry.ip} (${entry.device_model}) (${timeAgo})${commentLine}${deviceCodeLine}</div>`;
+            return `<div class="${rowClasses.join(' ')}">IP: ${entry.ip} (${entry.device_model}) (${timeAgo})${commentLine}</div>`;
           }).join('');
           ipContentHTML = `<div class="space-y-1">${entriesHTML}</div>`;
         }
@@ -181,7 +185,10 @@
         clearInterval(timeInterval);
         document.getElementById('time-ago').textContent = '';
         updateAccessButton();
-        document.getElementById('pending-count').textContent = '(0 pendientes)';
+        const pendingCountEl = document.getElementById('pending-count');
+        if (pendingCountEl) {
+          pendingCountEl.textContent = '(0 pendientes)';
+        }
         return;
       }
 
