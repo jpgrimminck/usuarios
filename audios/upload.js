@@ -40,6 +40,7 @@ function ensureRecorderElements() {
   if (!section) return null;
   recorderElements = {
     section,
+    dynamicContainer: section.querySelector('[data-recorder-dynamic]'),
     titleInput: section.querySelector('[data-recorder-field="title"]'),
     titleLabel: section.querySelector('[data-recorder-title-label]'),
     toggleButton: section.querySelector('[data-recorder-action="toggle"]'),
@@ -49,20 +50,6 @@ function ensureRecorderElements() {
     initialized: false
   };
   return recorderElements;
-}
-
-function scrollRecorderIntoView(block = 'center') {
-  const elements = ensureRecorderElements();
-  if (!elements?.section) return;
-  const target = elements.toggleButton || elements.section;
-  const align = block;
-  try {
-    target.scrollIntoView({ behavior: 'smooth', block: align, inline: 'nearest' });
-  } catch (err) {
-    const rect = target.getBoundingClientRect();
-    const offset = window.scrollY + rect.top - (window.innerHeight * 0.5);
-    window.scrollTo({ top: offset, behavior: 'smooth' });
-  }
 }
 
 export function setDefaultRecorderStatus() {
@@ -83,7 +70,7 @@ function startRecordingTimer() {
   recordingStartTime = Date.now();
   const elements = ensureRecorderElements();
   if (elements?.timerEl) {
-    elements.timerEl.hidden = false;
+    elements.timerEl.classList.remove('recorder-section__timer--hidden');
     updateRecordingTimer();
   }
   recordingTimerInterval = setInterval(updateRecordingTimer, 1000);
@@ -97,7 +84,7 @@ function stopRecordingTimer() {
   recordingStartTime = null;
   const elements = ensureRecorderElements();
   if (elements?.timerEl) {
-    elements.timerEl.hidden = true;
+    elements.timerEl.classList.add('recorder-section__timer--hidden');
   }
 }
 
@@ -106,6 +93,10 @@ export function updateRecorderUi() {
   if (!elements) return;
   const isRecording = mediaRecorder && mediaRecorder.state === 'recording';
   const hasRecording = !!recordingBlob;
+
+  if (elements.dynamicContainer) {
+    elements.dynamicContainer.classList.toggle('recorder-section__dynamic--recorded', hasRecording);
+  }
 
   if (elements.toggleButton) {
     const canRecord = !!getSongId() && !isUploadingRecording;
@@ -137,7 +128,7 @@ export function updateRecorderUi() {
 
   // Show title input only after stopping recording
   if (elements.titleLabel) {
-    elements.titleLabel.hidden = !hasRecording;
+    elements.titleLabel.classList.toggle('recorder-section__label--hidden', !hasRecording);
   }
 
   if (elements.titleInput) {
@@ -145,8 +136,9 @@ export function updateRecorderUi() {
   }
 
   if (elements.previewEl) {
-    elements.previewEl.classList.toggle('recorder-section__preview--visible', hasRecording && !!recordingObjectUrl);
-    if (!hasRecording) {
+    const shouldShowPreview = hasRecording && !!recordingObjectUrl;
+    elements.previewEl.classList.toggle('recorder-section__preview--hidden', !shouldShowPreview);
+    if (!shouldShowPreview) {
       elements.previewEl.pause();
       elements.previewEl.removeAttribute('src');
       elements.previewEl.load();
@@ -178,14 +170,20 @@ function resetRecordingState(options = {}) {
   recordedChunks = [];
   const elements = ensureRecorderElements();
   if (elements) {
-    if (!keepInput) {
+    if (!keepInput && elements.titleInput) {
       elements.titleInput.value = '';
     }
     if (elements.previewEl) {
       elements.previewEl.pause();
       elements.previewEl.removeAttribute('src');
       elements.previewEl.load();
-      elements.previewEl.classList.remove('recorder-section__preview--visible');
+      elements.previewEl.classList.add('recorder-section__preview--hidden');
+    }
+    if (elements.titleLabel) {
+      elements.titleLabel.classList.add('recorder-section__label--hidden');
+    }
+    if (elements.dynamicContainer) {
+      elements.dynamicContainer.classList.remove('recorder-section__dynamic--recorded');
     }
   }
   updateRecorderUi();
@@ -218,7 +216,6 @@ function handleRecorderStopped() {
   }
   recordingObjectUrl = URL.createObjectURL(recordingBlob);
   updateRecorderUi();
-  requestAnimationFrame(() => scrollRecorderIntoView('center'));
 }
 
 function determineFileExtension(mimeType) {
@@ -292,7 +289,6 @@ async function startRecording() {
     mediaRecorder.start();
     startRecordingTimer();
     updateRecorderUi();
-    requestAnimationFrame(() => scrollRecorderIntoView('center'));
   } catch (err) {
     console.error('Unable to start recording:', err);
     cleanupRecorderStream();
