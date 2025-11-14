@@ -119,9 +119,10 @@ export function updateRecorderUi() {
   if (!elements) return;
   const isRecording = mediaRecorder && mediaRecorder.state === 'recording';
   const hasRecording = !!recordingBlob;
+  const shouldShowTitle = hasRecording || pendingTitleFocus;
 
   if (elements.dynamicContainer) {
-    elements.dynamicContainer.classList.toggle('recorder-section__dynamic--recorded', hasRecording);
+    elements.dynamicContainer.classList.toggle('recorder-section__dynamic--recorded', shouldShowTitle);
   }
 
   if (elements.toggleButton) {
@@ -154,7 +155,7 @@ export function updateRecorderUi() {
 
   // Show title input only after stopping recording
   if (elements.titleLabel) {
-    elements.titleLabel.classList.toggle('recorder-section__label--hidden', !hasRecording);
+    elements.titleLabel.classList.toggle('recorder-section__label--hidden', !shouldShowTitle);
   }
 
   if (elements.titleInput) {
@@ -444,6 +445,8 @@ export function initRecorderControls() {
     event.preventDefault();
     if (mediaRecorder && mediaRecorder.state === 'recording') {
       pendingTitleFocus = true;
+      updateRecorderUi();
+      focusRecorderTitle();
       stopRecording();
     } else if (recordingBlob) {
       uploadRecording();
