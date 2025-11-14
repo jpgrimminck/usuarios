@@ -55,11 +55,16 @@ function ensureRecorderElements() {
   return recorderElements;
 }
 
-function focusRecorderTitle() {
+function focusRecorderTitle(options = {}) {
+  const { preventScroll = false } = options;
   const elements = ensureRecorderElements();
   if (!elements?.titleInput || elements.titleInput.disabled) return;
   try {
-    elements.titleInput.focus({ preventScroll: true });
+    if (preventScroll) {
+      elements.titleInput.focus({ preventScroll: true });
+    } else {
+      elements.titleInput.focus();
+    }
   } catch (_) {
     elements.titleInput.focus();
   }
@@ -76,7 +81,15 @@ function queueFocusOnTitle() {
   attachViewportWatcher();
 
   const focusAndReveal = () => {
-    focusRecorderTitle();
+    focusRecorderTitle({ preventScroll: false });
+    const elements = ensureRecorderElements();
+    if (elements?.titleInput?.scrollIntoView) {
+      try {
+        elements.titleInput.scrollIntoView({ block: 'center', inline: 'nearest', behavior: 'auto' });
+      } catch (_) {
+        elements.titleInput.scrollIntoView();
+      }
+    }
     ensureRecorderVisible({ behavior: 'auto', force: true, target: 'dynamic' });
   };
 
@@ -84,8 +97,8 @@ function queueFocusOnTitle() {
   if (typeof requestAnimationFrame === 'function') {
     requestAnimationFrame(focusAndReveal);
   }
-  setTimeout(focusAndReveal, 140);
-  setTimeout(() => ensureRecorderVisible({ behavior: 'smooth', force: true, target: 'dynamic' }), 320);
+  setTimeout(focusAndReveal, 160);
+  setTimeout(() => ensureRecorderVisible({ behavior: 'smooth', force: true, target: 'dynamic' }), 360);
 }
 
 function ensureRecorderVisible(options = {}) {
@@ -116,11 +129,23 @@ function ensureRecorderVisible(options = {}) {
   }
 }
 
+function getRecorderVisibilityTarget() {
+  if (pendingTitleFocus || recordingBlob) return 'dynamic';
+  if (mediaRecorder && mediaRecorder.state === 'recording') return 'button';
+
+  const elements = recorderElements || ensureRecorderElements();
+  if (elements?.dynamicContainer?.classList.contains('recorder-section__dynamic--recorded')) {
+    return 'dynamic';
+  }
+  return 'button';
+}
+
 function attachViewportWatcher() {
   keepRecorderVisible = true;
   if (!window.visualViewport || viewportResizeHandler) return;
-  viewportResizeHandler = () => ensureRecorderVisible({ behavior: 'auto', target: 'dynamic' });
+  viewportResizeHandler = () => ensureRecorderVisible({ behavior: 'auto', target: getRecorderVisibilityTarget() });
   window.visualViewport.addEventListener('resize', viewportResizeHandler, { passive: true });
+  ensureRecorderVisible({ behavior: 'auto', force: true, target: getRecorderVisibilityTarget() });
 }
 
 function detachViewportWatcher() {
@@ -231,8 +256,7 @@ export function updateRecorderUi() {
 
   const requiresVisibility = isRecording || hasRecording || pendingTitleFocus;
   if (requiresVisibility) {
-    const visibilityTarget = hasRecording || pendingTitleFocus ? 'dynamic' : 'button';
-    ensureRecorderVisible({ force: true, target: visibilityTarget });
+    ensureRecorderVisible({ behavior: 'auto', force: true, target: getRecorderVisibilityTarget() });
   }
 }
 
@@ -370,7 +394,7 @@ async function startRecording() {
   resetRecordingState({ keepInput: true });
   pendingTitleFocus = false;
   keepRecorderVisible = true;
-  ensureRecorderVisible({ behavior: 'auto', force: true });
+  ensureRecorderVisible({ behavior: 'auto', force: true, target: getRecorderVisibilityTarget() });
   attachViewportWatcher();
 
   try {
@@ -392,7 +416,7 @@ async function startRecording() {
     mediaRecorder.start();
     startRecordingTimer();
     updateRecorderUi();
-    ensureRecorderVisible();
+    ensureRecorderVisible({ behavior: 'auto', target: getRecorderVisibilityTarget() });
   } catch (err) {
     console.error('Unable to start recording:', err);
     cleanupRecorderStream();
@@ -409,7 +433,7 @@ function stopRecording() {
     console.error('Error while stopping the recording:', err);
   }
   updateRecorderUi();
-  ensureRecorderVisible();
+  ensureRecorderVisible({ behavior: 'auto', target: getRecorderVisibilityTarget() });
 }
 
 function discardRecording() {
@@ -523,7 +547,7 @@ export function initRecorderControls() {
     } else if (recordingBlob) {
       uploadRecording();
     } else {
-      ensureRecorderVisible({ behavior: 'auto' });
+      ensureRecorderVisible({ behavior: 'auto', target: getRecorderVisibilityTarget() });
       startRecording();
     }
   });
