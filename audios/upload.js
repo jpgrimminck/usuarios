@@ -78,6 +78,21 @@ function queueFocusOnTitle() {
   setTimeout(attempt, 120);
 }
 
+function ensureRecorderVisible() {
+  const elements = ensureRecorderElements();
+  if (!elements?.toggleButton) return;
+  const buttonRect = elements.toggleButton.getBoundingClientRect();
+  const viewportHeight = window.innerHeight || document.documentElement.clientHeight;
+  if (buttonRect.bottom > viewportHeight - 16) {
+    try {
+      elements.toggleButton.scrollIntoView({ behavior: 'smooth', block: 'center', inline: 'nearest' });
+    } catch (_) {
+      const offset = window.scrollY + buttonRect.top - Math.max(0, (viewportHeight / 2) - (buttonRect.height / 2));
+      window.scrollTo({ top: offset, behavior: 'smooth' });
+    }
+  }
+}
+
 export function setDefaultRecorderStatus() {
   // No status messages needed anymore
 }
@@ -173,6 +188,7 @@ export function updateRecorderUi() {
       elements.previewEl.src = recordingObjectUrl;
     }
   }
+  ensureRecorderVisible();
 }
 
 function cleanupRecorderStream() {
@@ -322,6 +338,7 @@ async function startRecording() {
     mediaRecorder.start();
     startRecordingTimer();
     updateRecorderUi();
+    ensureRecorderVisible();
   } catch (err) {
     console.error('Unable to start recording:', err);
     cleanupRecorderStream();
@@ -338,6 +355,7 @@ function stopRecording() {
     console.error('Error while stopping the recording:', err);
   }
   updateRecorderUi();
+  ensureRecorderVisible();
 }
 
 function discardRecording() {
