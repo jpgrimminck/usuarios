@@ -438,7 +438,7 @@ async function loadAudios(options = {}) {
     if (userAudios.length > 0) {
       const userSection = document.createElement('div');
       userSection.className = 'mb-6';
-      const userLabel = userName ? `Uploaded by ${userName}` : 'Uploaded by you';
+      const userLabel = userName ? `Audios de ${userName}` : 'Uploaded by you';
       userSection.innerHTML = `<h3 class="text-2xl font-semibold text-white mb-3">${userLabel}</h3>`;
       container.appendChild(userSection);
       
@@ -503,7 +503,7 @@ async function loadAudios(options = {}) {
     if (otherAudios.length > 0) {
       const otherSection = document.createElement('div');
       otherSection.className = 'mb-6';
-      otherSection.innerHTML = '<h3 class="text-2xl font-semibold text-white mb-3">Uploaded by other users</h3>';
+      otherSection.innerHTML = '<h3 class="text-2xl font-semibold text-white mb-3">Otros usuarios</h3>';
       container.appendChild(otherSection);
       
       otherAudios.forEach((audio) => {
