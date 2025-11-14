@@ -26,6 +26,7 @@ let recordingStartTime = null;
 let recordingTimerInterval = null;
 let pendingTitleFocus = false;
 let viewportResizeHandler = null;
+let keepRecorderVisible = false;
 
 export function initializeUploadModule(options = {}) {
   supabaseClient = options.supabase || null;
@@ -71,42 +72,65 @@ function focusRecorderTitle() {
 }
 
 function queueFocusOnTitle() {
-  const attempt = () => focusRecorderTitle();
-  attempt();
+  keepRecorderVisible = true;
+  attachViewportWatcher();
+
+  const focusAndReveal = () => {
+    focusRecorderTitle();
+    ensureRecorderVisible({ behavior: 'auto', force: true, target: 'dynamic' });
+  };
+
+  focusAndReveal();
   if (typeof requestAnimationFrame === 'function') {
-    requestAnimationFrame(attempt);
+    requestAnimationFrame(focusAndReveal);
   }
-  setTimeout(attempt, 120);
+  setTimeout(focusAndReveal, 140);
+  setTimeout(() => ensureRecorderVisible({ behavior: 'smooth', force: true, target: 'dynamic' }), 320);
 }
 
 function ensureRecorderVisible(options = {}) {
   const elements = ensureRecorderElements();
-  if (!elements?.toggleButton) return;
+  if (!elements) return;
 
-  const { behavior = 'smooth' } = options;
-  const buttonRect = elements.toggleButton.getBoundingClientRect();
+  const { behavior = 'smooth', force = false, target = 'button' } = options;
+  if (!force && !keepRecorderVisible) return;
+
+  const targetElement = target === 'dynamic' && elements.dynamicContainer
+    ? elements.dynamicContainer
+    : elements.toggleButton;
+
+  if (!targetElement) return;
+
+  const targetRect = targetElement.getBoundingClientRect();
   const viewportHeight = window.innerHeight || document.documentElement.clientHeight;
   const visualViewportHeight = window.visualViewport ? window.visualViewport.height : viewportHeight;
   const dynamicFooter = Math.max(0, viewportHeight - visualViewportHeight);
   const safeViewportHeight = Math.max(0, viewportHeight - dynamicFooter);
   const bottomLimit = safeViewportHeight - 24; // keep a small margin below the button
 
-  if (buttonRect.bottom > bottomLimit) {
-    const scrollAmount = buttonRect.bottom - bottomLimit;
+  if (targetRect.bottom > bottomLimit) {
+    const scrollAmount = targetRect.bottom - bottomLimit;
     window.scrollBy({ top: scrollAmount, behavior });
+  } else if (targetRect.top < 16) {
+    window.scrollBy({ top: targetRect.top - 16, behavior });
   }
 }
 
 function attachViewportWatcher() {
+  keepRecorderVisible = true;
   if (!window.visualViewport || viewportResizeHandler) return;
-  viewportResizeHandler = () => ensureRecorderVisible({ behavior: 'auto' });
+  viewportResizeHandler = () => ensureRecorderVisible({ behavior: 'auto', target: 'dynamic' });
   window.visualViewport.addEventListener('resize', viewportResizeHandler, { passive: true });
 }
 
 function detachViewportWatcher() {
-  if (!window.visualViewport || !viewportResizeHandler) return;
+  if (!window.visualViewport || !viewportResizeHandler) {
+    keepRecorderVisible = false;
+    return;
+  }
   window.visualViewport.removeEventListener('resize', viewportResizeHandler);
   viewportResizeHandler = null;
+  keepRecorderVisible = false;
 }
 
 export function setDefaultRecorderStatus() {
@@ -207,7 +231,8 @@ export function updateRecorderUi() {
 
   const requiresVisibility = isRecording || hasRecording || pendingTitleFocus;
   if (requiresVisibility) {
-    ensureRecorderVisible();
+    const visibilityTarget = hasRecording || pendingTitleFocus ? 'dynamic' : 'button';
+    ensureRecorderVisible({ force: true, target: visibilityTarget });
   }
 }
 
@@ -281,11 +306,15 @@ function handleRecorderStopped() {
   }
   recordingObjectUrl = URL.createObjectURL(recordingBlob);
   updateRecorderUi();
+  keepRecorderVisible = true;
+  attachViewportWatcher();
+  ensureRecorderVisible({ behavior: 'auto', force: true, target: 'dynamic' });
   if (pendingTitleFocus) {
     pendingTitleFocus = false;
     queueFocusOnTitle();
+  } else {
+    setTimeout(() => ensureRecorderVisible({ behavior: 'smooth', force: true, target: 'dynamic' }), 180);
   }
-  detachViewportWatcher();
 }
 
 function determineFileExtension(mimeType) {
@@ -340,7 +369,8 @@ async function startRecording() {
 
   resetRecordingState({ keepInput: true });
   pendingTitleFocus = false;
-  ensureRecorderVisible({ behavior: 'auto' });
+  keepRecorderVisible = true;
+  ensureRecorderVisible({ behavior: 'auto', force: true });
   attachViewportWatcher();
 
   try {
