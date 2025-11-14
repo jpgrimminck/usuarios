@@ -97,8 +97,8 @@ function queueFocusOnTitle() {
   if (typeof requestAnimationFrame === 'function') {
     requestAnimationFrame(focusAndReveal);
   }
-  setTimeout(focusAndReveal, 160);
-  setTimeout(() => ensureRecorderVisible({ behavior: 'smooth', force: true, target: 'dynamic' }), 360);
+  setTimeout(focusAndReveal, 180);
+  setTimeout(() => ensureRecorderVisible({ behavior: 'smooth', force: true, target: 'dynamic' }), 420);
 }
 
 function ensureRecorderVisible(options = {}) {
@@ -119,13 +119,15 @@ function ensureRecorderVisible(options = {}) {
   const visualViewportHeight = window.visualViewport ? window.visualViewport.height : viewportHeight;
   const dynamicFooter = Math.max(0, viewportHeight - visualViewportHeight);
   const safeViewportHeight = Math.max(0, viewportHeight - dynamicFooter);
-  const bottomLimit = safeViewportHeight - 24; // keep a small margin below the button
+  const bottomMargin = target === 'dynamic' ? 96 : 32;
+  const bottomLimit = safeViewportHeight - bottomMargin;
+  const topMargin = 24;
 
   if (targetRect.bottom > bottomLimit) {
     const scrollAmount = targetRect.bottom - bottomLimit;
     window.scrollBy({ top: scrollAmount, behavior });
-  } else if (targetRect.top < 16) {
-    window.scrollBy({ top: targetRect.top - 16, behavior });
+  } else if (targetRect.top < topMargin) {
+    window.scrollBy({ top: targetRect.top - topMargin, behavior });
   }
 }
 
@@ -143,7 +145,7 @@ function getRecorderVisibilityTarget() {
 function attachViewportWatcher() {
   keepRecorderVisible = true;
   if (!window.visualViewport || viewportResizeHandler) return;
-  viewportResizeHandler = () => ensureRecorderVisible({ behavior: 'auto', target: getRecorderVisibilityTarget() });
+  viewportResizeHandler = () => ensureRecorderVisible({ behavior: 'auto', force: true, target: getRecorderVisibilityTarget() });
   window.visualViewport.addEventListener('resize', viewportResizeHandler, { passive: true });
   ensureRecorderVisible({ behavior: 'auto', force: true, target: getRecorderVisibilityTarget() });
 }
@@ -337,7 +339,7 @@ function handleRecorderStopped() {
     pendingTitleFocus = false;
     queueFocusOnTitle();
   } else {
-    setTimeout(() => ensureRecorderVisible({ behavior: 'smooth', force: true, target: 'dynamic' }), 180);
+    setTimeout(() => ensureRecorderVisible({ behavior: 'smooth', force: true, target: 'dynamic' }), 260);
   }
 }
 
