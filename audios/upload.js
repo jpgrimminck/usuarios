@@ -78,18 +78,21 @@ function queueFocusOnTitle() {
   setTimeout(attempt, 120);
 }
 
-function ensureRecorderVisible() {
+function ensureRecorderVisible(options = {}) {
   const elements = ensureRecorderElements();
   if (!elements?.toggleButton) return;
+
+  const { behavior = 'smooth' } = options;
   const buttonRect = elements.toggleButton.getBoundingClientRect();
   const viewportHeight = window.innerHeight || document.documentElement.clientHeight;
-  if (buttonRect.bottom > viewportHeight - 16) {
-    try {
-      elements.toggleButton.scrollIntoView({ behavior: 'smooth', block: 'center', inline: 'nearest' });
-    } catch (_) {
-      const offset = window.scrollY + buttonRect.top - Math.max(0, (viewportHeight / 2) - (buttonRect.height / 2));
-      window.scrollTo({ top: offset, behavior: 'smooth' });
-    }
+  const visualViewportHeight = window.visualViewport ? window.visualViewport.height : viewportHeight;
+  const dynamicFooter = Math.max(0, viewportHeight - visualViewportHeight);
+  const safeViewportHeight = Math.max(0, viewportHeight - dynamicFooter);
+  const bottomLimit = safeViewportHeight - 24; // keep a small margin below the button
+
+  if (buttonRect.bottom > bottomLimit) {
+    const scrollAmount = buttonRect.bottom - bottomLimit;
+    window.scrollBy({ top: scrollAmount, behavior });
   }
 }
 
@@ -318,6 +321,7 @@ async function startRecording() {
 
   resetRecordingState({ keepInput: true });
   pendingTitleFocus = false;
+  ensureRecorderVisible({ behavior: 'auto' });
 
   try {
     const stream = await navigator.mediaDevices.getUserMedia({ audio: true });
@@ -469,6 +473,7 @@ export function initRecorderControls() {
     } else if (recordingBlob) {
       uploadRecording();
     } else {
+      ensureRecorderVisible({ behavior: 'auto' });
       startRecording();
     }
   });
