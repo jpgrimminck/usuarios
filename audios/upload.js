@@ -25,6 +25,7 @@ let recorderElements = null;
 let recordingStartTime = null;
 let recordingTimerInterval = null;
 let pendingTitleFocus = false;
+let viewportResizeHandler = null;
 
 export function initializeUploadModule(options = {}) {
   supabaseClient = options.supabase || null;
@@ -94,6 +95,18 @@ function ensureRecorderVisible(options = {}) {
     const scrollAmount = buttonRect.bottom - bottomLimit;
     window.scrollBy({ top: scrollAmount, behavior });
   }
+}
+
+function attachViewportWatcher() {
+  if (!window.visualViewport || viewportResizeHandler) return;
+  viewportResizeHandler = () => ensureRecorderVisible({ behavior: 'auto' });
+  window.visualViewport.addEventListener('resize', viewportResizeHandler, { passive: true });
+}
+
+function detachViewportWatcher() {
+  if (!window.visualViewport || !viewportResizeHandler) return;
+  window.visualViewport.removeEventListener('resize', viewportResizeHandler);
+  viewportResizeHandler = null;
 }
 
 export function setDefaultRecorderStatus() {
@@ -191,7 +204,11 @@ export function updateRecorderUi() {
       elements.previewEl.src = recordingObjectUrl;
     }
   }
-  ensureRecorderVisible();
+
+  const requiresVisibility = isRecording || hasRecording || pendingTitleFocus;
+  if (requiresVisibility) {
+    ensureRecorderVisible();
+  }
 }
 
 function cleanupRecorderStream() {
@@ -233,6 +250,7 @@ function resetRecordingState(options = {}) {
     }
   }
   pendingTitleFocus = false;
+  detachViewportWatcher();
   updateRecorderUi();
 }
 
@@ -267,6 +285,7 @@ function handleRecorderStopped() {
     pendingTitleFocus = false;
     queueFocusOnTitle();
   }
+  detachViewportWatcher();
 }
 
 function determineFileExtension(mimeType) {
@@ -322,6 +341,7 @@ async function startRecording() {
   resetRecordingState({ keepInput: true });
   pendingTitleFocus = false;
   ensureRecorderVisible({ behavior: 'auto' });
+  attachViewportWatcher();
 
   try {
     const stream = await navigator.mediaDevices.getUserMedia({ audio: true });
