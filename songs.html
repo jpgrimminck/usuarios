@@ -128,6 +128,38 @@ const selectedLibrarySongs = new Map();
 let modalWorking = false;
 let modalSongsFetchToken = 0;
 
+function focusCreateSongTitle(options = {}) {
+  const { preventScroll = false } = options;
+  const { titleInput } = getModalElements();
+  if (!titleInput || titleInput.disabled) return;
+  try {
+    if (preventScroll) {
+      titleInput.focus({ preventScroll: true });
+    } else {
+      titleInput.focus();
+    }
+  } catch (_) {
+    titleInput.focus();
+  }
+  if (titleInput.scrollIntoView) {
+    try {
+      titleInput.scrollIntoView({ block: 'center', inline: 'nearest', behavior: 'auto' });
+    } catch (_) {
+      titleInput.scrollIntoView();
+    }
+  }
+}
+
+function queueFocusOnCreateSongTitle() {
+  const attempt = () => focusCreateSongTitle({ preventScroll: false });
+  attempt();
+  if (typeof requestAnimationFrame === 'function') {
+    requestAnimationFrame(attempt);
+  }
+  setTimeout(attempt, 140);
+  setTimeout(attempt, 320);
+}
+
 function getModalElements() {
   return {
     createButton: document.getElementById('create-new-song'),
@@ -222,13 +254,8 @@ function setCreateMode(enable) {
     }
   }
 
-  if (shouldEnable && titleInput && !titleInput.disabled) {
-    // Delay focus slightly to let layout settle
-    setTimeout(() => {
-      try {
-        titleInput.focus();
-      } catch (_) {}
-    }, 20);
+  if (shouldEnable) {
+    queueFocusOnCreateSongTitle();
   }
 
   updateModalButtonsDisabledState();
