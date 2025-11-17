@@ -135,7 +135,9 @@ function getModalElements() {
     titleInput: document.getElementById('new-song-title'),
     artistInput: document.getElementById('new-song-artist'),
     toggleButton: document.getElementById('toggle-create-song'),
-    createForm: document.getElementById('create-song-form')
+    createForm: document.getElementById('create-song-form'),
+    suggestedWrapper: document.querySelector('.suggested-wrapper'),
+    modalTitle: document.querySelector('#add-song-modal h2')
   };
 }
 
@@ -155,20 +157,86 @@ function updateModalButtonsDisabledState() {
   }
   if (toggleButton && addButton) {
     const hasSelection = selectedLibrarySongs.size > 0;
-    toggleButton.hidden = hasSelection;
-    addButton.hidden = !hasSelection;
-    toggleButton.style.display = hasSelection ? 'none' : '';
-    addButton.style.display = hasSelection ? '' : 'none';
-    toggleButton.setAttribute('aria-hidden', hasSelection ? 'true' : 'false');
-    addButton.setAttribute('aria-hidden', hasSelection ? 'false' : 'true');
+    const isCreateMode = createForm && !createForm.hidden;
+    const showToggle = !hasSelection || isCreateMode;
+    const showAddButton = !isCreateMode && hasSelection;
 
-    if (hasSelection && createForm && !createForm.hidden) {
-      createForm.hidden = true;
-      const icon = toggleButton.querySelector('.material-symbols-outlined');
-      const text = toggleButton.querySelector('span:last-child');
+    toggleButton.hidden = !showToggle;
+    toggleButton.style.display = showToggle ? '' : 'none';
+    toggleButton.setAttribute('aria-hidden', showToggle ? 'false' : 'true');
+
+    addButton.hidden = !showAddButton;
+    addButton.style.display = showAddButton ? '' : 'none';
+    addButton.setAttribute('aria-hidden', showAddButton ? 'false' : 'true');
+  }
+}
+
+function setCreateMode(enable) {
+  const {
+    toggleButton,
+    addButton,
+    createForm,
+    suggestedWrapper,
+    titleInput,
+    artistInput,
+    modalTitle
+  } = getModalElements();
+
+  const shouldEnable = !!enable;
+
+  if (suggestedWrapper) {
+    suggestedWrapper.style.display = shouldEnable ? 'none' : '';
+    suggestedWrapper.setAttribute('aria-hidden', shouldEnable ? 'true' : 'false');
+  }
+
+  if (modalTitle) {
+    modalTitle.style.display = shouldEnable ? 'none' : '';
+    modalTitle.setAttribute('aria-hidden', shouldEnable ? 'true' : 'false');
+  }
+
+  if (createForm) {
+    createForm.hidden = !shouldEnable;
+  }
+
+  if (addButton) {
+    if (shouldEnable) {
+      addButton.hidden = true;
+      addButton.style.display = 'none';
+      addButton.setAttribute('aria-hidden', 'true');
+    }
+  }
+
+  if (toggleButton) {
+    toggleButton.hidden = false;
+    toggleButton.style.display = '';
+    toggleButton.setAttribute('aria-hidden', 'false');
+    const icon = toggleButton.querySelector('.material-symbols-outlined');
+    const text = toggleButton.querySelector('span:last-child');
+    if (shouldEnable) {
+      if (icon) icon.textContent = 'arrow_back';
+      if (text) text.textContent = 'Back to songs list';
+    } else {
       if (icon) icon.textContent = 'add';
       if (text) text.textContent = 'Create a new song';
     }
+  }
+
+  if (shouldEnable && titleInput && !titleInput.disabled) {
+    // Delay focus slightly to let layout settle
+    setTimeout(() => {
+      try {
+        titleInput.focus();
+      } catch (_) {}
+    }, 20);
+  }
+
+  updateModalButtonsDisabledState();
+
+  if (!shouldEnable && titleInput) {
+    titleInput.blur();
+  }
+  if (!shouldEnable && artistInput) {
+    artistInput.blur();
   }
 }
 
@@ -185,10 +253,7 @@ function resetNewSongForm() {
   if (artistInput) {
     artistInput.value = '';
   }
-  const createSongForm = document.getElementById('create-song-form');
-  if (createSongForm) {
-    createSongForm.hidden = true;
-  }
+  setCreateMode(false);
 }
 
 function normalizeStatusTag(value) {
@@ -485,9 +550,7 @@ function initAddSongModal() {
 
   function openModal() {
     setModalWorkingState(false);
-    if (createSongForm) {
-      createSongForm.hidden = true;
-    }
+    setCreateMode(false);
     const fetchToken = ++modalSongsFetchToken;
     // Fetch library songs and render them in the modal
     fetchLibrarySongs().then(list => {
@@ -511,9 +574,6 @@ function initAddSongModal() {
     modal.classList.add('hidden');
     selectedLibrarySongs.clear();
     resetNewSongForm();
-    if (createSongForm) {
-      createSongForm.hidden = true;
-    }
     setModalWorkingState(false);
   }
 
@@ -525,20 +585,8 @@ function initAddSongModal() {
 
   if (toggleCreateButton) {
     toggleCreateButton.addEventListener('click', () => {
-      if (createSongForm) {
-        const isExpanded = !createSongForm.hidden;
-        createSongForm.hidden = isExpanded;
-        
-        const icon = toggleCreateButton.querySelector('.material-symbols-outlined');
-        const text = toggleCreateButton.querySelector('span:last-child');
-        
-        if (icon) {
-          icon.textContent = isExpanded ? 'add' : 'remove';
-        }
-        if (text) {
-          text.textContent = isExpanded ? 'Create a new song' : 'Create a new song';
-        }
-      }
+      const isCreateMode = createSongForm && !createSongForm.hidden;
+      setCreateMode(!isCreateMode);
     });
   }
 
@@ -633,18 +681,7 @@ function initAddSongModal() {
 
         if (newSongTitleInput) newSongTitleInput.value = '';
         if (newSongArtistInput) newSongArtistInput.value = '';
-        
-        if (createSongForm) {
-          createSongForm.hidden = true;
-        }
-        if (toggleCreateButton) {
-          const icon = toggleCreateButton.querySelector('.material-symbols-outlined');
-          const text = toggleCreateButton.querySelector('span:last-child');
-          if (icon) icon.textContent = 'add';
-          if (text) text.textContent = 'Create a new song';
-        }
-        
-        updateModalButtonsDisabledState();
+        setCreateMode(false);
       } catch (err) {
         console.error('Error creating song:', err);
       } finally {
