@@ -105,6 +105,18 @@ function ensureRecorderVisible(options = {}) {
   const elements = ensureRecorderElements();
   if (!elements) return;
 
+  const hostSection = elements.section;
+  if (hostSection) {
+    try {
+      const position = window.getComputedStyle(hostSection).position;
+      if (position === 'fixed') {
+        return;
+      }
+    } catch (_) {
+      // continue if computed style fails
+    }
+  }
+
   const { behavior = 'smooth', force = false, target = 'button' } = options;
   if (!force && !keepRecorderVisible) return;
 
@@ -203,10 +215,12 @@ export function updateRecorderUi() {
   const hasRecording = !!recordingBlob;
   const shouldShowTitle = hasRecording || pendingTitleFocus;
   const shouldExpand = isRecording || hasRecording || pendingTitleFocus;
+  const sectionEl = elements.section;
+  const wasActive = sectionEl ? sectionEl.classList.contains('recorder-section--active') : false;
 
-  if (elements.section) {
-    elements.section.classList.toggle('recorder-section--active', shouldExpand);
-    elements.section.classList.toggle('recorder-section--recording', isRecording);
+  if (sectionEl) {
+    sectionEl.classList.toggle('recorder-section--active', shouldExpand);
+    sectionEl.classList.toggle('recorder-section--recording', isRecording);
   }
 
   if (elements.dynamicContainer) {
@@ -262,8 +276,8 @@ export function updateRecorderUi() {
     }
   }
 
-  if (shouldExpand) {
-    ensureRecorderVisible({ behavior: 'auto', force: true, target: getRecorderVisibilityTarget() });
+  if (shouldExpand && !wasActive) {
+    ensureRecorderVisible({ behavior: 'auto', target: getRecorderVisibilityTarget() });
   }
 }
 
