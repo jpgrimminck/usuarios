@@ -190,8 +190,9 @@ function setCreateMode(enable) {
   }
 
   if (modalTitle) {
-    modalTitle.style.display = shouldEnable ? 'none' : '';
-    modalTitle.setAttribute('aria-hidden', shouldEnable ? 'true' : 'false');
+    modalTitle.style.display = '';
+    modalTitle.setAttribute('aria-hidden', 'false');
+    modalTitle.textContent = shouldEnable ? 'Create New Song' : 'Songs List';
   }
 
   if (createForm) {
