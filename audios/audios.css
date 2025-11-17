@@ -204,7 +204,7 @@
   border-radius: 1.25rem 1.25rem 0 0;
   backdrop-filter: blur(12px);
   z-index: 50;
-  transition: padding 0.25s ease, gap 0.25s ease, background 0.25s ease, box-shadow 0.25s ease;
+  transition: padding 0.25s ease, gap 0.25s ease, background 0.25s ease, box-shadow 0.25s ease, transform 0.25s ease;
 }
 
 .recorder-section--active {

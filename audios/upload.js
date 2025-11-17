@@ -107,6 +107,13 @@ function ensureRecorderVisible(options = {}) {
 
   const hostSection = elements.section;
   if (hostSection) {
+    applyRecorderViewportOffset();
+  }
+
+  const { behavior = 'smooth', force = false, target = 'button' } = options;
+  if (!force && !keepRecorderVisible) return;
+
+  if (hostSection) {
     try {
       const position = window.getComputedStyle(hostSection).position;
       if (position === 'fixed') {
@@ -116,9 +123,6 @@ function ensureRecorderVisible(options = {}) {
       // continue if computed style fails
     }
   }
-
-  const { behavior = 'smooth', force = false, target = 'button' } = options;
-  if (!force && !keepRecorderVisible) return;
 
   const targetElement = target === 'dynamic' && elements.dynamicContainer
     ? elements.dynamicContainer
@@ -143,6 +147,26 @@ function ensureRecorderVisible(options = {}) {
   }
 }
 
+function applyRecorderViewportOffset() {
+  const elements = ensureRecorderElements();
+  if (!elements?.section) return;
+
+  if (!window.visualViewport) {
+    elements.section.style.transform = '';
+    return;
+  }
+
+  const layoutHeight = window.innerHeight || document.documentElement?.clientHeight || 0;
+  const { height: visualHeight, offsetTop = 0 } = window.visualViewport;
+  const keyboardInset = Math.max(0, layoutHeight - (visualHeight + offsetTop));
+
+  if (keyboardInset > 0) {
+    elements.section.style.transform = `translateY(-${keyboardInset}px)`;
+  } else {
+    elements.section.style.transform = '';
+  }
+}
+
 function getRecorderVisibilityTarget() {
   if (pendingTitleFocus || recordingBlob) return 'dynamic';
   if (mediaRecorder && mediaRecorder.state === 'recording') return 'button';
@@ -157,8 +181,13 @@ function getRecorderVisibilityTarget() {
 function attachViewportWatcher() {
   keepRecorderVisible = true;
   if (!window.visualViewport || viewportResizeHandler) return;
-  viewportResizeHandler = () => ensureRecorderVisible({ behavior: 'auto', force: true, target: getRecorderVisibilityTarget() });
+  viewportResizeHandler = () => {
+    applyRecorderViewportOffset();
+    ensureRecorderVisible({ behavior: 'auto', force: true, target: getRecorderVisibilityTarget() });
+  };
   window.visualViewport.addEventListener('resize', viewportResizeHandler, { passive: true });
+  window.visualViewport.addEventListener('scroll', viewportResizeHandler, { passive: true });
+  applyRecorderViewportOffset();
   ensureRecorderVisible({ behavior: 'auto', force: true, target: getRecorderVisibilityTarget() });
 }
 
@@ -168,8 +197,13 @@ function detachViewportWatcher() {
     return;
   }
   window.visualViewport.removeEventListener('resize', viewportResizeHandler);
+  window.visualViewport.removeEventListener('scroll', viewportResizeHandler);
   viewportResizeHandler = null;
   keepRecorderVisible = false;
+  const elements = ensureRecorderElements();
+  if (elements?.section) {
+    elements.section.style.transform = '';
+  }
 }
 
 export function setDefaultRecorderStatus() {
