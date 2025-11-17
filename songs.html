@@ -132,6 +132,9 @@ let modalSongsFetchToken = 0;
 let defaultCreateFormParent = null;
 let createFieldElements = [];
 let toggleButtonDefaultParent = null;
+let lastCreatedSongId = null;
+let pendingScrollSongId = null;
+let pendingSuggestedScrollSongId = null;
 
 function focusCreateSongTitle(options = {}) {
   const { preventScroll = false } = options;
@@ -215,12 +218,12 @@ function updateModalButtonsDisabledState() {
     const hasSelection = selectedLibrarySongs.size > 0;
     const isCreateMode = createForm && !createForm.hidden;
 
-    const showToggle = true;
+    const showToggle = isCreateMode || !hasSelection;
     const showAddButton = !isCreateMode && hasSelection;
 
     toggleButton.hidden = !showToggle;
-    toggleButton.style.display = '';
-    toggleButton.setAttribute('aria-hidden', 'false');
+    toggleButton.style.display = showToggle ? '' : 'none';
+    toggleButton.setAttribute('aria-hidden', showToggle ? 'false' : 'true');
 
     addButton.hidden = !showAddButton;
     addButton.style.display = showAddButton ? '' : 'none';
@@ -374,6 +377,69 @@ function resetNewSongForm() {
     artistInput.value = '';
   }
   setCreateMode(false);
+  lastCreatedSongId = null;
+}
+
+function scrollSongIntoView(songId, attempt = 0) {
+  if (!songId || attempt > 5) return;
+  const selector = `[data-song-id="${songId}"]`;
+  const rawTarget = document.querySelector(selector);
+  const target = rawTarget?.classList?.contains('song-card') ? rawTarget : rawTarget?.closest('.song-card') || rawTarget;
+  if (!target) {
+    setTimeout(() => scrollSongIntoView(songId, attempt + 1), 120);
+    return;
+  }
+  const scrollContainer = document.getElementById('songs-scroll');
+  if (scrollContainer && typeof target.scrollIntoView === 'function') {
+    try {
+      target.scrollIntoView({ block: 'center', behavior: 'smooth' });
+    } catch (_) {
+      const offsetTop = target.getBoundingClientRect().top - scrollContainer.getBoundingClientRect().top + scrollContainer.scrollTop;
+      scrollContainer.scrollTo({ top: Math.max(offsetTop - 40, 0), behavior: 'smooth' });
+    }
+  } else if (scrollContainer) {
+    const offsetTop = target.getBoundingClientRect().top - scrollContainer.getBoundingClientRect().top + scrollContainer.scrollTop;
+    scrollContainer.scrollTo({ top: Math.max(offsetTop - 40, 0), behavior: 'smooth' });
+  }
+
+  target.classList.add('song-card--recent');
+  setTimeout(() => target.classList.remove('song-card--recent'), 1600);
+}
+
+function scrollSuggestedSongIntoView(songKey, attempt = 0) {
+  if (!songKey || attempt > 5) return;
+  const keyString = String(songKey);
+  const container = document.getElementById('suggested-songs-container');
+  let target = null;
+  if (container) {
+    target = Array.from(container.children).find(node => node?.dataset?.suggestedSongId === keyString) || null;
+  }
+  if (!target) {
+    target = document.querySelector(`[data-suggested-song-id="${keyString.replace(/"/g, '\"')}"]`);
+  }
+  if (!target) {
+    setTimeout(() => scrollSuggestedSongIntoView(songKey, attempt + 1), 110);
+    return;
+  }
+
+  const wrapper = document.querySelector('.suggested-wrapper');
+  const scrollArea = wrapper || container;
+  if (scrollArea && typeof target.scrollIntoView === 'function') {
+    try {
+      target.scrollIntoView({ block: 'center', behavior: 'smooth' });
+    } catch (_) {
+      const base = scrollArea.getBoundingClientRect();
+      const offsetTop = target.getBoundingClientRect().top - base.top + scrollArea.scrollTop;
+      scrollArea.scrollTo({ top: Math.max(offsetTop - 32, 0), behavior: 'smooth' });
+    }
+  } else if (scrollArea) {
+    const base = scrollArea.getBoundingClientRect();
+    const offsetTop = target.getBoundingClientRect().top - base.top + scrollArea.scrollTop;
+    scrollArea.scrollTo({ top: Math.max(offsetTop - 32, 0), behavior: 'smooth' });
+  }
+
+  target.classList.add('suggested-card--recent');
+  setTimeout(() => target.classList.remove('suggested-card--recent'), 1400);
 }
 
 function normalizeStatusTag(value) {
@@ -525,6 +591,9 @@ function renderSuggestedSongs(onSelect) {
   sortedSongs.forEach((song) => {
     const card = document.createElement('div');
     card.className = 'suggested-card';
+    const songId = song.id;
+    const key = songId ?? (song.title || '');
+    card.dataset.suggestedSongId = String(key);
 
     const titleSpan = document.createElement('span');
     titleSpan.className = 'suggested-title';
@@ -542,8 +611,6 @@ function renderSuggestedSongs(onSelect) {
     addButton.setAttribute('aria-pressed', 'false');
     addButton.innerHTML = '<span class="material-symbols-outlined">add</span>';
 
-    const songId = song.id;
-    const key = songId ?? songTitle;
     if (selectedLibrarySongs.has(key)) {
       addButton.classList.add('suggested-add--selected');
       addButton.setAttribute('aria-pressed', 'true');
@@ -607,6 +674,14 @@ function renderSuggestedSongs(onSelect) {
     card.appendChild(addButton);
     container.appendChild(card);
   });
+
+  if (pendingSuggestedScrollSongId) {
+    const targetKey = pendingSuggestedScrollSongId;
+    pendingSuggestedScrollSongId = null;
+    requestAnimationFrame(() => {
+      scrollSuggestedSongIntoView(targetKey);
+    });
+  }
 }
 
 // Fetch songs from the 'songs' table (library)
@@ -791,6 +866,8 @@ function initAddSongModal() {
 
         const displayArtist = songRecord?.artists?.name || artistValue;
         selectedLibrarySongs.set(songRecord.id, { id: songRecord.id, title: songRecord.title, artist: displayArtist });
+  lastCreatedSongId = songRecord.id;
+  pendingSuggestedScrollSongId = songRecord.id ?? songRecord.title;
 
         const baseList = Array.isArray(renderSuggestedSongs._lastList) ? [...renderSuggestedSongs._lastList] : [];
         const filtered = baseList.filter(item => item?.id !== songRecord.id);
@@ -832,6 +909,10 @@ function initAddSongModal() {
           return;
         }
 
+        if (lastCreatedSongId && additions.includes(lastCreatedSongId)) {
+          pendingScrollSongId = lastCreatedSongId;
+        }
+
         const { data: existingRows, error: existingError } = await supabase
           .from('user_songs')
           .select('song_id')
@@ -862,6 +943,7 @@ function initAddSongModal() {
         closeModal();
       } catch (err) {
         console.error('Error adding songs to list:', err);
+        pendingScrollSongId = null;
       } finally {
         if (!modal.classList.contains('hidden')) {
           addSelectedButton.textContent = originalText;
@@ -984,6 +1066,7 @@ async function loadSongs() {
       const artistName = song.artists?.name || '';
       const firstLetter = songTitle.charAt(0).toUpperCase();
       const songElement = document.createElement('a');
+      songElement.dataset.songId = song.id;
       const audioParams = new URLSearchParams({ songId: song.id, title: songTitle });
       if (selectedUserId) {
         audioParams.set('id', selectedUserId);
@@ -1027,6 +1110,14 @@ async function loadSongs() {
       }
       container.appendChild(songElement);
     });
+
+    if (pendingScrollSongId) {
+      const targetId = pendingScrollSongId;
+      pendingScrollSongId = null;
+      requestAnimationFrame(() => {
+        scrollSongIntoView(targetId);
+      });
+    }
   } catch (err) {
     console.error('Error in loadSongs:', err);
   }

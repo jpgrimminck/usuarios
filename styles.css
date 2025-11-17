@@ -670,6 +670,22 @@ img {
   gap: 2px;
 }
 
+.suggested-card--recent {
+  animation: suggested-card-highlight 1.3s ease;
+}
+
+@keyframes suggested-card-highlight {
+  0% {
+    box-shadow: 0 0 0 rgba(37, 99, 235, 0);
+  }
+  20% {
+    box-shadow: 0 0 0 5px rgba(37, 99, 235, 0.35);
+  }
+  100% {
+    box-shadow: 0 0 0 rgba(37, 99, 235, 0);
+  }
+}
+
 .suggested-card span {
   display: block;
 }
@@ -766,6 +782,23 @@ img {
 
 .song-card {
   width: 100%;
+}
+
+.song-card--recent {
+  position: relative;
+  animation: song-card-highlight 1.4s ease;
+}
+
+@keyframes song-card-highlight {
+  0% {
+    box-shadow: 0 0 0 rgba(37, 99, 235, 0);
+  }
+  20% {
+    box-shadow: 0 0 0 6px rgba(37, 99, 235, 0.35);
+  }
+  100% {
+    box-shadow: 0 0 0 rgba(37, 99, 235, 0);
+  }
 }
 
 .suggested-actions {
