@@ -27,6 +27,7 @@ let recordingTimerInterval = null;
 let pendingTitleFocus = false;
 let viewportResizeHandler = null;
 let keepRecorderVisible = false;
+let recorderViewportBaseHeight = null;
 
 export function initializeUploadModule(options = {}) {
   supabaseClient = options.supabase || null;
@@ -156,9 +157,15 @@ function applyRecorderViewportOffset() {
     return;
   }
 
-  const layoutHeight = window.innerHeight || document.documentElement?.clientHeight || 0;
   const { height: visualHeight, offsetTop = 0 } = window.visualViewport;
-  const keyboardInset = Math.max(0, layoutHeight - (visualHeight + offsetTop));
+  const layoutHeight = window.innerHeight || document.documentElement?.clientHeight || 0;
+  if (recorderViewportBaseHeight == null) {
+    recorderViewportBaseHeight = Math.max(visualHeight + offsetTop, layoutHeight);
+  } else {
+    recorderViewportBaseHeight = Math.max(recorderViewportBaseHeight, visualHeight + offsetTop, layoutHeight);
+  }
+
+  const keyboardInset = Math.max(0, recorderViewportBaseHeight - (visualHeight + offsetTop));
 
   if (keyboardInset > 0) {
     elements.section.style.transform = `translateY(-${keyboardInset}px)`;
@@ -200,6 +207,7 @@ function detachViewportWatcher() {
   window.visualViewport.removeEventListener('scroll', viewportResizeHandler);
   viewportResizeHandler = null;
   keepRecorderVisible = false;
+  recorderViewportBaseHeight = null;
   const elements = ensureRecorderElements();
   if (elements?.section) {
     elements.section.style.transform = '';
