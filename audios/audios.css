@@ -279,9 +279,15 @@
 .recorder-section__controls {
   display: flex;
   align-items: center;
-  justify-content: center;
-  gap: 1rem;
+  justify-content: space-between;
+  gap: 3rem;
   margin: 0;
+}
+
+.recorder-section__controls::before,
+.recorder-section__controls::after {
+  content: '';
+  flex: 1;
 }
 
 
@@ -333,8 +339,8 @@
 }
 
 .recorder-button-erase {
-  width: 3rem;
-  height: 3rem;
+  width: 3.5rem;
+  height: 3.5rem;
   display: inline-flex;
   align-items: center;
   justify-content: center;
