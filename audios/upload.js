@@ -202,6 +202,12 @@ export function updateRecorderUi() {
   const isRecording = mediaRecorder && mediaRecorder.state === 'recording';
   const hasRecording = !!recordingBlob;
   const shouldShowTitle = hasRecording || pendingTitleFocus;
+  const shouldExpand = isRecording || hasRecording || pendingTitleFocus;
+
+  if (elements.section) {
+    elements.section.classList.toggle('recorder-section--active', shouldExpand);
+    elements.section.classList.toggle('recorder-section--recording', isRecording);
+  }
 
   if (elements.dynamicContainer) {
     elements.dynamicContainer.classList.toggle('recorder-section__dynamic--recorded', shouldShowTitle);
@@ -256,8 +262,7 @@ export function updateRecorderUi() {
     }
   }
 
-  const requiresVisibility = isRecording || hasRecording || pendingTitleFocus;
-  if (requiresVisibility) {
+  if (shouldExpand) {
     ensureRecorderVisible({ behavior: 'auto', force: true, target: getRecorderVisibilityTarget() });
   }
 }
