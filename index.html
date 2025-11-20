@@ -58,8 +58,6 @@
   let localAuthorizedProfile = null;
   const sessionPendingRequestIds = new Set();
 
-  let currentState = 1;
-  let approvedId = null;
   let clientIp = null;
   let localResolution = `${window.screen.width}x${window.screen.height}`;
   const userProfileCache = {};
@@ -152,8 +150,6 @@
       if (localAuthorizedProfile?.userId) {
         return;
       }
-      currentState = 1;
-      approvedId = null;
       const btn = document.getElementById('practicar-btn');
       btn.className = 'border border-gray-500 bg-transparent text-gray-500 font-bold py-2 px-4 rounded';
       btn.innerHTML = 'Practicar';
@@ -167,8 +163,6 @@
       if (localAuthorizedProfile?.userId) {
         return;
       }
-      currentState = 2;
-      approvedId = null;
       const btn = document.getElementById('practicar-btn');
       btn.className = 'relative bg-transparent hover:bg-yellow-700 text-gray-900 font-bold py-2 px-4 rounded overflow-hidden';
       btn.innerHTML = '<div class="absolute left-0 top-0 h-full bg-yellow-500 transition-all duration-1000 w-0"></div><span class="relative z-10 text-gray-900">Espere</span>';
@@ -196,8 +190,6 @@
     }
 
     function setState3(id, name = null, animate = false, options = {}) {
-      currentState = 3;
-      approvedId = id;
       const btn = document.getElementById('practicar-btn');
       btn.className = 'relative bg-transparent hover:bg-red-700 text-gray-900 font-bold py-2 px-4 rounded overflow-hidden';
       const priorProfile = (localAuthorizedProfile && localAuthorizedProfile.userId === id) ? localAuthorizedProfile : null;
@@ -237,10 +229,6 @@
       updatePracticeButtonVisibility();
     }
 
-    function showPendingModal() {
-      document.getElementById('pending-modal').classList.remove('hidden');
-    }
-
     function saveLocalAuthorization(profile) {
       if (!profile?.userId || !profile.email) return;
       try {
@@ -276,15 +264,6 @@
       }
     }
 
-    function clearLocalAuthorization() {
-      try {
-        window.localStorage.removeItem(LOCAL_AUTH_STORAGE_KEY);
-      } catch (err) {
-        console.warn('No se pudo limpiar la autorización local:', err);
-      }
-      localAuthorizedProfile = null;
-    }
-
     function restoreLocalAuthorization() {
       const stored = loadLocalAuthorization();
       if (!stored || !stored.userId || !stored.email) {
@@ -293,34 +272,6 @@
   localAuthorizedProfile = { ...stored };
   setState3(stored.userId, stored.name || null, false, { email: stored.email, persist: false, savedAt: stored.savedAt });
       return true;
-    }
-
-    async function handleRequest() {
-      console.log('Botón Practicar presionado');
-      try {
-        console.log('Recopilando datos del dispositivo...');
-        const deviceData = await collectDeviceData();
-        console.log('Datos recopilados:', deviceData);
-
-        console.log('Obteniendo IP...');
-        const ipResponse = await fetch('https://api.ipify.org?format=json');
-        const ipData = await ipResponse.json();
-        deviceData.ip = ipData.ip;
-        console.log('IP obtenida:', deviceData.ip);
-
-        console.log('Enviando a Supabase...');
-        const { error } = await supabase.from('user_ip').insert([deviceData]);
-        if (error) {
-          console.error('Error al enviar solicitud:', error);
-          alert('Error al enviar solicitud: ' + error.message);
-        } else {
-          console.log('Solicitud enviada correctamente');
-          document.getElementById('modal').classList.remove('hidden');
-        }
-      } catch (err) {
-        console.error('Error general:', err);
-        alert('Error al recopilar datos o enviar solicitud: ' + err.message);
-      }
     }
 
     async function checkApproval() {
