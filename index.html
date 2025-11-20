@@ -48,29 +48,37 @@
     </div>
   </div>
   <script>
-    const supabase = window.supabase.createClient(window.SUPABASE_URL, window.SUPABASE_ANON_KEY);
+  const supabase = window.supabase.createClient(window.SUPABASE_URL, window.SUPABASE_ANON_KEY);
+  const LOCAL_AUTH_STORAGE_KEY = 'usuarios:authorizedProfile';
+  let localAuthorizedProfile = null;
+  const sessionPendingRequestIds = new Set();
 
   let currentState = 1;
   let approvedId = null;
   let clientIp = null;
   let localResolution = `${window.screen.width}x${window.screen.height}`;
-  const userNameCache = {};
+  const userProfileCache = {};
 
-    async function getUserNameById(userId) {
+    async function getUserProfileById(userId) {
       if (!userId) return null;
-      if (userNameCache[userId]) return userNameCache[userId];
+      if (userProfileCache[userId]) return userProfileCache[userId];
       try {
         const { data, error } = await supabase
           .from('users')
-          .select('name')
+          .select('name, email')
           .eq('id', userId)
           .single();
-        if (!error && data && data.name) {
-          userNameCache[userId] = data.name;
-          return data.name;
+        if (!error && data) {
+          const profile = {
+            id: userId,
+            name: data.name || null,
+            email: data.email || null
+          };
+          userProfileCache[userId] = profile;
+          return profile;
         }
       } catch (err) {
-        console.warn('No se pudo obtener el nombre del usuario:', err);
+        console.warn('No se pudo obtener el perfil del usuario:', err);
       }
       return null;
     }
@@ -78,24 +86,36 @@
     async function applyApprovedState(record, animate = false) {
       if (!record) return false;
 
-      const ipMatches = Boolean(record.ip && clientIp && record.ip === clientIp);
-      const resolutionMatches = Boolean(record.resolution && localResolution && record.resolution === localResolution);
+      const targetId = record.selected_user_id || record.id;
+      const hasLocalAuth = Boolean(localAuthorizedProfile?.userId && targetId && localAuthorizedProfile.userId === targetId);
+      const isSessionApproval = Boolean(record.id && sessionPendingRequestIds.has(record.id));
 
-      if (!ipMatches || !resolutionMatches) {
+      if (!hasLocalAuth && !isSessionApproval) {
         setState1();
         return false;
       }
 
-      const targetId = record.selected_user_id || record.id;
-      let displayName = null;
+      let profile = null;
       if (record.selected_user_id) {
-        displayName = await getUserNameById(record.selected_user_id);
+        profile = await getUserProfileById(record.selected_user_id);
       }
-      setState3(targetId, displayName, animate);
+
+      const displayName = profile?.name || localAuthorizedProfile?.name || null;
+      const email = profile?.email || localAuthorizedProfile?.email || null;
+      const persist = Boolean(isSessionApproval && email);
+
+      setState3(targetId, displayName, animate, {
+        email,
+        persist,
+        requestId: record.id
+      });
       return true;
     }
 
     function setState1() {
+      if (localAuthorizedProfile?.userId) {
+        return;
+      }
       currentState = 1;
       approvedId = null;
       const btn = document.getElementById('practicar-btn');
@@ -107,6 +127,9 @@
     }
 
     async function setState2(record = null) {
+      if (localAuthorizedProfile?.userId) {
+        return;
+      }
       currentState = 2;
       approvedId = null;
       const btn = document.getElementById('practicar-btn');
@@ -134,12 +157,15 @@
       updateLocalInfo();
     }
 
-    function setState3(id, name = null, animate = false) {
+    function setState3(id, name = null, animate = false, options = {}) {
       currentState = 3;
       approvedId = id;
       const btn = document.getElementById('practicar-btn');
       btn.className = 'relative bg-transparent hover:bg-red-700 text-gray-900 font-bold py-2 px-4 rounded overflow-hidden';
-      const label = name || 'Practicar';
+      const priorProfile = (localAuthorizedProfile && localAuthorizedProfile.userId === id) ? localAuthorizedProfile : null;
+      const resolvedEmail = options.email ?? priorProfile?.email ?? null;
+      const resolvedName = name ?? priorProfile?.name ?? null;
+      const label = resolvedName || resolvedEmail || 'Practicar';
   btn.innerHTML = `<div class="absolute left-0 top-0 h-full bg-blue-500 transition-all duration-1000 w-0"></div><span class="relative z-10 text-gray-900">${label}</span>`;
       btn.onclick = () => {
         window.location.href = `songs.html?id=${id}`;
@@ -154,10 +180,80 @@
         const progressDiv = btn.querySelector('div');
         if (progressDiv) progressDiv.style.width = '100%';
       }
+
+      if (id) {
+        const savedAt = options.savedAt || Date.now();
+        localAuthorizedProfile = {
+          userId: id,
+          name: resolvedName,
+          email: resolvedEmail,
+          savedAt
+        };
+        if (options.persist && resolvedEmail) {
+          saveLocalAuthorization(localAuthorizedProfile);
+        }
+      }
+      if (options.requestId) {
+        sessionPendingRequestIds.delete(options.requestId);
+      }
     }
 
     function showPendingModal() {
       document.getElementById('pending-modal').classList.remove('hidden');
+    }
+
+    function saveLocalAuthorization(profile) {
+      if (!profile?.userId || !profile.email) return;
+      try {
+        const payload = {
+          userId: profile.userId,
+          email: profile.email,
+          name: profile.name || null,
+          savedAt: profile.savedAt || Date.now()
+        };
+        window.localStorage.setItem(LOCAL_AUTH_STORAGE_KEY, JSON.stringify(payload));
+      } catch (err) {
+        console.warn('No se pudo guardar la autorización local:', err);
+      }
+    }
+
+    function loadLocalAuthorization() {
+      try {
+        const raw = window.localStorage.getItem(LOCAL_AUTH_STORAGE_KEY);
+        if (!raw) return null;
+        const payload = JSON.parse(raw);
+        if (!payload || !payload.userId || !payload.email) {
+          return null;
+        }
+        return {
+          userId: payload.userId,
+          email: payload.email,
+          name: payload.name || null,
+          savedAt: payload.savedAt || Date.now()
+        };
+      } catch (err) {
+        console.warn('No se pudo cargar la autorización local:', err);
+        return null;
+      }
+    }
+
+    function clearLocalAuthorization() {
+      try {
+        window.localStorage.removeItem(LOCAL_AUTH_STORAGE_KEY);
+      } catch (err) {
+        console.warn('No se pudo limpiar la autorización local:', err);
+      }
+      localAuthorizedProfile = null;
+    }
+
+    function restoreLocalAuthorization() {
+      const stored = loadLocalAuthorization();
+      if (!stored || !stored.userId || !stored.email) {
+        return false;
+      }
+  localAuthorizedProfile = { ...stored };
+  setState3(stored.userId, stored.name || null, false, { email: stored.email, persist: false, savedAt: stored.savedAt });
+      return true;
     }
 
     async function handleRequest() {
@@ -289,6 +385,7 @@
     }
 
   // Button behavior is controlled by setState1/2/3; initialize by checking DB
+  restoreLocalAuthorization();
   checkApproval();
 
     if (document.getElementById('volver-btn')) {
@@ -555,12 +652,20 @@
       console.log('IP obtenida:', deviceData.ip);
 
       console.log('Enviando a Supabase...');
-      const { error } = await supabase.from('user_ip').insert([deviceData]);
+      const { data: insertedRows, error } = await supabase
+        .from('user_ip')
+        .insert([deviceData])
+        .select('id')
+        .limit(1);
       if (error) {
         console.error('Error al enviar solicitud:', error);
         alert('Error al enviar solicitud: ' + error.message);
       } else {
         console.log('Solicitud enviada correctamente');
+        const insertedRow = Array.isArray(insertedRows) ? insertedRows[0] : insertedRows;
+        if (insertedRow?.id) {
+          sessionPendingRequestIds.add(insertedRow.id);
+        }
       }
       updateSupabaseInfo(null);
     });
