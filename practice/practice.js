@@ -3,42 +3,18 @@
 
   const supabase = window.supabase.createClient(window.SUPABASE_URL, window.SUPABASE_ANON_KEY);
   const LOCAL_AUTH_STORAGE_KEY = 'usuarios:authorizedProfile';
-  const PRACTICE_VISIBILITY_SESSION_KEY = 'usuarios:practiceVisibility';
+  const PRACTICE_BUTTON_VISIBLE = true; // Set to true to keep the practice button visible.
 
   let localAuthorizedProfile = null;
   let clientIp = null;
   let localResolution = `${window.screen.width}x${window.screen.height}`;
   const sessionPendingRequestIds = new Set();
   const userProfileCache = {};
-  let isPracticeButtonVisible = loadPracticeVisibilityPreference();
 
   function updatePracticeButtonVisibility() {
     const practiceBtn = document.getElementById('practicar-btn');
-    const toggleBtn = document.getElementById('toggle-practice-btn');
-    if (!practiceBtn || !toggleBtn) return;
-
-  practiceBtn.style.display = isPracticeButtonVisible ? 'block' : 'none';
-    toggleBtn.textContent = isPracticeButtonVisible ? 'Hide Practice Button' : 'Show Practice Button';
-    savePracticeVisibilityPreference(isPracticeButtonVisible);
-  }
-
-  function loadPracticeVisibilityPreference() {
-    try {
-      const stored = window.sessionStorage.getItem(PRACTICE_VISIBILITY_SESSION_KEY);
-      if (stored === 'visible') return true;
-      if (stored === 'hidden') return false;
-    } catch (err) {
-      console.warn('No se pudo cargar la preferencia de visibilidad del botón:', err);
-    }
-    return false;
-  }
-
-  function savePracticeVisibilityPreference(isVisible) {
-    try {
-      window.sessionStorage.setItem(PRACTICE_VISIBILITY_SESSION_KEY, isVisible ? 'visible' : 'hidden');
-    } catch (err) {
-      console.warn('No se pudo guardar la preferencia de visibilidad del botón:', err);
-    }
+    if (!practiceBtn) return;
+    practiceBtn.style.display = PRACTICE_BUTTON_VISIBLE ? 'block' : 'none';
   }
 
   async function getUserProfileById(userId) {
@@ -565,9 +541,8 @@
   }
 
   document.addEventListener('DOMContentLoaded', () => {
-    const modalEl = document.getElementById('modal');
-    const pendingModalEl = document.getElementById('pending-modal');
-    const togglePracticeBtn = document.getElementById('toggle-practice-btn');
+  const modalEl = document.getElementById('modal');
+  const pendingModalEl = document.getElementById('pending-modal');
     const solicitarBtn = document.getElementById('solicitar-btn');
     const pendingVolverBtn = document.getElementById('pending-volver-btn');
 
@@ -590,13 +565,6 @@
     if (pendingVolverBtn && pendingModalEl) {
       pendingVolverBtn.addEventListener('click', () => {
         pendingModalEl.classList.add('hidden');
-      });
-    }
-
-    if (togglePracticeBtn) {
-      togglePracticeBtn.addEventListener('click', () => {
-        isPracticeButtonVisible = !isPracticeButtonVisible;
-        updatePracticeButtonVisibility();
       });
     }
 
