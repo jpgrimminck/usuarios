@@ -140,9 +140,9 @@ async function fetchSongAudiosByCandidates(songId) {
     try {
       const { data, error } = await state.supabase
         .from('audios')
-        .select('id, instrument, url, uploader_id')
+        .select('id, instrument, name, url, uploader_id')
         .eq(column, songId)
-        .order('instrument', { ascending: true });
+        .order('name', { ascending: true });
 
       if (error) {
         if (isColumnMissingError(error)) {
@@ -257,7 +257,7 @@ function buildAudioCard(audio) {
   container.innerHTML = `
     <div class="audio-card__header">
       <p class="audio-card__title text-lg font-semibold text-white">
-        ${audio.instrument || 'Instrumento sin nombre'}
+        ${audio.name || audio.instrument || 'Audio sin nombre'}
         ${formatLabel ? `<span class="ml-2 inline-flex items-center rounded-full bg-gray-700 px-2 py-0.5 text-[0.6rem] font-semibold uppercase tracking-wide text-blue-300 audio-card__format">${formatLabel}</span>` : ''}
       </p>
       <div class="audio-card__controls" data-role="controls">
@@ -424,15 +424,15 @@ async function loadAudios(options = {}) {
       }
     });
 
-    // Sort both arrays alphabetically by instrument name
-    const sortByInstrument = (a, b) => {
-      const nameA = (a.instrument || '').toLowerCase();
-      const nameB = (b.instrument || '').toLowerCase();
+    // Sort both arrays alphabetically by name
+    const sortByName = (a, b) => {
+      const nameA = (a.name || a.instrument || '').toLowerCase();
+      const nameB = (b.name || b.instrument || '').toLowerCase();
       return nameA.localeCompare(nameB);
     };
     
-    userAudios.sort(sortByInstrument);
-    otherAudios.sort(sortByInstrument);
+    userAudios.sort(sortByName);
+    otherAudios.sort(sortByName);
 
     // Render user's uploads section
     if (userAudios.length > 0) {

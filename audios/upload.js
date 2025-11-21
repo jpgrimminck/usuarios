@@ -567,9 +567,9 @@ async function uploadRecording() {
 
     const insertPayload = {
       id: nextAudioId,
-      instrument: titleValue,
+      instrument: null,
       detail: 'recording',
-      name: storageName,
+      name: titleValue,
       uploader_id: uploaderId,
       url: filePath
     };
