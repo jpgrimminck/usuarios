@@ -328,6 +328,32 @@
         alert('No hay solicitud pendiente o usuario seleccionado');
         return;
       }
+
+      try {
+        const { data: requestData } = await supabase
+          .from('user_ip')
+          .select('email')
+          .eq('id', pendingId)
+          .single();
+
+        if (requestData && requestData.email && requestData.email.trim()) {
+          const { data: userData } = await supabase
+            .from('users')
+            .select('email')
+            .eq('id', selectedUserId)
+            .single();
+
+          if (userData && !userData.email) {
+            await supabase
+              .from('users')
+              .update({ email: requestData.email.trim() })
+              .eq('id', selectedUserId);
+          }
+        }
+      } catch (err) {
+        console.warn('Error checking/updating user email:', err);
+      }
+
       const { error } = await supabase
         .from('user_ip')
         .update({ selected_user_id: selectedUserId, approved: true })
