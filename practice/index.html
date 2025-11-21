@@ -9,43 +9,43 @@
   <script src="https://cdn.jsdelivr.net/npm/@supabase/supabase-js@2"></script>
   <script src="../config.js"></script>
 </head>
-<body class="bg-gray-900 text-white">
-  <div class="min-h-screen flex flex-col items-center justify-center">
-    <button id="practicar-btn" class="border border-gray-500 bg-transparent text-gray-500 font-bold py-2 px-4 rounded">
+<body class="">
+  <div class="main-container">
+    <button id="practicar-btn" class="practice-btn-base practice-btn-state-1">
       Practicar
     </button>
-    <div class="bg-gray-800 rounded-lg p-4 shadow-md">
-      <table class="min-w-[280px] text-sm text-white">
+    <div class="email-container">
+      <table class="email-table">
         <tbody>
           <tr>
-            <td class="px-4 py-2 text-gray-300">Email</td>
-            <td class="px-4 py-2 font-semibold" id="stored-email">X</td>
+            <td class="email-label">Email</td>
+            <td class="email-value" id="stored-email">X</td>
           </tr>
         </tbody>
       </table>
     </div>
-  <button id="logout-btn" class="mt-12 border border-red-400 text-red-300 hover:bg-red-500 hover:text-gray-900 font-semibold py-4 px-4 rounded">
+  <button id="logout-btn">
       Logout
     </button>
   </div>
 
-  <div id="modal" class="fixed inset-0 bg-black bg-opacity-50 flex items-center justify-center hidden z-50">
-    <div class="bg-gray-800 p-6 rounded-lg text-white text-center max-w-[300px]">
-  <label for="email-input" class="block mb-2">Email</label>
-  <input id="email-input" type="email" class="w-full p-2 mb-4 bg-gray-700 text-white rounded" placeholder="Ingresa tu email">
-      <button id="solicitar-btn" class="relative bg-blue-500 hover:bg-blue-700 text-white font-bold py-2 px-4 rounded w-full overflow-hidden">
-        <div id="progress" class="absolute left-0 top-0 h-full bg-yellow-500 transition-all duration-1000 w-0"></div>
-        <span id="btn-text" class="relative z-10">Enviar</span>
+  <div id="modal" class="modal-overlay hidden">
+    <div class="modal-content">
+  <label for="email-input" class="input-label">Email</label>
+  <input id="email-input" type="email" placeholder="Ingresa tu email">
+      <button id="solicitar-btn">
+        <div id="progress" class="progress-bar"></div>
+        <span id="btn-text" class="btn-text">Enviar</span>
       </button>
     </div>
   </div>
 
-  <div id="pending-modal" class="fixed inset-0 bg-black bg-opacity-50 flex items-center justify-center hidden z-50">
-    <div class="bg-gray-800 p-6 rounded-lg text-white text-center max-w-[300px]">
-      <div class="mb-4">
+  <div id="pending-modal" class="modal-overlay hidden">
+    <div class="modal-content">
+      <div style="margin-bottom: 1rem;">
         <p>El administrador te dará acceso pronto...</p>
       </div>
-      <button id="pending-volver-btn" class="bg-yellow-500 hover:bg-yellow-700 text-gray-800 font-bold py-2 px-4 rounded">Volver</button>
+      <button id="pending-volver-btn">Volver</button>
     </div>
   </div>
 

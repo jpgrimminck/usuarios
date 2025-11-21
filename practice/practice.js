@@ -92,7 +92,7 @@
     }
     const btn = document.getElementById('practicar-btn');
     if (!btn) return;
-    btn.className = 'border border-gray-500 bg-transparent text-gray-500 font-bold py-2 px-4 rounded';
+    btn.className = 'practice-btn-base practice-btn-state-1';
     btn.innerHTML = 'Practicar';
     btn.onclick = () => {
       document.getElementById('modal').classList.remove('hidden');
@@ -107,8 +107,8 @@
     }
     const btn = document.getElementById('practicar-btn');
     if (!btn) return;
-    btn.className = 'relative bg-transparent hover:bg-yellow-700 text-gray-900 font-bold py-2 px-4 rounded overflow-hidden';
-    btn.innerHTML = '<div class="absolute left-0 top-0 h-full bg-yellow-500 transition-all duration-1000 w-0"></div><span class="relative z-10 text-gray-900">Espere</span>';
+    btn.className = 'practice-btn-base practice-btn-state-2';
+    btn.innerHTML = '<div class="progress-bar-yellow"></div><span class="btn-text">Espere</span>';
     setTimeout(() => {
       const progressDiv = btn.querySelector('div');
       if (progressDiv) progressDiv.style.width = '100%';
@@ -136,12 +136,12 @@
   function setState3(id, name = null, animate = false, options = {}) {
     const btn = document.getElementById('practicar-btn');
     if (!btn) return;
-    btn.className = 'relative bg-transparent hover:bg-red-700 text-gray-900 font-bold py-2 px-4 rounded overflow-hidden';
+    btn.className = 'practice-btn-base practice-btn-state-3';
     const priorProfile = (localAuthorizedProfile && localAuthorizedProfile.userId === id) ? localAuthorizedProfile : null;
     const resolvedEmail = options.email ?? priorProfile?.email ?? null;
     const resolvedName = name ?? priorProfile?.name ?? null;
     const label = resolvedName || resolvedEmail || 'Practicar';
-    btn.innerHTML = `<div class="absolute left-0 top-0 h-full bg-blue-500 transition-all duration-1000 w-0"></div><span class="relative z-10 text-gray-900">${label}</span>`;
+    btn.innerHTML = `<div class="progress-bar-blue"></div><span class="btn-text">${label}</span>`;
     btn.onclick = async () => {
       if (resolvedEmail && id) {
         await registerAccess(resolvedEmail, id);

@@ -1,3 +1,197 @@
+body {
+  background-color: #111827;
+  color: white;
+  margin: 0;
+  font-family: ui-sans-serif, system-ui, -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, "Helvetica Neue", Arial, sans-serif;
+}
+
+.main-container {
+  min-height: 100vh;
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  justify-content: center;
+}
+
+.email-container {
+  background-color: #1f2937;
+  border-radius: 0.5rem;
+  padding: 1rem;
+  box-shadow: 0 4px 6px -1px rgba(0, 0, 0, 0.1), 0 2px 4px -1px rgba(0, 0, 0, 0.06);
+}
+
+.email-table {
+  min-width: 280px;
+  font-size: 0.875rem;
+  color: white;
+  border-collapse: collapse;
+}
+
+.email-label {
+  padding: 0.5rem 1rem;
+  color: #d1d5db;
+}
+
+.email-value {
+  padding: 0.5rem 1rem;
+  font-weight: 600;
+}
+
+#logout-btn {
+  margin-top: 3rem;
+  border: 1px solid #f87171;
+  color: #fca5a5;
+  font-weight: 600;
+  padding: 1rem 1rem;
+  border-radius: 0.25rem;
+  background-color: transparent;
+  cursor: pointer;
+  transition: background-color 0.2s, color 0.2s;
+}
+
+#logout-btn:hover {
+  background-color: #ef4444;
+  color: #111827;
+}
+
+.modal-overlay {
+  position: fixed;
+  inset: 0;
+  background-color: rgba(0, 0, 0, 0.5);
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  z-index: 50;
+}
+
+.modal-overlay.hidden {
+  display: none;
+}
+
+.modal-content {
+  background-color: #1f2937;
+  padding: 1.5rem;
+  border-radius: 0.5rem;
+  color: white;
+  text-align: center;
+  max-width: 300px;
+  width: 100%;
+}
+
+.input-label {
+  display: block;
+  margin-bottom: 0.5rem;
+}
+
+#email-input {
+  width: 100%;
+  padding: 0.5rem;
+  margin-bottom: 1rem;
+  background-color: #374151;
+  color: white;
+  border-radius: 0.25rem;
+  border: none;
+  box-sizing: border-box;
+}
+
+#solicitar-btn {
+  position: relative;
+  background-color: #3b82f6;
+  color: white;
+  font-weight: 700;
+  padding: 0.5rem 1rem;
+  border-radius: 0.25rem;
+  width: 100%;
+  overflow: hidden;
+  border: none;
+  cursor: pointer;
+}
+
+#solicitar-btn:hover {
+  background-color: #1d4ed8;
+}
+
+.progress-bar {
+  position: absolute;
+  left: 0;
+  top: 0;
+  height: 100%;
+  background-color: #eab308;
+  transition: all 1s;
+  width: 0;
+}
+
+.btn-text {
+  position: relative;
+  z-index: 10;
+}
+
+#pending-volver-btn {
+  background-color: #eab308;
+  color: #1f2937;
+  font-weight: 700;
+  padding: 0.5rem 1rem;
+  border-radius: 0.25rem;
+  border: none;
+  cursor: pointer;
+}
+
+#pending-volver-btn:hover {
+  background-color: #a16207;
+}
+
+/* Dynamic Button States */
+.practice-btn-base {
+  font-weight: 700;
+  padding: 0.5rem 1rem;
+  border-radius: 0.25rem;
+  cursor: pointer;
+  position: relative;
+  overflow: hidden;
+}
+
+.practice-btn-state-1 {
+  border: 1px solid #6b7280;
+  background-color: transparent;
+  color: #6b7280;
+}
+
+.practice-btn-state-2 {
+  background-color: transparent;
+  color: #111827;
+}
+.practice-btn-state-2:hover {
+  background-color: #a16207;
+}
+
+.practice-btn-state-3 {
+  background-color: transparent;
+  color: #111827;
+}
+.practice-btn-state-3:hover {
+  background-color: #b91c1c; /* red-700 */
+}
+
+.progress-bar-yellow {
+  position: absolute;
+  left: 0;
+  top: 0;
+  height: 100%;
+  background-color: #eab308;
+  transition: all 1s;
+  width: 0;
+}
+
+.progress-bar-blue {
+  position: absolute;
+  left: 0;
+  top: 0;
+  height: 100%;
+  background-color: #3b82f6;
+  transition: all 1s;
+  width: 0;
+}
+
 #practicar-btn {
   display: none;
   margin-bottom: 40px;
