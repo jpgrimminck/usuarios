@@ -567,7 +567,6 @@ async function uploadRecording() {
 
     const insertPayload = {
       id: nextAudioId,
-      instrument: null,
       detail: 'recording',
       name: titleValue,
       uploader_id: uploaderId,
