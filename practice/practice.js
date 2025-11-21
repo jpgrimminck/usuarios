@@ -11,10 +11,26 @@
   const sessionPendingRequestIds = new Set();
   const userProfileCache = {};
 
+  function clearLocalAuthorization() {
+    try {
+      window.localStorage.removeItem(LOCAL_AUTH_STORAGE_KEY);
+    } catch (err) {
+      console.warn('No se pudo limpiar la autorización local:', err);
+    }
+    localAuthorizedProfile = null;
+  }
+
   function updatePracticeButtonVisibility() {
     const practiceBtn = document.getElementById('practicar-btn');
     if (!practiceBtn) return;
     practiceBtn.style.display = PRACTICE_BUTTON_VISIBLE ? 'block' : 'none';
+  }
+
+  function updateEmailDisplay() {
+    const emailCell = document.getElementById('stored-email');
+    if (!emailCell) return;
+    const email = typeof localAuthorizedProfile?.email === 'string' ? localAuthorizedProfile.email.trim() : '';
+    emailCell.textContent = email ? email : 'X';
   }
 
   async function getUserProfileById(userId) {
@@ -82,6 +98,7 @@
       document.getElementById('modal').classList.remove('hidden');
     };
     updatePracticeButtonVisibility();
+    updateEmailDisplay();
   }
 
   async function setState2(record = null) {
@@ -113,6 +130,7 @@
 
     updateLocalInfo();
     updatePracticeButtonVisibility();
+    updateEmailDisplay();
   }
 
   function setState3(id, name = null, animate = false, options = {}) {
@@ -124,7 +142,10 @@
     const resolvedName = name ?? priorProfile?.name ?? null;
     const label = resolvedName || resolvedEmail || 'Practicar';
     btn.innerHTML = `<div class="absolute left-0 top-0 h-full bg-blue-500 transition-all duration-1000 w-0"></div><span class="relative z-10 text-gray-900">${label}</span>`;
-    btn.onclick = () => {
+    btn.onclick = async () => {
+      if (resolvedEmail && id) {
+        await registerAccess(resolvedEmail, id);
+      }
       window.location.href = `../songs.html?id=${id}`;
     };
     if (animate) {
@@ -153,6 +174,7 @@
       sessionPendingRequestIds.delete(options.requestId);
     }
     updatePracticeButtonVisibility();
+    updateEmailDisplay();
   }
 
   function saveLocalAuthorization(profile) {
@@ -305,47 +327,38 @@
     refreshApprovalInfo();
   }
 
-  async function refreshApprovalInfo() {
-    const approvedEl = document.getElementById('approval-status');
-    const commentsEl = document.getElementById('comments-list');
-    if (!approvedEl || !commentsEl) return;
+    async function refreshApprovalInfo() {
+      const approvedEl = document.getElementById('approval-status');
+      if (!approvedEl) return;
 
-    if (!clientIp || !localResolution) {
-      approvedEl.textContent = '-';
-      approvedEl.style.color = '#f87171';
-      commentsEl.textContent = '-';
-      return;
-    }
+      if (!clientIp || !localResolution) {
+        approvedEl.textContent = '-';
+        approvedEl.style.color = '#f87171';
+        return;
+      }
 
-    try {
-      const { data, error } = await supabase
-        .from('user_ip')
-        .select('id, comment, approved, created_at')
-        .eq('ip', clientIp)
-        .eq('resolution', localResolution)
-        .order('created_at', { ascending: false });
+      try {
+        const { data, error } = await supabase
+          .from('user_ip')
+          .select('id, email, approved, created_at')
+          .eq('ip', clientIp)
+          .eq('resolution', localResolution)
+          .order('created_at', { ascending: false });
 
-      if (!error && data && data.length > 0) {
-        const isApproved = data.some((row) => row.approved === true);
-        approvedEl.textContent = String(isApproved);
-        approvedEl.style.color = isApproved ? '#34d399' : '#f87171';
-
-        const comments = data
-          .map((row) => (row.comment || '').trim())
-          .filter((text) => text.length > 0);
-        commentsEl.textContent = comments.length > 0 ? comments.join(' • ') : 'No comments';
-      } else {
+        if (!error && data && data.length > 0) {
+          const isApproved = data.some((row) => row.approved === true);
+          approvedEl.textContent = String(isApproved);
+          approvedEl.style.color = isApproved ? '#34d399' : '#f87171';
+        } else {
+          approvedEl.textContent = 'false';
+          approvedEl.style.color = '#f87171';
+        }
+      } catch (err) {
+        console.warn('No se pudo actualizar el estado aprobado:', err);
         approvedEl.textContent = 'false';
         approvedEl.style.color = '#f87171';
-        commentsEl.textContent = 'No comments';
       }
-    } catch (err) {
-      console.warn('No se pudo actualizar el estado aprobado:', err);
-      approvedEl.textContent = 'false';
-      approvedEl.style.color = '#f87171';
-      commentsEl.textContent = 'No comments';
     }
-  }
 
   function updateSupabaseInfo(record) {
     const remoteIpEl = document.getElementById('remote-ip');
@@ -540,11 +553,42 @@
     }
   }
 
+  async function ensureClientIp() {
+    if (clientIp) return clientIp;
+    try {
+      const ipResponse = await fetch('https://api.ipify.org?format=json');
+      const ipData = await ipResponse.json();
+      clientIp = ipData.ip;
+      return clientIp;
+    } catch (err) {
+      console.warn('Error fetching IP:', err);
+      return null;
+    }
+  }
+
+  async function registerAccess(email, userId) {
+    try {
+      await ensureClientIp();
+      const deviceData = await collectDeviceData();
+      const payload = {
+        ...deviceData,
+        email: email,
+        selected_user_id: userId,
+        ip: clientIp,
+        approved: true
+      };
+      await supabase.from('user_ip').insert([payload]);
+    } catch (err) {
+      console.error('Error registering access:', err);
+    }
+  }
+
   document.addEventListener('DOMContentLoaded', () => {
   const modalEl = document.getElementById('modal');
   const pendingModalEl = document.getElementById('pending-modal');
     const solicitarBtn = document.getElementById('solicitar-btn');
     const pendingVolverBtn = document.getElementById('pending-volver-btn');
+  const logoutBtn = document.getElementById('logout-btn');
 
     if (modalEl) {
       modalEl.addEventListener('click', (e) => {
@@ -568,70 +612,128 @@
       });
     }
 
+    if (logoutBtn) {
+      logoutBtn.addEventListener('click', () => {
+        clearLocalAuthorization();
+        updateEmailDisplay();
+        setState1();
+      });
+    }
+
     if (solicitarBtn) {
       solicitarBtn.addEventListener('click', async () => {
         console.log('Solicitar acceso clicked');
-        const nameInput = document.getElementById('name-input');
-        const name = nameInput ? nameInput.value.trim() : '';
-        if (!name) {
-          alert('Por favor, ingresa tu nombre');
+        const emailInput = document.getElementById('email-input');
+        const email = emailInput ? emailInput.value.trim() : '';
+        if (!email) {
+          alert('Por favor, ingresa tu email');
           return;
         }
+
         const progress = document.getElementById('progress');
         const btnText = document.getElementById('btn-text');
+        const resetButtonState = () => {
+          if (progress) progress.style.width = '0';
+          if (btnText) btnText.textContent = 'Solicitar acceso';
+          solicitarBtn.disabled = false;
+        };
+
         solicitarBtn.disabled = true;
-        if (progress) progress.style.width = '100%';
-        setTimeout(() => {
+        if (btnText) btnText.textContent = 'Verificando...';
+
+        let matchedUser = null;
+        try {
+          const { data: userRows, error: userError } = await supabase
+            .from('users')
+            .select('id, email, name')
+            .ilike('email', email)
+            .limit(1);
+          if (userError) throw userError;
+          matchedUser = Array.isArray(userRows) ? userRows[0] : userRows;
+        } catch (lookupError) {
+          console.error('Error verificando email:', lookupError);
+          alert('No se pudo verificar el email. Inténtalo nuevamente.');
+          resetButtonState();
+          return;
+        }
+
+        if (matchedUser) {
+          const matchedUserId = matchedUser.id;
+          const matchedEmail = typeof matchedUser.email === 'string' ? matchedUser.email.trim() : email;
+          const matchedName = matchedUser.name || null;
+          if (btnText) btnText.textContent = 'Accediendo...';
+          if (progress) progress.style.width = '100%';
+          
+          await registerAccess(matchedEmail, matchedUserId);
+
+          const savedAt = Date.now();
+          setState3(matchedUserId, matchedName, false, { email: matchedEmail, persist: true, savedAt });
           if (btnText) btnText.textContent = 'Listo!';
           setTimeout(() => {
             if (modalEl) modalEl.classList.add('hidden');
-            if (progress) progress.style.width = '0';
-            if (btnText) btnText.textContent = 'Solicitar acceso';
-            solicitarBtn.disabled = false;
-            if (nameInput) nameInput.value = '';
-          }, 1000);
-        }, 1000);
-
-        console.log('Recopilando datos del dispositivo...');
-        const deviceData = await collectDeviceData();
-        deviceData.comment = name;
-        console.log('Datos recopilados:', deviceData);
-
-        if (!clientIp) {
-          console.log('Obteniendo IP...');
-          try {
-            const ipResponse = await fetch('https://api.ipify.org?format=json');
-            const ipData = await ipResponse.json();
-            clientIp = ipData.ip;
-          } catch (err) {
-            console.error('No se pudo obtener la IP:', err);
-            alert('No se pudo obtener la IP del dispositivo. Inténtalo nuevamente.');
-            solicitarBtn.disabled = false;
-            if (progress) progress.style.width = '0';
-            if (btnText) btnText.textContent = 'Solicitar acceso';
-            return;
-          }
+            if (emailInput) emailInput.value = '';
+            resetButtonState();
+          }, 800);
+          return;
         }
-        deviceData.ip = clientIp;
-        console.log('IP obtenida:', deviceData.ip);
 
-        console.log('Enviando a Supabase...');
-        const { data: insertedRows, error } = await supabase
-          .from('user_ip')
-          .insert([deviceData])
-          .select('id')
-          .limit(1);
-        if (error) {
-          console.error('Error al enviar solicitud:', error);
-          alert('Error al enviar solicitud: ' + error.message);
-        } else {
+        if (btnText) btnText.textContent = 'Enviando...';
+        if (progress) progress.style.width = '100%';
+
+        try {
+          console.log('Recopilando datos del dispositivo...');
+          const deviceData = await collectDeviceData();
+          const payload = {
+            ...deviceData,
+            email,
+            selected_user_id: null
+          };
+          console.log('Datos recopilados:', payload);
+
+          if (!clientIp) {
+            console.log('Obteniendo IP...');
+            try {
+              const ipResponse = await fetch('https://api.ipify.org?format=json');
+              const ipData = await ipResponse.json();
+              clientIp = ipData.ip;
+            } catch (err) {
+              console.error('No se pudo obtener la IP:', err);
+              alert('No se pudo obtener la IP del dispositivo. Inténtalo nuevamente.');
+              resetButtonState();
+              return;
+            }
+          }
+          payload.ip = clientIp;
+          console.log('IP obtenida:', payload.ip);
+
+          console.log('Enviando a Supabase...');
+          const { data: insertedRows, error } = await supabase
+            .from('user_ip')
+            .insert([payload])
+            .select('id')
+            .limit(1);
+          if (error) {
+            throw error;
+          }
+
           console.log('Solicitud enviada correctamente');
           const insertedRow = Array.isArray(insertedRows) ? insertedRows[0] : insertedRows;
           if (insertedRow?.id) {
             sessionPendingRequestIds.add(insertedRow.id);
           }
+          updateSupabaseInfo(null);
+
+          if (btnText) btnText.textContent = 'Listo!';
+          setTimeout(() => {
+            if (modalEl) modalEl.classList.add('hidden');
+            if (emailInput) emailInput.value = '';
+            resetButtonState();
+          }, 1000);
+        } catch (submissionError) {
+          console.error('Error al enviar solicitud:', submissionError);
+          alert('Error al enviar solicitud: ' + submissionError.message);
+          resetButtonState();
         }
-        updateSupabaseInfo(null);
       });
     }
 
@@ -642,6 +744,7 @@
     }
 
     updatePracticeButtonVisibility();
+    updateEmailDisplay();
     restoreLocalAuthorization();
     checkApproval();
   });

@@ -16,43 +16,23 @@
     </button>
     <div class="bg-gray-800 rounded-lg p-4 shadow-md">
       <table class="min-w-[280px] text-sm text-white">
-        <thead>
-          <tr>
-            <th class="text-left px-4 py-2"></th>
-            <th class="text-left px-4 py-2">Local</th>
-            <th class="text-left px-4 py-2">Supabase</th>
-          </tr>
-        </thead>
         <tbody>
           <tr>
-            <td class="px-4 py-2 text-gray-300">Public IP</td>
-            <td class="px-4 py-2" id="local-ip">-</td>
-            <td class="px-4 py-2 font-semibold" id="remote-ip">-</td>
-          </tr>
-          <tr>
-            <td class="px-4 py-2 text-gray-300">Resolution</td>
-            <td class="px-4 py-2" id="local-resolution">-</td>
-            <td class="px-4 py-2 font-semibold" id="remote-resolution">-</td>
-          </tr>
-          <tr>
-            <td class="px-4 py-2 text-gray-300">Approved</td>
-            <td class="px-4 py-2">-</td>
-            <td class="px-4 py-2 font-semibold" id="approval-status">-</td>
-          </tr>
-          <tr>
-            <td class="px-4 py-2 text-gray-300">Comments</td>
-            <td class="px-4 py-2">-</td>
-            <td class="px-4 py-2 font-semibold" id="comments-list">-</td>
+            <td class="px-4 py-2 text-gray-300">Email</td>
+            <td class="px-4 py-2 font-semibold" id="stored-email">X</td>
           </tr>
         </tbody>
       </table>
     </div>
+  <button id="logout-btn" class="mt-12 border border-red-400 text-red-300 hover:bg-red-500 hover:text-gray-900 font-semibold py-4 px-4 rounded">
+      Logout
+    </button>
   </div>
 
   <div id="modal" class="fixed inset-0 bg-black bg-opacity-50 flex items-center justify-center hidden z-50">
     <div class="bg-gray-800 p-6 rounded-lg text-white text-center max-w-[300px]">
-      <label for="name-input" class="block mb-2">Nombre</label>
-      <input id="name-input" type="text" class="w-full p-2 mb-4 bg-gray-700 text-white rounded" placeholder="Ingresa tu nombre">
+  <label for="email-input" class="block mb-2">Email</label>
+  <input id="email-input" type="email" class="w-full p-2 mb-4 bg-gray-700 text-white rounded" placeholder="Ingresa tu email">
       <button id="solicitar-btn" class="relative bg-blue-500 hover:bg-blue-700 text-white font-bold py-2 px-4 rounded w-full overflow-hidden">
         <div id="progress" class="absolute left-0 top-0 h-full bg-yellow-500 transition-all duration-1000 w-0"></div>
         <span id="btn-text" class="relative z-10">Enviar</span>
