@@ -1,6 +1,6 @@
 const supabase = window.supabase.createClient(window.SUPABASE_URL, window.SUPABASE_ANON_KEY);
 
-const AUDIO_BUCKET = 'audios'; // Ajusta el nombre del bucket si es distinto
+const AUDIO_BUCKET = 'audios';
 const form = document.getElementById('audio-upload-form');
 const fileInput = document.getElementById('audio-file');
 const audioIdInput = document.getElementById('audio-id');
@@ -13,7 +13,6 @@ const submitBtn = document.getElementById('submit-btn');
 const messageBox = document.getElementById('form-message');
 
 let currentAudioId = null;
-let currentUploaderId = null;
 
 async function loadNextAudioId() {
   try {
@@ -52,14 +51,12 @@ async function loadUploaders() {
       console.error('No se pudieron cargar los usuarios:', error.message);
       uploaderSelect.innerHTML = '<option value="">Error cargando usuarios</option>';
       uploaderSelect.disabled = true;
-      currentUploaderId = null;
       return;
     }
 
     if (!data || data.length === 0) {
       uploaderSelect.innerHTML = '<option value="">No hay usuarios disponibles</option>';
       uploaderSelect.disabled = true;
-      currentUploaderId = null;
       return;
     }
 
@@ -71,12 +68,10 @@ async function loadUploaders() {
       option.textContent = user.name || user.id;
       uploaderSelect.appendChild(option);
     });
-    currentUploaderId = null;
   } catch (err) {
     console.error('Fallo inesperado cargando usuarios:', err);
     uploaderSelect.innerHTML = '<option value="">Error cargando usuarios</option>';
     uploaderSelect.disabled = true;
-    currentUploaderId = null;
   }
 }
 
@@ -181,10 +176,6 @@ fileInput.addEventListener('change', async (event) => {
   }
 });
 
-uploaderSelect.addEventListener('change', (event) => {
-  currentUploaderId = event.target.value || null;
-});
-
 form.addEventListener('submit', async (event) => {
   event.preventDefault();
   clearMessage();
@@ -192,7 +183,7 @@ form.addEventListener('submit', async (event) => {
   const instrumentValue = instrumentSelect.value;
   const detailValue = detailSelect.value;
   const nombreCancionId = songSelect.value;
-  const uploaderId = currentUploaderId;
+  const uploaderId = uploaderSelect.value;
 
   if (!file) {
     showMessage('error', 'Selecciona un archivo MP3 antes de enviar.');
@@ -248,7 +239,6 @@ form.addEventListener('submit', async (event) => {
     showMessage('success', '¡Audio subido y registrado correctamente!');
     form.reset();
     currentAudioId = null;
-    currentUploaderId = null;
     uploaderSelect.value = '';
     await loadNextAudioId();
     fileNameInput.value = '';
