@@ -3,7 +3,7 @@
 
   const supabase = window.supabase.createClient(window.SUPABASE_URL, window.SUPABASE_ANON_KEY);
   const LOCAL_AUTH_STORAGE_KEY = 'usuarios:authorizedProfile';
-  const PRACTICE_BUTTON_VISIBLE = true; // Set to true to keep the practice button visible.
+  const PRACTICE_BUTTON_VISIBLE = true;
 
   let localAuthorizedProfile = null;
   let clientIp = null;
@@ -128,7 +128,7 @@
       document.getElementById('pending-modal').classList.remove('hidden');
     };
 
-    updateLocalInfo();
+    localResolution = `${window.screen.width}x${window.screen.height}`;
     updatePracticeButtonVisibility();
     updateEmailDisplay();
   }
@@ -228,9 +228,8 @@
       const ipData = await ipResponse.json();
       const ip = ipData.ip;
       clientIp = ip;
-      console.log('Checking approval for IP:', ip);
 
-      updateLocalInfo();
+      localResolution = `${window.screen.width}x${window.screen.height}`;
 
       let matchingRecord = null;
       let approvedApplied = false;
@@ -265,8 +264,6 @@
         }
       }
 
-      updateSupabaseInfo(matchingRecord);
-
       const matchesCurrentDevice = (entry) => entry && entry.ip === clientIp;
 
       supabase.channel('user_ip_changes')
@@ -275,7 +272,6 @@
             if (payload.new.approved) {
               const applied = await applyApprovedState(payload.new, false);
               if (!applied) {
-                updateSupabaseInfo(payload.new);
                 return;
               }
             } else if (payload.new.resolution === localResolution) {
@@ -283,7 +279,6 @@
             } else {
               setState1();
             }
-            updateSupabaseInfo(payload.new);
           }
         })
         .on('postgres_changes', { event: 'UPDATE', schema: 'public', table: 'user_ip' }, async (payload) => {
@@ -292,7 +287,6 @@
               const wasApproved = payload.old && payload.old.approved === true;
               const applied = await applyApprovedState(payload.new, !wasApproved);
               if (!applied) {
-                updateSupabaseInfo(payload.new);
                 return;
               }
             } else if (payload.new.resolution === localResolution) {
@@ -300,93 +294,19 @@
             } else {
               setState1();
             }
-            updateSupabaseInfo(payload.new);
           } else if (matchesCurrentDevice(payload.old)) {
             setState1();
-            updateSupabaseInfo(null);
           }
         })
         .on('postgres_changes', { event: 'DELETE', schema: 'public', table: 'user_ip' }, (payload) => {
           if (matchesCurrentDevice(payload.old)) {
             setState1();
-            updateSupabaseInfo(null);
           }
         })
         .subscribe();
     } catch (err) {
       console.warn('Error checking approval:', err);
     }
-  }
-
-  function updateLocalInfo() {
-    localResolution = `${window.screen.width}x${window.screen.height}`;
-    const ipEl = document.getElementById('local-ip');
-    const resolutionEl = document.getElementById('local-resolution');
-    if (ipEl) ipEl.textContent = clientIp ? clientIp : '-';
-    if (resolutionEl) resolutionEl.textContent = localResolution ? localResolution : '-';
-    refreshApprovalInfo();
-  }
-
-    async function refreshApprovalInfo() {
-      const approvedEl = document.getElementById('approval-status');
-      if (!approvedEl) return;
-
-      if (!clientIp || !localResolution) {
-        approvedEl.textContent = '-';
-        approvedEl.style.color = '#f87171';
-        return;
-      }
-
-      try {
-        const { data, error } = await supabase
-          .from('user_ip')
-          .select('id, email, approved, created_at')
-          .eq('ip', clientIp)
-          .eq('resolution', localResolution)
-          .order('created_at', { ascending: false });
-
-        if (!error && data && data.length > 0) {
-          const isApproved = data.some((row) => row.approved === true);
-          approvedEl.textContent = String(isApproved);
-          approvedEl.style.color = isApproved ? '#34d399' : '#f87171';
-        } else {
-          approvedEl.textContent = 'false';
-          approvedEl.style.color = '#f87171';
-        }
-      } catch (err) {
-        console.warn('No se pudo actualizar el estado aprobado:', err);
-        approvedEl.textContent = 'false';
-        approvedEl.style.color = '#f87171';
-      }
-    }
-
-  function updateSupabaseInfo(record) {
-    const remoteIpEl = document.getElementById('remote-ip');
-    const remoteResolutionEl = document.getElementById('remote-resolution');
-    if (!remoteIpEl || !remoteResolutionEl) return;
-
-    const ipMatch = record && record.ip && clientIp && record.ip === clientIp;
-    const resolutionMatch = record && record.resolution && localResolution && record.resolution === localResolution;
-
-    if (record && record.ip) {
-      remoteIpEl.textContent = record.ip;
-      remoteIpEl.style.color = ipMatch ? '#34d399' : '#f87171';
-      if (!ipMatch) remoteIpEl.textContent = 'x';
-    } else {
-      remoteIpEl.textContent = 'x';
-      remoteIpEl.style.color = '#f87171';
-    }
-
-    if (record && record.resolution) {
-      remoteResolutionEl.textContent = record.resolution;
-      remoteResolutionEl.style.color = resolutionMatch ? '#34d399' : '#f87171';
-      if (!resolutionMatch) remoteResolutionEl.textContent = 'x';
-    } else {
-      remoteResolutionEl.textContent = 'x';
-      remoteResolutionEl.style.color = '#f87171';
-    }
-
-    refreshApprovalInfo();
   }
 
   async function collectDeviceData() {
@@ -622,7 +542,6 @@
 
     if (solicitarBtn) {
       solicitarBtn.addEventListener('click', async () => {
-        console.log('Solicitar acceso clicked');
         const emailInput = document.getElementById('email-input');
         const email = emailInput ? emailInput.value.trim() : '';
         if (!email) {
@@ -681,17 +600,14 @@
         if (progress) progress.style.width = '100%';
 
         try {
-          console.log('Recopilando datos del dispositivo...');
           const deviceData = await collectDeviceData();
           const payload = {
             ...deviceData,
             email,
             selected_user_id: null
           };
-          console.log('Datos recopilados:', payload);
 
           if (!clientIp) {
-            console.log('Obteniendo IP...');
             try {
               const ipResponse = await fetch('https://api.ipify.org?format=json');
               const ipData = await ipResponse.json();
@@ -704,9 +620,7 @@
             }
           }
           payload.ip = clientIp;
-          console.log('IP obtenida:', payload.ip);
 
-          console.log('Enviando a Supabase...');
           const { data: insertedRows, error } = await supabase
             .from('user_ip')
             .insert([payload])
@@ -716,12 +630,10 @@
             throw error;
           }
 
-          console.log('Solicitud enviada correctamente');
           const insertedRow = Array.isArray(insertedRows) ? insertedRows[0] : insertedRows;
           if (insertedRow?.id) {
             sessionPendingRequestIds.add(insertedRow.id);
           }
-          updateSupabaseInfo(null);
 
           if (btnText) btnText.textContent = 'Listo!';
           setTimeout(() => {
@@ -737,11 +649,7 @@
       });
     }
 
-    if (document.getElementById('volver-btn')) {
-      document.getElementById('volver-btn').addEventListener('click', () => {
-        if (modalEl) modalEl.classList.add('hidden');
-      });
-    }
+
 
     updatePracticeButtonVisibility();
     updateEmailDisplay();
