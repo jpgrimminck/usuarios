@@ -1,0 +1,67 @@
+<!DOCTYPE html>
+<html lang="es">
+<head>
+  <meta charset="UTF-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no" />
+  <title>Subir pista de audio</title>
+  <link rel="stylesheet" href="../styles.css" />
+  <link rel="stylesheet" href="upload-audio.css" />
+  <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin />
+  <link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;700&family=Noto+Sans:wght@400;500;700&display=swap" />
+</head>
+<body>
+  <div class="container">
+    <h1>Subir nuevo audio (MP3)</h1>
+    <form id="audio-upload-form">
+      <div>
+        <label for="audio-file">Archivo MP3</label>
+        <input id="audio-file" type="file" accept="audio/mpeg" required />
+        <p class="helper">Selecciona un archivo con extensión .mp3 (audio/mpeg).</p>
+      </div>
+      <div class="inline">
+        <div>
+          <label for="audio-id">ID generado</label>
+          <input id="audio-id" type="text" readonly />
+        </div>
+        <div>
+          <label for="file-name">Nombre del archivo</label>
+          <input id="file-name" type="text" readonly />
+        </div>
+      </div>
+      <div>
+        <label for="uploader">Subido por</label>
+        <select id="uploader" required>
+          <option value="">Selecciona un usuario…</option>
+        </select>
+      </div>
+      <div class="inline">
+        <div>
+          <label for="instrument">Instrumento</label>
+          <input id="instrument" type="text" placeholder="Ej: guitarra1" required />
+        </div>
+        <div>
+          <label for="detail">Detalle</label>
+          <select id="detail" required>
+            <option value="">Selecciona detalle…</option>
+            <option value="estrofa">Estrofa</option>
+            <option value="coro">Coro</option>
+            <option value="puente">Puente</option>
+          </select>
+        </div>
+      </div>
+      <div>
+        <label for="song-id">Canción</label>
+        <select id="song-id" required>
+          <option value="">Cargando canciones…</option>
+        </select>
+      </div>
+      <button id="submit-btn" type="submit">Subir audio</button>
+      <div id="form-message" class="message"></div>
+    </form>
+  </div>
+
+  <script src="https://cdn.jsdelivr.net/npm/@supabase/supabase-js@2"></script>
+  <script src="../config.js"></script>
+  <script src="upload-audio.js"></script>
+</body>
+</html>
