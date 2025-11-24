@@ -152,6 +152,12 @@ function applyRecorderViewportOffset() {
   const elements = ensureRecorderElements();
   if (!elements?.section) return;
 
+  // Only apply offset if the title input is focused (keyboard likely open)
+  if (elements.titleInput && document.activeElement !== elements.titleInput) {
+    elements.section.style.transform = '';
+    return;
+  }
+
   if (!window.visualViewport) {
     elements.section.style.transform = '';
     return;
