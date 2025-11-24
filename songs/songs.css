@@ -150,6 +150,79 @@ body, html {
   gap: 0.5rem;
 }
 
+.suggested-card {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 0.75rem;
+  padding: 0.75rem 0.85rem;
+  border-radius: 0.5rem;
+  border: 1px solid #374151;
+  background-color: #111827;
+  transition: border-color 0.2s, background-color 0.2s, box-shadow 0.2s;
+}
+
+.suggested-card:hover {
+  border-color: #4b5563;
+  background-color: rgba(255, 255, 255, 0.04);
+  box-shadow: 0 0 0 1px rgba(59, 130, 246, 0.25);
+}
+
+.suggested-card--recent {
+  box-shadow: 0 0 0 2px rgba(59, 130, 246, 0.45);
+}
+
+.suggested-title {
+  color: #ffffff;
+  font-size: 0.95rem;
+  font-weight: 600;
+  line-height: 1.2;
+}
+
+.suggested-artist {
+  color: #9ca3af;
+  font-size: 0.85rem;
+  line-height: 1.2;
+}
+
+.suggested-add {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  width: 2.5rem;
+  height: 2.5rem;
+  border-radius: 9999px;
+  border: 1px solid #4b5563;
+  color: #ffffff;
+  background-color: transparent;
+  transition: background-color 0.2s, border-color 0.2s, transform 0.2s;
+}
+
+.suggested-add:hover {
+  background-color: #374151;
+  border-color: #5b6473;
+}
+
+.suggested-add--animating {
+  transform: scale(0.95);
+}
+
+.suggested-add--selected {
+  background-color: #10b981;
+  border-color: #10b981;
+  color: #0f172a;
+}
+
+.suggested-add--selected .material-symbols-outlined {
+  color: #0f172a;
+}
+
+.suggested-add:disabled,
+.suggested-add[aria-pressed="true"][disabled] {
+  opacity: 0.55;
+  cursor: not-allowed;
+}
+
 .suggested-toggle-create {
   display: flex;
   align-items: center;
@@ -165,10 +238,6 @@ body, html {
 
 .suggested-toggle-create:hover {
   background-color: #374151;
-}
-
-.suggested-create-form {
-  display: block;
 }
 
 /* Song Card */
