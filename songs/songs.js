@@ -2,38 +2,6 @@ const supabase = window.supabase.createClient(window.SUPABASE_URL, window.SUPABA
 const urlParams = new URLSearchParams(window.location.search);
 const selectedUserId = urlParams.get('id');
 let songsRefreshTimeoutId = null;
-const sampleSongs = [
-  { title: 'Sol de Medianoche', artist: 'Luna Áurea' },
-  { title: 'Viento del Sur', artist: 'Horizonte Azul' },
-  { title: 'Caminos de Sal', artist: 'Los Errantes' },
-  { title: 'Corazón Mapache', artist: 'Selva Lenta' },
-  { title: 'Pasos de Fuego', artist: 'Bruma Roja' },
-  { title: 'Nubes de Abril', artist: 'Camila Rivero' },
-  { title: 'Tiempo en Re', artist: 'Los Forasteros' },
-  { title: 'Mar Adentro', artist: 'Nora Esencial' },
-  { title: 'Río Eléctrico', artist: 'Voltaje 21' },
-  { title: 'Bosque de Cristal', artist: 'Dalia Boreal' },
-  { title: 'Horizonte Ígneo', artist: 'Alma Bravía' },
-  { title: 'Flor de Cardo', artist: 'Lucía y el Monte' },
-  { title: 'Sueño de Plata', artist: 'Sirenas del Sur' },
-  { title: 'Puesta Morena', artist: 'Ecos Urbanos' },
-  { title: 'Ritmo Lunar', artist: 'Trío Eclipse' },
-  { title: 'Luz en la Niebla', artist: 'Matías Prado' },
-  { title: 'Nave de Papel', artist: 'Cielo Frágil' },
-  { title: 'Verde Azahar', artist: 'Estación Primavera' },
-  { title: 'Faro del Alma', artist: 'Lucero Atlántico' },
-  { title: 'Espinas y Rosas', artist: 'Marina Oscura' },
-  { title: 'Fuga del Sol', artist: 'Ráfaga Dorada' },
-  { title: 'Zarpazo', artist: 'Los Felinos' },
-  { title: 'Lluvia de Agosto', artist: 'Paula Méndez' },
-  { title: 'Cicatriz de Luz', artist: 'Ave Nómada' },
-  { title: 'Frontera Nítida', artist: 'La Ruta Blanca' },
-  { title: 'Boreal', artist: 'Sofía Vega' },
-  { title: 'Eco en la Arena', artist: 'Kilómetro Cero' },
-  { title: 'Puerto Equinox', artist: 'Valiente Prisma' },
-  { title: 'Latido Azul', artist: 'Domo Atlántida' },
-  { title: 'Brisa Mística', artist: 'Isla Tiburón' }
-];
 
 const STATUS_CYCLE = ['Not started', 'Practicing', 'Completed'];
 const DEFAULT_STATUS = STATUS_CYCLE[0];
@@ -491,8 +459,8 @@ function renderSuggestedSongs(onSelect) {
   if (!container) return;
   container.innerHTML = '';
   updateModalButtonsDisabledState();
-  // fallback to sampleSongs if no list provided
-  const sourceSongs = renderSuggestedSongs._lastList || sampleSongs;
+  // fallback to empty list if no list provided
+  const sourceSongs = renderSuggestedSongs._lastList || [];
   const sortedSongs = [...sourceSongs].sort((a, b) => {
     const aTitle = (a.title || '').toString();
     const bTitle = (b.title || '').toString();
@@ -663,13 +631,13 @@ function initAddSongModal() {
       if (modalSongsFetchToken !== fetchToken) {
         return;
       }
-      renderSuggestedSongs._lastList = list.length ? list : sampleSongs;
+      renderSuggestedSongs._lastList = list.length ? list : [];
       renderSuggestedSongs(handleSuggestionSelect);
     }).catch(() => {
       if (modalSongsFetchToken !== fetchToken) {
         return;
       }
-      renderSuggestedSongs._lastList = sampleSongs;
+      renderSuggestedSongs._lastList = [];
       renderSuggestedSongs(handleSuggestionSelect);
     });
     updateModalButtonsDisabledState();
@@ -709,13 +677,13 @@ function initAddSongModal() {
     if (modalSongsFetchToken !== prefetchToken) {
       return;
     }
-    renderSuggestedSongs._lastList = list.length ? list : sampleSongs;
+    renderSuggestedSongs._lastList = list.length ? list : [];
     renderSuggestedSongs(handleSuggestionSelect);
   }).catch(() => {
     if (modalSongsFetchToken !== prefetchToken) {
       return;
     }
-    renderSuggestedSongs._lastList = sampleSongs;
+    renderSuggestedSongs._lastList = [];
     renderSuggestedSongs(handleSuggestionSelect);
   });
 
