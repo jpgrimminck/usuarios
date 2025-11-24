@@ -594,9 +594,9 @@ function setupBackLink() {
   const backLink = document.getElementById('back-to-songs');
   if (!backLink) return;
   if (state.userId) {
-    backLink.href = `../songs.html?id=${encodeURIComponent(state.userId)}`;
+    backLink.href = `../songs/index.html?id=${encodeURIComponent(state.userId)}`;
   } else {
-    backLink.href = '../songs.html';
+    backLink.href = '../songs/index.html';
   }
 }
 

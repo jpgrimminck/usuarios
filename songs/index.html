@@ -1,0 +1,68 @@
+<html><head>
+<meta charset="utf-8"/>
+<meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no"/>
+<link crossorigin="" href="https://fonts.gstatic.com/" rel="preconnect"/>
+<link as="style" href="https://fonts.googleapis.com/css2?display=swap&amp;family=Inter%3Awght%40400%3B500%3B700%3B900&amp;family=Noto+Sans%3Awght%40400%3B500%3B700%3B900" onload="this.rel='stylesheet'" rel="stylesheet"/>
+<link href="https://fonts.googleapis.com/css2?family=Material+Symbols+Outlined" rel="stylesheet"/>
+<title>Stitch Design</title>
+<link href="data:image/x-icon;base64," rel="icon" type="image/x-icon"/>
+<link rel="stylesheet" href="../styles.css"/>
+<link rel="stylesheet" href="songs.css"/>
+</head>
+<body class="bg-gray-900 min-h-screen">
+
+  <!-- Header -->
+  <div id="site-header">
+    <div class="max-w-5xl">
+      <div class="w-12 flex items-center">
+        <button id="back-button" aria-label="Volver">
+          <span class="material-symbols-outlined text-2xl">arrow_back</span>
+        </button>
+      </div>
+      <h1>Canciones</h1>
+      <div class="w-12"></div>
+    </div>
+  </div>
+
+  <!-- Scrollable list area -->
+  <div id="songs-scroll">
+    <div id="songs-container">
+      <!-- cards will be injected here -->
+    </div>
+  </div>
+  
+  <button id="add-song-fab">
+    <span class="material-symbols-outlined text-3xl">add</span>
+  </button>
+  <div id="add-song-modal" class="hidden">
+    <div class="add-song-modal__dialog">
+      <div id="create-mode-back-slot" class="suggested-back-slot" hidden></div>
+      <h2>Songs List</h2>
+      <div class="suggested-wrapper">
+        <div id="create-song-fields-slot" class="suggested-create-fields-slot" hidden></div>
+        <div id="suggested-songs-container" class="suggested-grid"></div>
+      </div>
+      <div class="suggested-actions">
+        <button type="button" id="toggle-create-song" class="suggested-toggle-create">
+          <span class="material-symbols-outlined">add</span>
+          <span>Create a new song</span>
+        </button>
+        <div id="create-song-form" class="suggested-create-form" hidden>
+          <div class="suggested-field">
+            <input type="text" id="new-song-title" class="suggested-input" placeholder="Nuevo título de canción" autocomplete="off"/>
+          </div>
+          <div class="suggested-field">
+            <input type="text" id="new-song-artist" class="suggested-input" placeholder="Nombre del artista" autocomplete="off"/>
+          </div>
+          <button type="button" id="create-new-song" class="suggested-secondary">Add</button>
+        </div>
+        <button type="button" id="add-selected-songs" class="suggested-primary" disabled>Añadir a mi lista</button>
+      </div>
+    </div>
+  </div>
+
+<script src="https://cdn.jsdelivr.net/npm/@supabase/supabase-js@2"></script>
+<script src="../config.js"></script>
+<script src="songs.js"></script>
+</body>
+</html>

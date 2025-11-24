@@ -1,92 +1,3 @@
-<html><head>
-<meta charset="utf-8"/>
-<meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no"/>
-<link crossorigin="" href="https://fonts.gstatic.com/" rel="preconnect"/>
-<link as="style" href="https://fonts.googleapis.com/css2?display=swap&amp;family=Inter%3Awght%40400%3B500%3B700%3B900&amp;family=Noto+Sans%3Awght%40400%3B500%3B700%3B900" onload="this.rel='stylesheet'" rel="stylesheet"/>
-<link href="https://fonts.googleapis.com/css2?family=Material+Symbols+Outlined" rel="stylesheet"/>
-<title>Stitch Design</title>
-<link href="data:image/x-icon;base64," rel="icon" type="image/x-icon"/>
-<link rel="stylesheet" href="styles.css"/>
-<style>
-      :root {
-        --primary-color: #137fec;
-      }
-      body {
-        font-family: 'Inter', sans-serif;
-      }
-      * {
-        touch-action: pan-y pan-x;
-      }
-      body, html {
-        touch-action: manipulation;
-      }
-    </style>
-<style>
-    body {
-      min-height: max(884px, 100dvh);
-    }
-  </style>
-<style>
-    body {
-      min-height: max(884px, 100dvh);
-    }
-  </style>
-  </head>
-<body class="bg-gray-900 min-h-screen">
-
-  <!-- Header -->
-  <div id="site-header" class="bg-gray-900 border-b border-gray-800">
-    <div class="max-w-5xl mx-auto flex items-center p-4 pb-2 justify-between">
-      <div class="w-12 flex items-center">
-        <button id="back-button" aria-label="Volver" class="flex items-center justify-center rounded-full h-10 w-10 text-white hover:bg-white/10 transition-colors">
-          <span class="material-symbols-outlined text-2xl">arrow_back</span>
-        </button>
-      </div>
-      <h1 class="text-xl font-bold leading-tight tracking-tight flex-1 text-center text-white">Canciones</h1>
-      <div class="w-12"></div>
-    </div>
-  </div>
-
-  <!-- Scrollable list area -->
-  <div id="songs-scroll" class="overflow-y-auto" style="height: calc(100vh - 60px); -webkit-overflow-scrolling: touch;">
-    <div id="songs-container" class="flex flex-col songs-list max-w-5xl mx-auto" style="padding: 16px 0 120px 0;">
-      <!-- cards will be injected here -->
-    </div>
-  </div>
-  
-  <button id="add-song-fab" class="fixed bg-blue-500 hover:bg-blue-700 text-white rounded-full flex items-center justify-center" style="bottom:24px; right:24px; width:56px; height:56px; z-index:25;">
-    <span class="material-symbols-outlined text-3xl">add</span>
-  </button>
-  <div id="add-song-modal" class="fixed inset-0 bg-black bg-opacity-50 flex items-center justify-center hidden" style="z-index:30;">
-    <div class="add-song-modal__dialog bg-gray-800 p-6 rounded-lg text-white w-full" style="max-width:350px; position:relative;">
-      <div id="create-mode-back-slot" class="suggested-back-slot" hidden></div>
-      <h2 class="text-xl font-bold" style="margin:0 0 16px 0; text-align:center;">Songs List</h2>
-      <div class="suggested-wrapper">
-        <div id="create-song-fields-slot" class="suggested-create-fields-slot" hidden></div>
-        <div id="suggested-songs-container" class="suggested-grid"></div>
-      </div>
-      <div class="suggested-actions">
-        <button type="button" id="toggle-create-song" class="suggested-toggle-create">
-          <span class="material-symbols-outlined">add</span>
-          <span>Create a new song</span>
-        </button>
-        <div id="create-song-form" class="suggested-create-form" hidden>
-          <div class="suggested-field">
-            <input type="text" id="new-song-title" class="suggested-input" placeholder="Nuevo título de canción" autocomplete="off"/>
-          </div>
-          <div class="suggested-field">
-            <input type="text" id="new-song-artist" class="suggested-input" placeholder="Nombre del artista" autocomplete="off"/>
-          </div>
-          <button type="button" id="create-new-song" class="suggested-secondary">Add</button>
-        </div>
-        <button type="button" id="add-selected-songs" class="suggested-primary" disabled>Añadir a mi lista</button>
-      </div>
-    </div>
-  </div>
-
-<script src="https://cdn.jsdelivr.net/npm/@supabase/supabase-js@2"></script>
-<script src="config.js"></script>
-<script>
 const supabase = window.supabase.createClient(window.SUPABASE_URL, window.SUPABASE_ANON_KEY);
 const urlParams = new URLSearchParams(window.location.search);
 const selectedUserId = urlParams.get('id');
@@ -1071,18 +982,18 @@ async function loadSongs() {
       if (selectedUserId) {
         audioParams.set('id', selectedUserId);
       }
-  songElement.href = `audios/audios.html?${audioParams.toString()}`;
-      songElement.className = 'song-card flex items-center gap-4 px-4 py-3 hover:bg-white/5 transition-colors duration-200';
+  songElement.href = `../audios/audios.html?${audioParams.toString()}`;
+      songElement.className = 'song-card';
       const statusTag = statusBySongId.get(song.id) || DEFAULT_STATUS;
       const statusClassSuffix = normalizeStatusTag(statusTag);
       const statusButtonHtml = selectedUserId
         ? `<button type="button" class="song-status-button song-status-button--${statusClassSuffix}" data-song-id="${song.id}" data-status="${statusTag}">${statusTag}</button>`
         : '';
       songElement.innerHTML = `
-        <div class="bg-[var(--primary-color)] flex items-center justify-center text-white font-bold text-xl rounded-lg size-20">${firstLetter}</div>
-        <div class="flex-1">
-          <p class="text-white text-base font-medium leading-normal">${songTitle}</p>
-          <p class="text-gray-400 text-sm font-normal leading-normal">${artistName}</p>
+        <div class="song-icon">${firstLetter}</div>
+        <div class="song-info">
+          <p class="song-title">${songTitle}</p>
+          <p class="song-artist">${artistName}</p>
         </div>
         ${statusButtonHtml}
       `;
@@ -1128,8 +1039,7 @@ updateSongsTitle();
 updateModalButtonsDisabledState();
 initAddSongModal();
 initSongsRealtime();
-</script>
-<script>
+
 // Back button behavior: try history.back(), fallback to index.html
 document.addEventListener('DOMContentLoaded', function () {
   const backBtn = document.getElementById('back-button');
@@ -1139,9 +1049,8 @@ document.addEventListener('DOMContentLoaded', function () {
     // Always navigate back to index.html (preserve id if present) using replace
     const params = new URLSearchParams(window.location.search);
     const id = params.get('id');
-    const target = id ? `index.html?id=${encodeURIComponent(id)}` : 'index.html';
+    const target = id ? `../index.html?id=${encodeURIComponent(id)}` : '../index.html';
     // Use replace so this navigation doesn't create a new history entry
     window.location.replace(target);
   });
 });
-</script>

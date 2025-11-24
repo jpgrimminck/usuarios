@@ -146,7 +146,7 @@
       if (resolvedEmail && id) {
         await registerAccess(resolvedEmail, id);
       }
-      window.location.href = `../songs.html?id=${id}`;
+      window.location.href = `../songs/index.html?id=${id}`;
     };
     if (animate) {
       setTimeout(() => {
