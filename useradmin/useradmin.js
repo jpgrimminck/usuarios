@@ -2,8 +2,6 @@ const supabase = window.supabase.createClient(window.SUPABASE_URL, window.SUPABA
 let pendingId = null;
 let selectedUserId = null;
 let timeInterval;
-// Ajuste horario para mostrar la hora local (ej: UTC-3). Cambia este valor si tu zona es distinta.
-const DISPLAY_TIME_OFFSET_HOURS = 3; // resta 3 horas al horario UTC recibido
 
 function updateAccessButton() {
   const btn = document.getElementById('dar-acceso');
@@ -44,12 +42,6 @@ async function loadUserCards() {
     if (assignmentsError) {
       console.error(assignmentsError);
     } else if (assignments && assignments.length > 0) {
-      const debugAssignmentsUser7 = assignments.filter((assignment) => assignment?.selected_user_id === 7);
-      if (debugAssignmentsUser7.length > 0) {
-        console.log('Debug user 7 assignments:', debugAssignmentsUser7);
-      } else {
-        console.log('Debug user 7 assignments: none found');
-      }
       assignments.forEach((assignment) => {
         if (!assignment?.selected_user_id) return;
         const list = assignmentsMap.get(assignment.selected_user_id) || [];
