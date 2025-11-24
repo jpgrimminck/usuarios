@@ -1,0 +1,23 @@
+<!DOCTYPE html>
+<html lang="es">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no">
+  <title>Admin de Usuarios</title>
+  <link rel="stylesheet" href="../styles.css">
+  <link rel="stylesheet" href="useradmin.css">
+  <script src="https://cdn.jsdelivr.net/npm/@supabase/supabase-js@2"></script>
+  <script src="../config.js"></script>
+</head>
+<body class="admin-body">
+  <div id="ip-request" class="admin-header">No hay solicitudes pendientes</div>
+  <div id="users-cards" class="users-grid"></div>
+  <div class="admin-footer">
+    <div id="time-ago" class="admin-time"></div>
+    <button id="dar-acceso" class="access-btn">
+      Dar acceso
+    </button>
+  </div>
+  <script src="useradmin.js"></script>
+</body>
+</html>

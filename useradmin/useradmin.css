@@ -1,0 +1,84 @@
+/* useradmin.css */
+
+.admin-body {
+  background-color: #111827;
+  color: #ffffff;
+  display: flex;
+  flex-direction: column;
+  height: 100vh;
+}
+
+.admin-header {
+  text-align: left;
+  font-size: 1.125rem;
+  line-height: 1.75rem;
+  padding: 1rem;
+  background-color: #1f2937;
+  position: fixed;
+  top: 0;
+  width: 100%;
+  z-index: 10;
+}
+
+.users-grid {
+  flex: 1 1 0%;
+  overflow-y: auto;
+  padding: 1rem;
+  padding-top: 10rem;
+  padding-bottom: 8rem;
+  display: grid;
+  grid-template-columns: repeat(1, minmax(0, 1fr));
+  gap: 1rem;
+}
+
+@media (min-width: 768px) {
+  .users-grid {
+    grid-template-columns: repeat(2, minmax(0, 1fr));
+  }
+}
+
+@media (min-width: 1024px) {
+  .users-grid {
+    grid-template-columns: repeat(3, minmax(0, 1fr));
+  }
+}
+
+.admin-footer {
+  position: fixed;
+  bottom: 0;
+  width: 100%;
+  background-color: #111827;
+  padding: 1rem;
+  border-top-width: 1px;
+  border-color: #374151;
+}
+
+.admin-time {
+  text-align: center;
+  margin-bottom: 0.5rem;
+}
+
+.access-btn {
+  background-color: #6b7280;
+  color: #ffffff;
+  font-weight: 700;
+  padding-top: 0.5rem;
+  padding-bottom: 0.5rem;
+  padding-left: 1rem;
+  padding-right: 1rem;
+  border-radius: 0.25rem;
+  width: 100%;
+  transition: background-color 0.2s;
+}
+
+.access-btn:hover {
+  background-color: #374151;
+}
+
+.access-btn.ready {
+  background-color: #22c55e;
+}
+
+.access-btn.ready:hover {
+  background-color: #15803d;
+}
