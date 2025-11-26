@@ -1,5 +1,10 @@
-export const STATUS_CYCLE = ['Not started', 'Practicing', 'Completed'];
-export const DEFAULT_STATUS = STATUS_CYCLE[0];
+export const STATUS_MAP = {
+  1: 'No iniciado',
+  2: 'En práctica',
+  3: 'Completado'
+};
+export const STATUS_CYCLE = [1, 2, 3];
+export const DEFAULT_STATUS = 1;
 
 let supabaseClient = null;
 let normalizedUserId = null;
@@ -26,24 +31,33 @@ export function setNormalizedUserId(value) {
   normalizedUserId = value ?? null;
 }
 
-function normalizeStatusTag(value) {
-  return (value || '').toLowerCase().replace(/\s+/g, '-');
+export function normalizeStatusTag(value) {
+  const val = Number(value);
+  const label = STATUS_MAP[val] || STATUS_MAP[DEFAULT_STATUS];
+  return label.toLowerCase()
+    .normalize("NFD").replace(/[\u0300-\u036f]/g, "")
+    .replace(/\s+/g, '-');
 }
 
-function getNextStatusTag(currentStatus) {
-  const index = STATUS_CYCLE.indexOf(currentStatus);
+export function getNextStatusTag(currentStatus) {
+  const val = Number(currentStatus);
+  const index = STATUS_CYCLE.indexOf(val);
   if (index === -1 || index === STATUS_CYCLE.length - 1) {
     return STATUS_CYCLE[0];
   }
   return STATUS_CYCLE[index + 1];
 }
 
-function applyStatusStyles(button, statusTag) {
+export function applyStatusStyles(button, statusTag) {
   if (!button) return;
-  const resolvedStatus = STATUS_CYCLE.includes(statusTag) ? statusTag : DEFAULT_STATUS;
+  const val = Number(statusTag);
+  const resolvedStatus = STATUS_CYCLE.includes(val) ? val : DEFAULT_STATUS;
+  const label = STATUS_MAP[resolvedStatus];
   const normalized = normalizeStatusTag(resolvedStatus);
-  button.textContent = resolvedStatus;
+  
+  button.textContent = label;
   button.dataset.status = resolvedStatus;
+  
   STATUS_CYCLE.forEach((state) => {
     button.classList.remove(`song-status-button--${normalizeStatusTag(state)}`);
   });
@@ -77,7 +91,9 @@ async function fetchUserSongStatusTag(songId) {
   if (!normalizedUserId || songId === null || songId === undefined) {
     return null;
   }
+  // Ensure songId is treated as a number for the query if it looks like one
   const normalizedSongId = coerceNumericId(songId);
+  
   const { data, error } = await supabaseClient
     .from('user_songs')
     .select('status_tag')
@@ -101,13 +117,17 @@ async function persistUserSongStatus(songId, nextStatus) {
     throw new Error('No user selected.');
   }
   const normalizedSongId = coerceNumericId(songId);
+  
+  // Use upsert to handle both existing and new rows
   const { data, error } = await supabaseClient
     .from('user_songs')
-    .update({ status_tag: nextStatus })
-    .eq('user_id', normalizedUserId)
-    .eq('song_id', normalizedSongId)
+    .upsert({ 
+      user_id: normalizedUserId, 
+      song_id: normalizedSongId, 
+      status_tag: nextStatus 
+    }, { onConflict: 'user_id, song_id' })
     .select('status_tag')
-    .maybeSingle();
+    .single();
 
   if (error) {
     throw error;
@@ -140,7 +160,8 @@ export async function refreshSongStatusUi(songId) {
     if (songStatusFetchToken !== fetchToken) {
       return;
     }
-    currentSongStatus = STATUS_CYCLE.includes(statusTag) ? statusTag : DEFAULT_STATUS;
+    const val = Number(statusTag);
+    currentSongStatus = STATUS_CYCLE.includes(val) ? val : DEFAULT_STATUS;
     applyStatusStyles(songStatusUi.button, currentSongStatus);
     songStatusUi.container.hidden = false;
   } catch (err) {
@@ -182,7 +203,7 @@ export function initSongStatusControls() {
       return;
     }
 
-    const currentStatus = songStatusUi.button.dataset.status || currentSongStatus || DEFAULT_STATUS;
+    const currentStatus = Number(songStatusUi.button.dataset.status) || currentSongStatus || DEFAULT_STATUS;
     const nextStatus = getNextStatusTag(currentStatus);
 
     applyStatusStyles(songStatusUi.button, nextStatus);
@@ -190,7 +211,8 @@ export function initSongStatusControls() {
 
     try {
       const persisted = await persistUserSongStatus(songId, nextStatus);
-      currentSongStatus = STATUS_CYCLE.includes(persisted) ? persisted : DEFAULT_STATUS;
+      const val = Number(persisted);
+      currentSongStatus = STATUS_CYCLE.includes(val) ? val : DEFAULT_STATUS;
       applyStatusStyles(songStatusUi.button, currentSongStatus);
       if (songStatusUi.container) {
         songStatusUi.container.hidden = false;

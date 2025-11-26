@@ -1,3 +1,12 @@
+import {
+  STATUS_MAP,
+  STATUS_CYCLE,
+  DEFAULT_STATUS,
+  normalizeStatusTag,
+  getNextStatusTag,
+  applyStatusStyles
+} from '../audios/status.js';
+
 const supabase = window.supabase.createClient(window.SUPABASE_URL, window.SUPABASE_ANON_KEY);
 const urlParams = new URLSearchParams(window.location.search);
 
@@ -15,8 +24,6 @@ function getStoredUserId() {
 const selectedUserId = urlParams.get('id') || getStoredUserId();
 let songsRefreshTimeoutId = null;
 
-const STATUS_CYCLE = ['Not started', 'Practicing', 'Completed'];
-const DEFAULT_STATUS = STATUS_CYCLE[0];
 const selectedLibrarySongs = new Map();
 let modalWorking = false;
 let modalSongsFetchToken = 0;
@@ -333,29 +340,9 @@ function scrollSuggestedSongIntoView(songKey, attempt = 0) {
   setTimeout(() => target.classList.remove('suggested-card--recent'), 1400);
 }
 
-function normalizeStatusTag(value) {
-  return (value || '').toLowerCase().replace(/\s+/g, '-');
-}
-
-function getNextStatusTag(currentStatus) {
-  const index = STATUS_CYCLE.indexOf(currentStatus);
-  if (index === -1 || index === STATUS_CYCLE.length - 1) {
-    return STATUS_CYCLE[0];
-  }
-  return STATUS_CYCLE[index + 1];
-}
-
-function applyStatusStyles(button, statusTag) {
-  if (!button) return;
-  const resolvedStatus = STATUS_CYCLE.includes(statusTag) ? statusTag : DEFAULT_STATUS;
-  const normalized = normalizeStatusTag(resolvedStatus);
-  button.textContent = resolvedStatus;
-  button.dataset.status = resolvedStatus;
-  STATUS_CYCLE.forEach(state => {
-    button.classList.remove(`song-status-button--${normalizeStatusTag(state)}`);
-  });
-  button.classList.add(`song-status-button--${normalized}`);
-}
+// ...existing code...
+// Removed duplicate functions as they are now imported
+// ...existing code...
 
 async function persistStatusTag(songId, nextStatus) {
   const query = supabase
@@ -966,8 +953,9 @@ async function loadSongs() {
       songElement.className = 'song-card';
       const statusTag = statusBySongId.get(song.id) || DEFAULT_STATUS;
       const statusClassSuffix = normalizeStatusTag(statusTag);
+      const statusLabel = STATUS_MAP[statusTag] || STATUS_MAP[DEFAULT_STATUS];
       const statusButtonHtml = selectedUserId
-        ? `<button type="button" class="song-status-button song-status-button--${statusClassSuffix}" data-song-id="${song.id}" data-status="${statusTag}">${statusTag}</button>`
+        ? `<button type="button" class="song-status-button song-status-button--${statusClassSuffix}" data-song-id="${song.id}" data-status="${statusTag}">${statusLabel}</button>`
         : '';
       songElement.innerHTML = `
         <div class="song-icon">${firstLetter}</div>
@@ -983,7 +971,7 @@ async function loadSongs() {
         statusButton.addEventListener('click', async (event) => {
           event.preventDefault();
           event.stopPropagation();
-          const currentStatus = statusButton.dataset.status || DEFAULT_STATUS;
+          const currentStatus = Number(statusButton.dataset.status) || DEFAULT_STATUS;
           const nextStatus = getNextStatusTag(currentStatus);
           statusButton.disabled = true;
           applyStatusStyles(statusButton, nextStatus);

@@ -618,13 +618,25 @@ function handleBeforeUnload() {
   }
 }
 
+function getStoredUserId() {
+  try {
+    const raw = window.localStorage.getItem('usuarios:authorizedProfile');
+    if (!raw) return null;
+    const payload = JSON.parse(raw);
+    return payload?.userId || null;
+  } catch (e) {
+    return null;
+  }
+}
+
 export function initializeCards(options = {}) {
   state.supabase = options.supabase;
   state.urlParams = options.urlParams || new URLSearchParams(window.location.search);
-  state.userId = options.userId ?? state.urlParams.get('id');
+  state.userId = options.userId ?? state.urlParams.get('id') ?? getStoredUserId();
   state.title = options.title ?? state.urlParams.get('title');
   state.songIdParam = options.songIdParam ?? state.urlParams.get('songId');
-  state.normalizedUserId = coerceNumericId(state.userId);
+  // Do not coerce user ID to number, keep it as is to match songs.js behavior
+  state.normalizedUserId = state.userId;
 
   initializePlaybackControls({
     supabase: state.supabase,
