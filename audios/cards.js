@@ -299,6 +299,17 @@ function buildAudioCard(audio) {
 
 async function loadAudios(options = {}) {
   const { skipRealtimeSetup = false } = options;
+
+  // Ensure we have a user ID, falling back to local storage if needed
+  if (!state.normalizedUserId) {
+    const stored = getStoredUserId();
+    if (stored) {
+      state.normalizedUserId = stored;
+      state.userId = stored;
+      setNormalizedUserId(stored);
+    }
+  }
+
   const headingEl = document.querySelector('h2');
   let headingTitle = state.title || '';
   let songId = state.songIdParam ? Number(state.songIdParam) : null;
@@ -417,7 +428,8 @@ async function loadAudios(options = {}) {
     const otherAudios = [];
     
     audios.forEach((audio) => {
-      if (state.normalizedUserId && audio.uploader_id === state.normalizedUserId) {
+      // Use string comparison to handle potential type mismatches (string vs number)
+      if (state.normalizedUserId && String(audio.uploader_id) === String(state.normalizedUserId)) {
         userAudios.push(audio);
       } else {
         otherAudios.push(audio);

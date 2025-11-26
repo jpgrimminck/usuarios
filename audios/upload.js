@@ -283,17 +283,17 @@ export function updateRecorderUi() {
       // Recording in progress - show red square with "Stop"
       elements.toggleButton.classList.remove('recorder-button--round', 'recorder-button--primary', 'recorder-button--success');
       elements.toggleButton.classList.add('recorder-button--square', 'recorder-button--primary');
-      elements.toggleButton.textContent = 'Stop';
+      elements.toggleButton.textContent = 'Detener';
     } else if (hasRecording) {
       // Recording stopped - show green square with "Save"
       elements.toggleButton.classList.remove('recorder-button--round', 'recorder-button--primary');
       elements.toggleButton.classList.add('recorder-button--square', 'recorder-button--success');
-      elements.toggleButton.textContent = 'Save';
+      elements.toggleButton.textContent = 'Guardar';
     } else {
       // Initial state - show red circle with "Record"
       elements.toggleButton.classList.remove('recorder-button--square', 'recorder-button--success');
       elements.toggleButton.classList.add('recorder-button--round', 'recorder-button--primary');
-      elements.toggleButton.textContent = 'Record';
+      elements.toggleButton.textContent = 'Grabar';
     }
   }
 
