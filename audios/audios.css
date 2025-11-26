@@ -51,7 +51,30 @@
 }
 
 .audio-page main {
-  padding-bottom: 320px;
+  flex: 1;
+  overflow-y: auto;
+  height: auto;
+}
+
+.audio-page main .space-y-4 {
+  padding-bottom: 260px;
+}
+
+.audio-page {
+  height: 100dvh;
+  overflow: hidden;
+}
+
+.audio-page .group\/design-root {
+  height: 100%;
+  overflow: hidden;
+}
+
+.audio-page .group\/design-root > div:first-child {
+  height: 100%;
+  display: flex;
+  flex-direction: column;
+  overflow: hidden;
 }
 
 .audio-card__controls [data-role="play-button"] {

@@ -4,7 +4,10 @@
 
 body {
   font-family: 'Inter', sans-serif;
-  min-height: max(884px, 100dvh);
+  height: 100dvh;
+  display: flex;
+  flex-direction: column;
+  overflow: hidden;
 }
 
 * {
@@ -64,7 +67,8 @@ body, html {
 /* Songs List */
 #songs-scroll {
   overflow-y: auto;
-  height: calc(100vh - 60px);
+  flex: 1;
+  height: auto;
   -webkit-overflow-scrolling: touch;
 }
 
