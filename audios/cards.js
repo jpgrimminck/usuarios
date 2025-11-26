@@ -140,7 +140,7 @@ async function fetchSongAudiosByCandidates(songId) {
     try {
       const { data, error } = await state.supabase
         .from('audios')
-        .select('id, instrument, name, url, uploader_id')
+        .select('id, name, url, uploader_id')
         .eq(column, songId)
         .order('name', { ascending: true });
 
@@ -257,7 +257,7 @@ function buildAudioCard(audio) {
   container.innerHTML = `
     <div class="audio-card__header">
       <p class="audio-card__title text-lg font-semibold text-white">
-        ${audio.name || audio.instrument || 'Audio sin nombre'}
+        ${audio.name || 'Audio sin nombre'}
         ${formatLabel ? `<span class="ml-2 inline-flex items-center rounded-full bg-gray-700 px-2 py-0.5 text-[0.6rem] font-semibold uppercase tracking-wide text-blue-300 audio-card__format">${formatLabel}</span>` : ''}
       </p>
       <div class="audio-card__controls" data-role="controls">
@@ -426,8 +426,8 @@ async function loadAudios(options = {}) {
 
     // Sort both arrays alphabetically by name
     const sortByName = (a, b) => {
-      const nameA = (a.name || a.instrument || '').toLowerCase();
-      const nameB = (b.name || b.instrument || '').toLowerCase();
+      const nameA = (a.name || '').toLowerCase();
+      const nameB = (b.name || '').toLowerCase();
       return nameA.localeCompare(nameB);
     };
     

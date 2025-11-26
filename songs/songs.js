@@ -1,6 +1,18 @@
 const supabase = window.supabase.createClient(window.SUPABASE_URL, window.SUPABASE_ANON_KEY);
 const urlParams = new URLSearchParams(window.location.search);
-const selectedUserId = urlParams.get('id');
+
+function getStoredUserId() {
+  try {
+    const raw = window.localStorage.getItem('usuarios:authorizedProfile');
+    if (!raw) return null;
+    const payload = JSON.parse(raw);
+    return payload?.userId || null;
+  } catch (e) {
+    return null;
+  }
+}
+
+const selectedUserId = urlParams.get('id') || getStoredUserId();
 let songsRefreshTimeoutId = null;
 
 const STATUS_CYCLE = ['Not started', 'Practicing', 'Completed'];
@@ -200,7 +212,7 @@ function setCreateMode(enable) {
   if (modalTitle) {
     modalTitle.style.display = '';
     modalTitle.setAttribute('aria-hidden', 'false');
-    modalTitle.textContent = shouldEnable ? 'Create New Song' : 'Songs List';
+    modalTitle.textContent = shouldEnable ? 'Crear Canción' : 'Lista de Canciones';
   }
 
   if (addButton && shouldEnable) {
@@ -218,7 +230,7 @@ function setCreateMode(enable) {
     if (text) {
       text.style.display = shouldEnable ? 'none' : '';
       if (!shouldEnable) {
-        text.textContent = 'Create a new song';
+        text.textContent = 'Crear Canción';
       }
     }
     if (icon) {
@@ -1016,7 +1028,7 @@ document.addEventListener('DOMContentLoaded', function () {
     e.preventDefault();
     // Always navigate back to index.html (preserve id if present) using replace
     const params = new URLSearchParams(window.location.search);
-    const id = params.get('id');
+    const id = params.get('id') || selectedUserId;
     const target = id ? `../index.html?id=${encodeURIComponent(id)}` : '../index.html';
     // Use replace so this navigation doesn't create a new history entry
     window.location.replace(target);

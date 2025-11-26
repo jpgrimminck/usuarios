@@ -6,7 +6,6 @@ const fileInput = document.getElementById('audio-file');
 const audioIdInput = document.getElementById('audio-id');
 const fileNameInput = document.getElementById('file-name');
 const uploaderSelect = document.getElementById('uploader');
-const instrumentSelect = document.getElementById('instrument');
 const detailSelect = document.getElementById('detail');
 const songSelect = document.getElementById('song-id');
 const submitBtn = document.getElementById('submit-btn');
@@ -180,7 +179,6 @@ form.addEventListener('submit', async (event) => {
   event.preventDefault();
   clearMessage();
   const file = fileInput.files && fileInput.files[0];
-  const instrumentValue = instrumentSelect.value;
   const detailValue = detailSelect.value;
   const nombreCancionId = songSelect.value;
   const uploaderId = uploaderSelect.value;
@@ -190,7 +188,7 @@ form.addEventListener('submit', async (event) => {
     return;
   }
 
-  if (!instrumentValue || !detailValue || !nombreCancionId || !uploaderId) {
+  if (!detailValue || !nombreCancionId || !uploaderId) {
     showMessage('error', 'Completa todos los campos obligatorios.');
     return;
   }
@@ -223,7 +221,6 @@ form.addEventListener('submit', async (event) => {
       .insert({
         id: audioId,
         relational_song_id: nombreCancionId,
-        instrument: instrumentValue,
         detail: detailValue,
         name: file.name,
         uploader_id: uploaderId,
