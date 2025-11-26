@@ -35,6 +35,7 @@ import {
 const AUDIO_BUCKET = 'audios';
 const AUDIO_SONG_COLUMN_CANDIDATES = ['relational_song_id', 'song_id', 'cancion_id'];
 const SEEK_OFFSET_SECONDS = 3;
+const SHOW_AUDIO_EXTENSION = false; // Set to false to hide audio extensions in the UI
 
 const state = {
   supabase: null,
@@ -244,6 +245,7 @@ function buildAudioCard(audio) {
   container.className = 'audio-card flex flex-col gap-4 rounded-lg bg-gray-800 p-4';
   container.dataset.audioId = audio.id;
   const formatLabel = (() => {
+    if (!SHOW_AUDIO_EXTENSION) return null;
     const rawUrl = typeof audio.url === 'string' ? audio.url : '';
     if (!rawUrl.includes('.')) return null;
     const withoutQuery = rawUrl.split('?')[0];
