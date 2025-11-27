@@ -260,12 +260,15 @@ function setModalWorkingState(isWorking) {
 }
 
 function resetNewSongForm() {
-  const { titleInput, artistInput } = getModalElements();
+  const { titleInput, artistInput, createButton } = getModalElements();
   if (titleInput) {
     titleInput.value = '';
   }
   if (artistInput) {
     artistInput.value = '';
+  }
+  if (createButton) {
+    createButton.classList.remove('suggested-secondary--active');
   }
   setCreateMode(false);
   lastCreatedSongId = null;
@@ -608,6 +611,24 @@ function initAddSongModal() {
   const newSongArtistInput = document.getElementById('new-song-artist');
   const toggleCreateButton = document.getElementById('toggle-create-song');
   const createSongForm = document.getElementById('create-song-form');
+
+  function updateCreateButtonState() {
+    if (!createSongButton || !newSongTitleInput || !newSongArtistInput) return;
+    const title = newSongTitleInput.value.trim();
+    const artist = newSongArtistInput.value.trim();
+    if (title && artist) {
+      createSongButton.classList.add('suggested-secondary--active');
+    } else {
+      createSongButton.classList.remove('suggested-secondary--active');
+    }
+  }
+
+  if (newSongTitleInput) {
+    newSongTitleInput.addEventListener('input', updateCreateButtonState);
+  }
+  if (newSongArtistInput) {
+    newSongArtistInput.addEventListener('input', updateCreateButtonState);
+  }
 
   const handleSuggestionSelect = (song) => {
     if (!song) return;

@@ -410,10 +410,10 @@ img {
   position: relative;
   width: min(92vw, 360px);
   max-height: min(85vh, 520px);
-  min-height: 340px;
+  min-height: 250px;
   display: flex;
   flex-direction: column;
-  gap: 16px;
+  gap: 0px;
   box-shadow: 0 24px 48px rgba(0, 0, 0, 0.35);
   overflow: hidden;
   overflow-y: auto;
@@ -628,7 +628,8 @@ img {
   display: flex;
   flex-direction: column;
   gap: 0.75rem;
-  margin-bottom: 0.75rem;
+  margin-bottom: 0rem;
+ /* border: 4px solid green !important; /* DEBUG: List container */
 }
 
 .suggested-create-fields-slot[hidden] {
@@ -793,8 +794,10 @@ img {
 
 .suggested-back-slot {
   position: absolute;
-  top: 16px;
-  left: 16px;
+  top: 6px;
+  left: 1rem;
+  height: 100%;
+  max-height: 60px; /* Altura aproximada del header del modal */
   display: none;
   align-items: center;
   justify-content: flex-start;
@@ -819,6 +822,7 @@ img {
   font-size: 0.9rem;
   transition: background-color 0.2s ease, transform 0.15s ease;
   cursor: pointer;
+  
 }
 
 .suggested-toggle-create:hover {
@@ -837,12 +841,13 @@ img {
   border-radius: 9999px;
   padding: 0;
   gap: 0;
-  background-color: rgba(31, 41, 55, 0.9);
-  border-color: rgba(148, 163, 184, 0.2);
+  background-color: transparent !important;
+  border: none !important;
+  box-shadow: none !important;
 }
 
 .suggested-toggle-create--back:hover {
-  background-color: rgba(55, 65, 81, 0.9);
+  background-color: rgba(55, 65, 81, 0.5);
 }
 
 .suggested-toggle-create--back .material-symbols-outlined {
@@ -858,6 +863,7 @@ img {
   flex-direction: column;
   gap: 0;
   width: 100%;
+  
 }
 
 .suggested-create-form:not([hidden]) {
@@ -868,12 +874,14 @@ img {
   width: 100%;
   display: inline-flex;
   justify-content: center;
+  
 }
 
 .suggested-field {
   display: flex;
   flex-direction: column;
   gap: 0.25rem;
+  
 }
 
 .suggested-input {
@@ -885,6 +893,7 @@ img {
   padding: 0.6rem 0.75rem;
   font-size: 0.9rem;
   transition: border-color 0.2s ease, box-shadow 0.2s ease;
+
 }
 
 .suggested-input::placeholder {

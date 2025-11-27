@@ -140,6 +140,7 @@ body, html {
   font-weight: 700;
   margin: 0 0 16px 0;
   text-align: center;
+  padding-bottom: 1rem;
 }
 
 /* Suggested Songs */
@@ -257,6 +258,7 @@ body, html {
   border: 1px solid #4b5563;
   color: #d1d5db;
   transition: background-color 0.2s;
+  height:50px;
 }
 
 .suggested-toggle-create:hover {
@@ -308,7 +310,7 @@ body, html {
 }
 
 .suggested-field {
-  margin-bottom: 1rem;
+  margin-bottom: 0.5rem;
 }
 
 .suggested-input {
@@ -318,6 +320,7 @@ body, html {
   background-color: #374151;
   border: 1px solid #4b5563;
   color: #ffffff;
+  
 }
 
 .suggested-secondary {
@@ -326,8 +329,16 @@ body, html {
   padding: 0.5rem 1rem;
   border-radius: 0.25rem;
   width: 100%;
-  margin-top: 0.5rem;
-  
+  height: 50px;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  margin-top: 0;
+  transition: background-color 0.2s;
+}
+
+.suggested-secondary--active {
+  background-color: #3b82f6;
 }
 
 .suggested-primary {
@@ -336,7 +347,11 @@ body, html {
   padding: 0.5rem 1rem;
   border-radius: 0.25rem;
   width: 100%;
-  margin-top: 0.5rem;
+  height: 50px;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  
 }
 
 .suggested-primary:disabled {
