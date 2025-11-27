@@ -518,6 +518,14 @@
       modalEl.addEventListener('click', (e) => {
         if (e.target === e.currentTarget) {
           e.currentTarget.classList.add('hidden');
+
+          const emailInput = document.getElementById('email-input');
+          if (emailInput) emailInput.blur();
+          const viewport = document.querySelector('meta[name="viewport"]');
+          if (viewport) {
+            viewport.setAttribute('content', 'width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no');
+            setTimeout(() => viewport.setAttribute('content', 'width=device-width, initial-scale=1.0'), 100);
+          }
         }
       });
     }
