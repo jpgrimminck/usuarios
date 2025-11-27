@@ -96,6 +96,10 @@
     btn.innerHTML = 'Practicar';
     btn.onclick = () => {
       document.getElementById('modal').classList.remove('hidden');
+      const emailInput = document.getElementById('email-input');
+      if (emailInput) {
+        emailInput.focus();
+      }
     };
     updatePracticeButtonVisibility();
     updateEmailDisplay();
@@ -543,6 +547,15 @@
     if (solicitarBtn) {
       solicitarBtn.addEventListener('click', async () => {
         const emailInput = document.getElementById('email-input');
+
+        // Reset zoom and hide keyboard
+        if (emailInput) emailInput.blur();
+        const viewport = document.querySelector('meta[name="viewport"]');
+        if (viewport) {
+          viewport.setAttribute('content', 'width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no');
+          setTimeout(() => viewport.setAttribute('content', 'width=device-width, initial-scale=1.0'), 100);
+        }
+
         const email = emailInput ? emailInput.value.trim() : '';
         if (!email) {
           alert('Por favor, ingresa tu email');
