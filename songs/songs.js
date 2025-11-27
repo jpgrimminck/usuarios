@@ -958,7 +958,6 @@ async function loadSongs() {
         ? `<button type="button" class="song-status-button song-status-button--${statusClassSuffix}" data-song-id="${song.id}" data-status="${statusTag}">${statusLabel}</button>`
         : '';
       songElement.innerHTML = `
-        <div class="song-icon">${firstLetter}</div>
         <div class="song-info">
           <p class="song-title">${songTitle}</p>
           <p class="song-artist">${artistName}</p>

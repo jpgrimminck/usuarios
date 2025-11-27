@@ -283,20 +283,6 @@ body, html {
 
 }
 
-.song-icon {
-  background-color: var(--primary-color);
-  display: flex;
-  align-items: center;
-  justify-content: center;
-  color: #ffffff;
-  font-weight: 700;
-  font-size: 1.25rem;
-  border-radius: 0.5rem;
-  width: 5rem;
-  height: 5rem;
-  flex-shrink: 0;
-}
-
 .song-info {
   flex: 1 1 0%;
   min-width: 0;
