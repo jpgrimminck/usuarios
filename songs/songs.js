@@ -88,7 +88,6 @@ function getModalElements() {
     artistInput: document.getElementById('new-song-artist'),
     toggleButton: document.getElementById('toggle-create-song'),
     createForm: document.getElementById('create-song-form'),
-    suggestedWrapper: document.querySelector('.suggested-wrapper'),
     createFieldsSlot: document.getElementById('create-song-fields-slot'),
     toggleBackSlot: document.getElementById('create-mode-back-slot'),
     modalTitle: document.querySelector('#add-song-modal h2'),
@@ -134,7 +133,6 @@ function setCreateMode(enable) {
     toggleButton,
     addButton,
     createForm,
-    suggestedWrapper,
     suggestedList,
     titleInput,
     artistInput,
@@ -156,11 +154,6 @@ function setCreateMode(enable) {
 
   if (dialog) {
     dialog.classList.toggle('add-song-modal__dialog--create', shouldEnable);
-  }
-
-  if (suggestedWrapper) {
-    suggestedWrapper.classList.toggle('suggested-wrapper--creating', shouldEnable);
-    suggestedWrapper.setAttribute('aria-hidden', 'false');
   }
 
   if (suggestedList) {
