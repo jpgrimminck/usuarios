@@ -172,8 +172,14 @@ async function confirmDelete() {
 
     // Verificar si el contenedor quedó vacío
     const container = document.getElementById('songs-container');
-    if (container && container.children.length === 0) {
-      document.body.classList.add('songs-empty');
+    const remainingCount = container ? container.children.length : 0;
+    
+    // Actualizar estado del FAB
+    if (typeof window.updateFabState === 'function') {
+      window.updateFabState(remainingCount);
+    }
+    
+    if (remainingCount === 0) {
       exitEraseMode();
     }
 

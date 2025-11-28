@@ -532,6 +532,10 @@ export function initAddSongModal(exitEraseMode) {
     if (typeof exitEraseMode === 'function') {
       exitEraseMode();
     }
+    
+    // Mostrar loading en el FAB
+    fab.classList.add('fab-loading');
+    
     setModalWorkingState(false);
     setCreateMode(false);
     
@@ -539,17 +543,22 @@ export function initAddSongModal(exitEraseMode) {
     try {
       const list = await fetchLibrarySongs();
       if (modalSongsFetchToken !== fetchToken) {
+        fab.classList.remove('fab-loading');
         return;
       }
       renderSuggestedSongs._lastList = list.length ? list : [];
       renderSuggestedSongs(handleSuggestionSelect);
     } catch {
       if (modalSongsFetchToken !== fetchToken) {
+        fab.classList.remove('fab-loading');
         return;
       }
       renderSuggestedSongs._lastList = [];
       renderSuggestedSongs(handleSuggestionSelect);
     }
+    
+    // Quitar loading del FAB
+    fab.classList.remove('fab-loading');
     
     updateModalButtonsDisabledState();
     modal.classList.remove('hidden');
@@ -706,6 +715,22 @@ export function initAddSongModal(exitEraseMode) {
 
         selectedLibrarySongs.clear();
         
+        // Cerrar modal primero
+        closeModal();
+        
+        // Mostrar loading en el contenedor de canciones
+        const songsContainer = document.getElementById('songs-container');
+        if (songsContainer) {
+          // Quitar clase songs-empty para que el FAB no interfiera
+          document.body.classList.remove('songs-empty');
+          songsContainer.innerHTML = `
+            <div class="songs-loading">
+              <div class="songs-loading__spinner"></div>
+              <span class="songs-loading__text">Cargando canciones...</span>
+            </div>
+          `;
+        }
+        
         if (loadSongsCallback) {
           await loadSongsCallback();
         }
@@ -713,8 +738,6 @@ export function initAddSongModal(exitEraseMode) {
         if (onSongsAdded) {
           onSongsAdded(additions, pendingScrollId);
         }
-        
-        closeModal();
       } catch (err) {
         console.error('Error adding songs to list:', err);
       } finally {

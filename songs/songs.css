@@ -117,7 +117,7 @@ body, html {
 /*  border: 4px solid green !important; /* DEBUG: List container */ 
 }
 
-/* FAB */
+/* FAB - Siempre misma forma, solo cambia posición */
 #add-song-fab {
   position: fixed;
   background-color: #3b82f6;
@@ -126,30 +126,20 @@ body, html {
   display: flex;
   align-items: center;
   justify-content: center;
-  bottom: 24px;
-  right: 24px;
-  width: 56px;
-  height: 56px;
+  padding: 0.875rem 1.25rem;
+  font-size: 0.9rem;
+  font-weight: 600;
   z-index: 25;
-  transition: background-color 0.2s, width 0.3s, height 0.3s, border-radius 0.3s, bottom 0.3s, right 0.3s, top 0.3s, left 0.3s, transform 0.3s;
-}
-
-#add-song-fab:hover {
-  background-color: #1d4ed8;
-}
-
-#add-song-fab .fab-text {
-  display: none;
-}
-
-#add-song-fab .fab-icon {
-  display: inline;
-}
-
-/* FAB oculto inicialmente */
-#add-song-fab {
+  transition: background-color 0.2s, bottom 0.3s, right 0.3s, transform 0.3s, opacity 0.3s;
   opacity: 0;
   pointer-events: none;
+  /* Posición default: esquina inferior derecha */
+  bottom: 24px;
+  right: 24px;
+  /* Tamaño fijo para mantener forma durante loading */
+  min-width: 168px;
+  height: 46px;
+  box-sizing: border-box;
 }
 
 #add-song-fab.fab-ready {
@@ -157,25 +147,41 @@ body, html {
   pointer-events: auto;
 }
 
-/* FAB centrado cuando no hay canciones */
+#add-song-fab:hover {
+  background-color: #1d4ed8;
+}
+
+/* Ocultar icono, siempre mostrar texto */
+#add-song-fab .fab-icon {
+  display: none;
+}
+
+#add-song-fab .fab-text {
+  display: inline;
+}
+
+#add-song-fab .fab-loading-dots {
+  display: none;
+}
+
+/* Posición centrada cuando no hay canciones */
 .songs-empty #add-song-fab {
   bottom: 50%;
   right: 50%;
   transform: translate(50%, 50%);
-  width: auto;
-  height: auto;
-  padding: 1rem 1.5rem;
-  border-radius: 0.5rem;
-  font-size: 1rem;
-  font-weight: 600;
 }
 
-.songs-empty #add-song-fab .fab-icon {
+/* FAB Loading State - no cambia forma ni tamaño */
+#add-song-fab.fab-loading {
+  pointer-events: none;
+}
+
+#add-song-fab.fab-loading .fab-text {
   display: none;
 }
 
-.songs-empty #add-song-fab .fab-text {
-  display: inline;
+#add-song-fab.fab-loading .fab-loading-dots {
+  display: inline-flex;
 }
 
 /* Modal */
@@ -595,4 +601,34 @@ body, html {
 .erase-popup__delete:disabled {
   opacity: 0.6;
   cursor: wait;
+}
+
+/* Loading Spinner */
+.songs-loading {
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  justify-content: center;
+  padding: 3rem 1rem;
+  gap: 1rem;
+}
+
+.songs-loading__spinner {
+  width: 40px;
+  height: 40px;
+  border: 3px solid #374151;
+  border-top-color: #3b82f6;
+  border-radius: 50%;
+  animation: spin 0.8s linear infinite;
+}
+
+.songs-loading__text {
+  color: #9ca3af;
+  font-size: 0.9rem;
+}
+
+@keyframes spin {
+  to {
+    transform: rotate(360deg);
+  }
 }

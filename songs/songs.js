@@ -118,6 +118,27 @@ function adjustSongsContainerPadding() {
   header.style.zIndex = 30;
 }
 
+// Actualiza el estado del FAB según la cantidad de canciones
+function updateFabState(songCount) {
+  const body = document.body;
+  
+  // Remover clase de estado
+  body.classList.remove('songs-empty');
+  
+  if (songCount === 0) {
+    // Centrado
+    body.classList.add('songs-empty');
+  }
+  // Si hay 1+ canciones: esquina inferior derecha (default, sin clase)
+  
+  // Mostrar el FAB
+  const fab = document.getElementById('add-song-fab');
+  if (fab) fab.classList.add('fab-ready');
+}
+
+// Exportar para uso en otros módulos
+window.updateFabState = updateFabState;
+
 // ============================================
 // Persistencia de Status
 // ============================================
@@ -172,7 +193,7 @@ async function loadSongs() {
       });
       if (!songIds.length) {
         container.innerHTML = '';
-        document.body.classList.add('songs-empty');
+        updateFabState(0);
         return;
       }
       document.body.classList.remove('songs-empty');
@@ -214,7 +235,8 @@ async function loadSongs() {
       });
     }
 
-    document.body.classList.remove('songs-empty');
+    // Actualizar estado del FAB según cantidad de canciones
+    updateFabState(songs.length);
 
     songs.forEach(song => {
       if (!song || !song.id) return;
@@ -349,11 +371,7 @@ initAddModule({
 });
 
 // Cargar canciones y título
-loadSongs().then(() => {
-  // Mostrar FAB después de determinar si hay canciones
-  const fab = document.getElementById('add-song-fab');
-  if (fab) fab.classList.add('fab-ready');
-});
+loadSongs();
 updateSongsTitle();
 updateModalButtonsDisabledState();
 
