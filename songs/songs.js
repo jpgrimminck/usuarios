@@ -219,7 +219,7 @@ function setCreateMode(enable) {
   if (modalTitle) {
     modalTitle.style.display = '';
     modalTitle.setAttribute('aria-hidden', 'false');
-    modalTitle.textContent = shouldEnable ? 'Crear Canción' : 'Lista de Canciones';
+    modalTitle.textContent = shouldEnable ? 'Crear Canción' : 'Otras Canciones';
   }
 
   if (addButton && shouldEnable) {
