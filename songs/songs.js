@@ -171,9 +171,11 @@ async function loadSongs() {
         statusBySongId.set(record.song_id, record.status_tag || DEFAULT_STATUS);
       });
       if (!songIds.length) {
-        container.innerHTML = '<p class="text-gray-400 p-4">No hay canciones para este usuario.</p>';
+        container.innerHTML = '';
+        document.body.classList.add('songs-empty');
         return;
       }
+      document.body.classList.remove('songs-empty');
 
       const { data, error } = await supabase
         .from('songs')
@@ -211,6 +213,8 @@ async function loadSongs() {
         return titleA.localeCompare(titleB);
       });
     }
+
+    document.body.classList.remove('songs-empty');
 
     songs.forEach(song => {
       if (!song || !song.id) return;
@@ -345,7 +349,11 @@ initAddModule({
 });
 
 // Cargar canciones y título
-loadSongs();
+loadSongs().then(() => {
+  // Mostrar FAB después de determinar si hay canciones
+  const fab = document.getElementById('add-song-fab');
+  if (fab) fab.classList.add('fab-ready');
+});
 updateSongsTitle();
 updateModalButtonsDisabledState();
 

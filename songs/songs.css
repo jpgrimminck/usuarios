@@ -131,11 +131,51 @@ body, html {
   width: 56px;
   height: 56px;
   z-index: 25;
-  transition: background-color 0.2s;
+  transition: background-color 0.2s, width 0.3s, height 0.3s, border-radius 0.3s, bottom 0.3s, right 0.3s, top 0.3s, left 0.3s, transform 0.3s;
 }
 
 #add-song-fab:hover {
   background-color: #1d4ed8;
+}
+
+#add-song-fab .fab-text {
+  display: none;
+}
+
+#add-song-fab .fab-icon {
+  display: inline;
+}
+
+/* FAB oculto inicialmente */
+#add-song-fab {
+  opacity: 0;
+  pointer-events: none;
+}
+
+#add-song-fab.fab-ready {
+  opacity: 1;
+  pointer-events: auto;
+}
+
+/* FAB centrado cuando no hay canciones */
+.songs-empty #add-song-fab {
+  bottom: 50%;
+  right: 50%;
+  transform: translate(50%, 50%);
+  width: auto;
+  height: auto;
+  padding: 1rem 1.5rem;
+  border-radius: 0.5rem;
+  font-size: 1rem;
+  font-weight: 600;
+}
+
+.songs-empty #add-song-fab .fab-icon {
+  display: none;
+}
+
+.songs-empty #add-song-fab .fab-text {
+  display: inline;
 }
 
 /* Modal */
