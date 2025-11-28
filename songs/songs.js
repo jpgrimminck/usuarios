@@ -422,6 +422,10 @@ async function getOrCreateArtistId(artistName) {
 async function updateSongsTitle() {
   const titleEl = document.querySelector('#site-header h1');
   if (!titleEl) return;
+  
+  // Mostrar loading mientras se carga
+  titleEl.innerHTML = '<span class="loading-dots"><span>.</span><span>.</span><span>.</span></span>';
+  
   if (!selectedUserId) {
     titleEl.textContent = 'Canciones';
     return;
