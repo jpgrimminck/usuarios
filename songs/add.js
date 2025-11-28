@@ -586,6 +586,12 @@ export function initAddSongModal(exitEraseMode) {
     
     updateModalButtonsDisabledState();
     modal.classList.remove('hidden');
+    
+    // Resetear scroll al inicio
+    const suggestedContainer = document.getElementById('suggested-songs-container');
+    if (suggestedContainer) {
+      suggestedContainer.scrollTop = 0;
+    }
   }
 
   function closeModal() {
