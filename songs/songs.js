@@ -646,25 +646,28 @@ function initAddSongModal() {
     console.log('Seleccionar canción sugerida:', song.title, '/', song.artist);
   };
 
-  function openModal() {
+  async function openModal() {
     exitEraseMode();
     setModalWorkingState(false);
     setCreateMode(false);
+    
+    // Fetch library songs ANTES de abrir el modal para evitar parpadeo
     const fetchToken = ++modalSongsFetchToken;
-    // Fetch library songs and render them in the modal
-    fetchLibrarySongs().then(list => {
+    try {
+      const list = await fetchLibrarySongs();
       if (modalSongsFetchToken !== fetchToken) {
         return;
       }
       renderSuggestedSongs._lastList = list.length ? list : [];
       renderSuggestedSongs(handleSuggestionSelect);
-    }).catch(() => {
+    } catch {
       if (modalSongsFetchToken !== fetchToken) {
         return;
       }
       renderSuggestedSongs._lastList = [];
       renderSuggestedSongs(handleSuggestionSelect);
-    });
+    }
+    
     updateModalButtonsDisabledState();
     modal.classList.remove('hidden');
   }
