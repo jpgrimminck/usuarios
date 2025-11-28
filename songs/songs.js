@@ -670,6 +670,32 @@ function initAddSongModal() {
     selectedLibrarySongs.clear();
     resetNewSongForm();
     setModalWorkingState(false);
+    // Reset viewport zoom (fix para móviles después del teclado virtual)
+    resetViewportZoom();
+  }
+
+  function resetViewportZoom() {
+    // Desenfocar cualquier input activo primero
+    if (document.activeElement && document.activeElement.blur) {
+      document.activeElement.blur();
+    }
+    
+    // Resetear viewport meta tag
+    const viewport = document.querySelector('meta[name="viewport"]');
+    if (viewport) {
+      // Temporalmente permitir zoom para forzar reset
+      viewport.setAttribute('content', 'width=device-width, initial-scale=1.0, maximum-scale=10.0, user-scalable=yes');
+      
+      // Forzar el zoom a 1
+      setTimeout(() => {
+        viewport.setAttribute('content', 'width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no');
+      }, 50);
+    }
+    
+    // Forzar scroll al inicio para ayudar con el reset
+    window.scrollTo(0, 0);
+    document.body.scrollTop = 0;
+    document.documentElement.scrollTop = 0;
   }
 
   fab.addEventListener('click', openModal);
@@ -681,6 +707,12 @@ function initAddSongModal() {
   if (toggleCreateButton) {
     toggleCreateButton.addEventListener('click', () => {
       const isCreateMode = createSongForm && !createSongForm.hidden;
+      if (isCreateMode) {
+        // Saliendo del modo crear: limpiar campos y resetear zoom
+        if (newSongTitleInput) newSongTitleInput.value = '';
+        if (newSongArtistInput) newSongArtistInput.value = '';
+        resetViewportZoom();
+      }
       setCreateMode(!isCreateMode);
     });
   }
