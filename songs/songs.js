@@ -7,6 +7,13 @@ import {
   applyStatusStyles
 } from '../audios/status.js';
 
+import {
+  initEraseMode,
+  createDeleteButton,
+  refreshEraseMode,
+  exitEraseMode
+} from './erase.js';
+
 const supabase = window.supabase.createClient(window.SUPABASE_URL, window.SUPABASE_ANON_KEY);
 const urlParams = new URLSearchParams(window.location.search);
 
@@ -636,6 +643,7 @@ function initAddSongModal() {
   };
 
   function openModal() {
+    exitEraseMode();
     setModalWorkingState(false);
     setCreateMode(false);
     const fetchToken = ++modalSongsFetchToken;
@@ -978,6 +986,19 @@ async function loadSongs() {
         </div>
         ${statusButtonHtml}
       `;
+      // Agregar botón de borrado si hay usuario seleccionado
+      if (selectedUserId) {
+        const deleteBtn = createDeleteButton(song.id);
+        songElement.appendChild(deleteBtn);
+      }
+      // Salir del modo borrado al hacer clic en la tarjeta
+      songElement.addEventListener('click', (e) => {
+        // No salir si se hizo clic en el botón de borrado o status
+        if (e.target.closest('.song-delete-btn') || e.target.closest('.song-status-button')) {
+          return;
+        }
+        exitEraseMode();
+      });
       const statusButton = songElement.querySelector('.song-status-button');
       if (statusButton && selectedUserId) {
         applyStatusStyles(statusButton, statusTag);
@@ -1010,6 +1031,9 @@ async function loadSongs() {
         scrollSongIntoView(targetId);
       });
     }
+
+    // Refrescar modo borrado si está activo
+    refreshEraseMode();
   } catch (err) {
     console.error('Error in loadSongs:', err);
   }
@@ -1020,6 +1044,13 @@ updateSongsTitle();
 updateModalButtonsDisabledState();
 initAddSongModal();
 initSongsRealtime();
+initEraseMode({
+  supabase: supabase,
+  userId: selectedUserId,
+  onSongDeleted: (songId) => {
+    console.log('Canción eliminada de la lista:', songId);
+  }
+});
 
 // Back button behavior: try history.back(), fallback to index.html
 document.addEventListener('DOMContentLoaded', function () {
@@ -1027,6 +1058,7 @@ document.addEventListener('DOMContentLoaded', function () {
   if (!backBtn) return;
   backBtn.addEventListener('click', function (e) {
     e.preventDefault();
+    exitEraseMode();
     // Always navigate back to index.html (preserve id if present) using replace
     const params = new URLSearchParams(window.location.search);
     const id = params.get('id') || selectedUserId;

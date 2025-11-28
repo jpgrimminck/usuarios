@@ -18,6 +18,9 @@
         <span class="material-symbols-outlined text-2xl">arrow_back</span>
       </button>
       <h1>Canciones</h1>
+      <button id="erase-mode-toggle" aria-label="Modo borrado" hidden>
+        <span class="material-symbols-outlined">delete</span>
+      </button>
     </div>
   </div>
 
@@ -55,6 +58,17 @@
       </div>
     </div>
   </div>
+
+<!-- Popup de confirmación de borrado -->
+<div id="erase-confirm-popup" class="hidden">
+  <div class="erase-popup__dialog">
+    <p class="erase-popup__message">Borrarás esta canción de tu lista</p>
+    <div class="erase-popup__actions">
+      <button type="button" id="erase-cancel-btn" class="erase-popup__cancel">Cancelar</button>
+      <button type="button" id="erase-delete-btn" class="erase-popup__delete">Borrar</button>
+    </div>
+  </div>
+</div>
 
 <script src="https://cdn.jsdelivr.net/npm/@supabase/supabase-js@2"></script>
 <script src="../config.js"></script>

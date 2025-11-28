@@ -57,6 +57,7 @@ body, html {
   letter-spacing: -0.025em;
   text-align: left;
   color: #ffffff;
+  flex: 1;
 }
 
 /* Songs List */
@@ -389,4 +390,136 @@ body, html {
   background-color: rgba(6, 95, 70, 0.4);
   color: #6ee7b7;
   border-color: #059669;
+}
+
+/* Erase Mode Toggle Button */
+#erase-mode-toggle {
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  border-radius: 9999px;
+  height: 2.5rem;
+  width: 2.5rem;
+  color: #9ca3af;
+  transition: background-color 0.2s, color 0.2s;
+  flex-shrink: 0;
+}
+
+#erase-mode-toggle:hover {
+  background-color: rgba(255, 255, 255, 0.1);
+  color: #ffffff;
+}
+
+#erase-mode-toggle.erase-mode-active {
+  background-color: rgba(239, 68, 68, 0.2);
+  color: #ef4444;
+}
+
+#erase-mode-toggle.erase-mode-active:hover {
+  background-color: rgba(239, 68, 68, 0.3);
+}
+
+/* Song Delete Button (in card) */
+.song-delete-btn {
+  display: none;
+  align-items: center;
+  justify-content: center;
+  width: 2.5rem;
+  height: 2.5rem;
+  border-radius: 9999px;
+  color: #ef4444;
+  background-color: transparent;
+  transition: background-color 0.2s;
+  flex-shrink: 0;
+}
+
+.song-delete-btn:hover {
+  background-color: rgba(239, 68, 68, 0.15);
+}
+
+.song-delete-btn .material-symbols-outlined {
+  font-size: 1.25rem;
+}
+
+/* Erase Mode Active - show delete buttons */
+.erase-mode .song-delete-btn {
+  display: flex;
+}
+
+/* Song Card Deleting Animation */
+.song-card--deleting {
+  background-color: rgba(239, 68, 68, 0.3) !important;
+  opacity: 0;
+  transform: translateX(100%);
+  transition: background-color 0.1s, opacity 0.2s 0.1s, transform 0.2s 0.1s;
+}
+
+/* Erase Confirmation Popup */
+#erase-confirm-popup {
+  position: fixed;
+  inset: 0;
+  background-color: rgba(0, 0, 0, 0.6);
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  z-index: 50;
+}
+
+#erase-confirm-popup.hidden {
+  display: none;
+}
+
+.erase-popup__dialog {
+  background-color: #1f2937;
+  padding: 1.5rem;
+  border-radius: 0.75rem;
+  color: #ffffff;
+  width: 90%;
+  max-width: 320px;
+  text-align: center;
+}
+
+.erase-popup__message {
+  font-size: 1rem;
+  font-weight: 500;
+  margin: 0 0 1.5rem 0;
+  color: #e5e7eb;
+}
+
+.erase-popup__actions {
+  display: flex;
+  gap: 0.75rem;
+}
+
+.erase-popup__cancel {
+  flex: 1;
+  padding: 0.75rem 1rem;
+  border-radius: 0.5rem;
+  background-color: #374151;
+  color: #ffffff;
+  font-weight: 500;
+  transition: background-color 0.2s;
+}
+
+.erase-popup__cancel:hover {
+  background-color: #4b5563;
+}
+
+.erase-popup__delete {
+  flex: 1;
+  padding: 0.75rem 1rem;
+  border-radius: 0.5rem;
+  background-color: #dc2626;
+  color: #ffffff;
+  font-weight: 500;
+  transition: background-color 0.2s;
+}
+
+.erase-popup__delete:hover {
+  background-color: #b91c1c;
+}
+
+.erase-popup__delete:disabled {
+  opacity: 0.6;
+  cursor: wait;
 }
