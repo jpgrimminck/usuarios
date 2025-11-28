@@ -484,6 +484,11 @@ body, html {
   flex-shrink: 0;
 }
 
+/* Hide trash icon when no songs */
+.songs-empty #erase-mode-toggle {
+  display: none;
+}
+
 #erase-mode-toggle:hover {
   background-color: rgba(255, 255, 255, 0.1);
   color: #ffffff;
