@@ -1,3 +1,8 @@
+// ============================================
+// DESARROLLO: cambiar a false para ocultar el botón de status
+// ============================================
+const SHOW_STATUS_BUTTON = false;
+
 export const STATUS_MAP = {
   1: 'No iniciado',
   2: 'En práctica',
@@ -138,6 +143,13 @@ async function persistUserSongStatus(songId, nextStatus) {
 
 export async function refreshSongStatusUi(songId) {
   if (!songStatusUi.button || !songStatusUi.container) return;
+  
+  // Ocultar si SHOW_STATUS_BUTTON es false
+  if (!SHOW_STATUS_BUTTON) {
+    songStatusUi.container.hidden = true;
+    return;
+  }
+  
   if (!normalizedUserId) {
     songStatusUi.container.hidden = true;
     currentSongStatus = DEFAULT_STATUS;
@@ -178,6 +190,14 @@ export async function refreshSongStatusUi(songId) {
 
 export function initSongStatusControls() {
   if (!songStatusUi.button) {
+    return;
+  }
+  
+  // Ocultar si SHOW_STATUS_BUTTON es false
+  if (!SHOW_STATUS_BUTTON) {
+    if (songStatusUi.container) {
+      songStatusUi.container.hidden = true;
+    }
     return;
   }
 
