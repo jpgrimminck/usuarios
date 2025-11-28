@@ -426,7 +426,7 @@ async function updateSongsTitle() {
       .eq('id', selectedUserId)
       .single();
     if (!error && data && data.name) {
-      titleEl.textContent = `Canciones de ${data.name}`;
+      titleEl.textContent = `Hola, ${data.name}`;
     } else {
       titleEl.textContent = 'Canciones';
     }
