@@ -21,6 +21,7 @@ let pendingSuggestedScrollSongId = null;
 // Callbacks
 let onSongsAdded = null;
 let loadSongsCallback = null;
+let isFirstTimeModal = false;
 
 export function initAddModule(options = {}) {
   supabaseClient = options.supabase || null;
@@ -129,6 +130,18 @@ export function updateModalButtonsDisabledState() {
   if (toggleButton && addButton) {
     const hasSelection = selectedLibrarySongs.size > 0;
     const isCreateMode = createForm && !createForm.hidden;
+
+    // Si es primera vez, siempre ocultar el botón crear
+    if (isFirstTimeModal) {
+      toggleButton.hidden = true;
+      toggleButton.style.display = 'none';
+      toggleButton.setAttribute('aria-hidden', 'true');
+      
+      addButton.hidden = !hasSelection;
+      addButton.style.display = hasSelection ? '' : 'none';
+      addButton.setAttribute('aria-hidden', hasSelection ? 'false' : 'true');
+      return;
+    }
 
     const showToggle = isCreateMode || !hasSelection;
     const showAddButton = !isCreateMode && hasSelection;
@@ -539,6 +552,17 @@ export function initAddSongModal(exitEraseMode) {
     setModalWorkingState(false);
     setCreateMode(false);
     
+    // Detectar si es primera vez (lista vacía)
+    isFirstTimeModal = document.body.classList.contains('songs-empty');
+    const modalTitle = document.querySelector('#add-song-modal h2');
+    
+    // Ajustar título según si es primera vez
+    if (modalTitle) {
+      modalTitle.textContent = isFirstTimeModal 
+        ? 'Agrega tu primera canción para empezar a practicar' 
+        : 'Otras Canciones';
+    }
+    
     const fetchToken = ++modalSongsFetchToken;
     try {
       const list = await fetchLibrarySongs();
@@ -569,6 +593,7 @@ export function initAddSongModal(exitEraseMode) {
     selectedLibrarySongs.clear();
     resetNewSongForm();
     setModalWorkingState(false);
+    isFirstTimeModal = false;
     resetViewportZoom();
   }
 
