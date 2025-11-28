@@ -135,6 +135,13 @@ function applyPageTitle(titleText) {
   }
 }
 
+function showPageTitleLoading() {
+  const headerH1 = document.querySelector('header h1');
+  if (headerH1) {
+    headerH1.innerHTML = '<span class="loading-dots"><span>.</span><span>.</span><span>.</span></span>';
+  }
+}
+
 async function fetchSongAudiosByCandidates(songId) {
   let lastError = null;
   for (const column of AUDIO_SONG_COLUMN_CANDIDATES) {
@@ -301,6 +308,9 @@ function buildAudioCard(audio) {
 
 async function loadAudios(options = {}) {
   const { skipRealtimeSetup = false } = options;
+
+  // Mostrar loading mientras se carga el título
+  showPageTitleLoading();
 
   // Ensure we have a user ID, falling back to local storage if needed
   if (!state.normalizedUserId) {
