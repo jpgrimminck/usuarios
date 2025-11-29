@@ -7,6 +7,20 @@ const RECORDER_MIME_TYPES = [
   'audio/mp4;codecs=mp4a.40.2'
 ];
 
+// Audio recording configuration
+const AUDIO_CONFIG = {
+  // getUserMedia constraints
+  constraints: {
+    sampleRate: 44000,
+    echoCancellation: false,
+    noiseSuppression: false,
+    autoGainControl: false,
+    channelCount: 1
+  },
+  // MediaRecorder bitrate (128 kbps for medium quality)
+  audioBitsPerSecond: 128000
+};
+
 let supabaseClient = null;
 let audioBucket = 'audios';
 let getSongId = () => null;
@@ -467,7 +481,7 @@ async function startRecording() {
   attachViewportWatcher();
 
   try {
-    const stream = await navigator.mediaDevices.getUserMedia({ audio: true });
+    const stream = await navigator.mediaDevices.getUserMedia({ audio: AUDIO_CONFIG.constraints });
     recorderStream = stream;
     recordedChunks = [];
 
@@ -476,7 +490,13 @@ async function startRecording() {
       selectedMimeType = RECORDER_MIME_TYPES.find((type) => MediaRecorder.isTypeSupported(type)) || '';
     }
 
-    mediaRecorder = selectedMimeType ? new MediaRecorder(stream, { mimeType: selectedMimeType }) : new MediaRecorder(stream);
+    const recorderOptions = {
+      audioBitsPerSecond: AUDIO_CONFIG.audioBitsPerSecond
+    };
+    if (selectedMimeType) {
+      recorderOptions.mimeType = selectedMimeType;
+    }
+    mediaRecorder = new MediaRecorder(stream, recorderOptions);
     recorderMimeType = mediaRecorder.mimeType || selectedMimeType || 'audio/webm';
 
     mediaRecorder.addEventListener('dataavailable', handleRecorderDataAvailable);
