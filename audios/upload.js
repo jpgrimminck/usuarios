@@ -15,11 +15,105 @@ const AUDIO_CONFIG = {
     echoCancellation: false,
     noiseSuppression: false,
     autoGainControl: false,
-    channelCount: 2
+    channelCount: 1  // Mono (los micrófonos de móviles son mono)
   },
   // MediaRecorder bitrate (128 kbps for medium quality)
   audioBitsPerSecond: 128000
 };
+
+// Convert mono audio to stereo (duplicate mono channel to both L and R)
+async function convertMonoToStereo(blob) {
+  try {
+    const audioContext = new (window.AudioContext || window.webkitAudioContext)();
+    const arrayBuffer = await blob.arrayBuffer();
+    const audioBuffer = await audioContext.decodeAudioData(arrayBuffer);
+    
+    // If already stereo, return original blob
+    if (audioBuffer.numberOfChannels >= 2) {
+      await audioContext.close();
+      return blob;
+    }
+    
+    // Create stereo buffer
+    const stereoBuffer = audioContext.createBuffer(
+      2, // 2 channels (stereo)
+      audioBuffer.length,
+      audioBuffer.sampleRate
+    );
+    
+    // Get mono channel data
+    const monoData = audioBuffer.getChannelData(0);
+    
+    // Copy mono data to both stereo channels
+    stereoBuffer.getChannelData(0).set(monoData); // Left channel
+    stereoBuffer.getChannelData(1).set(monoData); // Right channel
+    
+    // Encode stereo buffer to WAV format
+    const stereoBlob = encodeAudioBufferToWav(stereoBuffer);
+    
+    await audioContext.close();
+    return stereoBlob;
+  } catch (err) {
+    console.warn('Could not convert mono to stereo, using original:', err);
+    return blob;
+  }
+}
+
+// Encode AudioBuffer to WAV Blob
+function encodeAudioBufferToWav(audioBuffer) {
+  const numChannels = audioBuffer.numberOfChannels;
+  const sampleRate = audioBuffer.sampleRate;
+  const format = 1; // PCM
+  const bitDepth = 16;
+  
+  const bytesPerSample = bitDepth / 8;
+  const blockAlign = numChannels * bytesPerSample;
+  const byteRate = sampleRate * blockAlign;
+  const dataSize = audioBuffer.length * blockAlign;
+  const bufferSize = 44 + dataSize;
+  
+  const buffer = new ArrayBuffer(bufferSize);
+  const view = new DataView(buffer);
+  
+  // Write WAV header
+  const writeString = (offset, string) => {
+    for (let i = 0; i < string.length; i++) {
+      view.setUint8(offset + i, string.charCodeAt(i));
+    }
+  };
+  
+  writeString(0, 'RIFF');
+  view.setUint32(4, bufferSize - 8, true);
+  writeString(8, 'WAVE');
+  writeString(12, 'fmt ');
+  view.setUint32(16, 16, true); // fmt chunk size
+  view.setUint16(20, format, true);
+  view.setUint16(22, numChannels, true);
+  view.setUint32(24, sampleRate, true);
+  view.setUint32(28, byteRate, true);
+  view.setUint16(32, blockAlign, true);
+  view.setUint16(34, bitDepth, true);
+  writeString(36, 'data');
+  view.setUint32(40, dataSize, true);
+  
+  // Write interleaved audio data
+  const channels = [];
+  for (let i = 0; i < numChannels; i++) {
+    channels.push(audioBuffer.getChannelData(i));
+  }
+  
+  let offset = 44;
+  for (let i = 0; i < audioBuffer.length; i++) {
+    for (let ch = 0; ch < numChannels; ch++) {
+      const sample = Math.max(-1, Math.min(1, channels[ch][i]));
+      const intSample = sample < 0 ? sample * 0x8000 : sample * 0x7FFF;
+      view.setInt16(offset, intSample, true);
+      offset += 2;
+    }
+  }
+  
+  return new Blob([buffer], { type: 'audio/wav' });
+}
 
 let supabaseClient = null;
 let audioBucket = 'audios';
@@ -392,7 +486,7 @@ function handleRecorderDataAvailable(event) {
   }
 }
 
-function handleRecorderStopped() {
+async function handleRecorderStopped() {
   stopRecordingTimer();
   cleanupRecorderStream();
   if (mediaRecorder) {
@@ -406,8 +500,12 @@ function handleRecorderStopped() {
     return;
   }
 
-  recordingBlob = new Blob(recordedChunks, { type: recorderMimeType || 'audio/webm' });
+  const rawBlob = new Blob(recordedChunks, { type: recorderMimeType || 'audio/webm' });
   recordedChunks = [];
+  
+  // Convert mono to stereo so audio plays in both ears
+  recordingBlob = await convertMonoToStereo(rawBlob);
+  
   if (recordingObjectUrl) {
     URL.revokeObjectURL(recordingObjectUrl);
   }
