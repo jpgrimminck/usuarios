@@ -1,75 +1,29 @@
-const RECORDER_MIME_TYPES = [
-  'audio/mpeg',
-  'audio/mp3',
-  'audio/webm;codecs=opus',
-  'audio/webm',
-  'audio/ogg;codecs=opus',
-  'audio/mp4;codecs=mp4a.40.2'
-];
-
-// Audio recording configuration
+// Audio recording configuration - PCM direct capture
 const AUDIO_CONFIG = {
-  // getUserMedia constraints
-  constraints: {
-    sampleRate: 44000,
-    echoCancellation: false,
-    noiseSuppression: false,
-    autoGainControl: false,
-    channelCount: 1  // Mono (los micrófonos de móviles son mono)
-  },
-  // MediaRecorder bitrate (128 kbps for medium quality)
-  audioBitsPerSecond: 128000
+  sampleRate: 44100,
+  echoCancellation: false,
+  noiseSuppression: false,
+  autoGainControl: false
 };
 
-// Convert mono audio to stereo (duplicate mono channel to both L and R)
-async function convertMonoToStereo(blob) {
-  try {
-    const audioContext = new (window.AudioContext || window.webkitAudioContext)();
-    const arrayBuffer = await blob.arrayBuffer();
-    const audioBuffer = await audioContext.decodeAudioData(arrayBuffer);
-    
-    // If already stereo, return original blob
-    if (audioBuffer.numberOfChannels >= 2) {
-      await audioContext.close();
-      return blob;
-    }
-    
-    // Create stereo buffer
-    const stereoBuffer = audioContext.createBuffer(
-      2, // 2 channels (stereo)
-      audioBuffer.length,
-      audioBuffer.sampleRate
-    );
-    
-    // Get mono channel data
-    const monoData = audioBuffer.getChannelData(0);
-    
-    // Copy mono data to both stereo channels
-    stereoBuffer.getChannelData(0).set(monoData); // Left channel
-    stereoBuffer.getChannelData(1).set(monoData); // Right channel
-    
-    // Encode stereo buffer to WAV format
-    const stereoBlob = encodeAudioBufferToWav(stereoBuffer);
-    
-    await audioContext.close();
-    return stereoBlob;
-  } catch (err) {
-    console.warn('Could not convert mono to stereo, using original:', err);
-    return blob;
-  }
-}
+// PCM recording variables
+let pcmAudioContext = null;
+let pcmScriptProcessor = null;
+let pcmSourceNode = null;
+let pcmSamples = [];
+let pcmSampleRate = 44100;
+let isRecordingPcm = false;
 
-// Encode AudioBuffer to WAV Blob
-function encodeAudioBufferToWav(audioBuffer) {
-  const numChannels = audioBuffer.numberOfChannels;
-  const sampleRate = audioBuffer.sampleRate;
+// Encode mono PCM samples to stereo WAV (duplicates mono to both L and R channels)
+function encodePcmToStereoWav(samples, sampleRate) {
+  const numChannels = 2; // Stereo output
   const format = 1; // PCM
   const bitDepth = 16;
   
   const bytesPerSample = bitDepth / 8;
   const blockAlign = numChannels * bytesPerSample;
   const byteRate = sampleRate * blockAlign;
-  const dataSize = audioBuffer.length * blockAlign;
+  const dataSize = samples.length * blockAlign;
   const bufferSize = 44 + dataSize;
   
   const buffer = new ArrayBuffer(bufferSize);
@@ -86,7 +40,7 @@ function encodeAudioBufferToWav(audioBuffer) {
   view.setUint32(4, bufferSize - 8, true);
   writeString(8, 'WAVE');
   writeString(12, 'fmt ');
-  view.setUint32(16, 16, true); // fmt chunk size
+  view.setUint32(16, 16, true);
   view.setUint16(20, format, true);
   view.setUint16(22, numChannels, true);
   view.setUint32(24, sampleRate, true);
@@ -96,23 +50,37 @@ function encodeAudioBufferToWav(audioBuffer) {
   writeString(36, 'data');
   view.setUint32(40, dataSize, true);
   
-  // Write interleaved audio data
-  const channels = [];
-  for (let i = 0; i < numChannels; i++) {
-    channels.push(audioBuffer.getChannelData(i));
-  }
-  
+  // Write interleaved stereo data (duplicate mono sample to both channels)
   let offset = 44;
-  for (let i = 0; i < audioBuffer.length; i++) {
-    for (let ch = 0; ch < numChannels; ch++) {
-      const sample = Math.max(-1, Math.min(1, channels[ch][i]));
-      const intSample = sample < 0 ? sample * 0x8000 : sample * 0x7FFF;
-      view.setInt16(offset, intSample, true);
-      offset += 2;
-    }
+  for (let i = 0; i < samples.length; i++) {
+    const sample = Math.max(-1, Math.min(1, samples[i]));
+    const intSample = sample < 0 ? sample * 0x8000 : sample * 0x7FFF;
+    // Left channel
+    view.setInt16(offset, intSample, true);
+    offset += 2;
+    // Right channel (same as left)
+    view.setInt16(offset, intSample, true);
+    offset += 2;
   }
   
   return new Blob([buffer], { type: 'audio/wav' });
+}
+
+// Cleanup PCM recording resources
+function cleanupPcmRecording() {
+  isRecordingPcm = false;
+  if (pcmScriptProcessor) {
+    pcmScriptProcessor.disconnect();
+    pcmScriptProcessor = null;
+  }
+  if (pcmSourceNode) {
+    pcmSourceNode.disconnect();
+    pcmSourceNode = null;
+  }
+  if (pcmAudioContext && pcmAudioContext.state !== 'closed') {
+    pcmAudioContext.close().catch(() => {});
+    pcmAudioContext = null;
+  }
 }
 
 let supabaseClient = null;
@@ -127,7 +95,7 @@ let recorderStream = null;
 let recordedChunks = [];
 let recordingBlob = null;
 let recordingObjectUrl = null;
-let recorderMimeType = 'audio/webm';
+let recorderMimeType = 'audio/wav';
 let isUploadingRecording = false;
 let recorderElements = null;
 let recordingStartTime = null;
@@ -480,31 +448,29 @@ function resetRecordingState(options = {}) {
   updateRecorderUi();
 }
 
-function handleRecorderDataAvailable(event) {
-  if (event?.data && event.data.size > 0) {
-    recordedChunks.push(event.data);
-  }
-}
-
-async function handleRecorderStopped() {
+function handleRecorderStopped() {
   stopRecordingTimer();
   cleanupRecorderStream();
-  if (mediaRecorder) {
-    mediaRecorder.removeEventListener('dataavailable', handleRecorderDataAvailable);
-    mediaRecorder.removeEventListener('stop', handleRecorderStopped);
-  }
+  cleanupPcmRecording();
   mediaRecorder = null;
 
-  if (!recordedChunks.length) {
+  // Check if we have PCM samples
+  if (!pcmSamples.length) {
     resetRecordingState({ keepInput: true });
     return;
   }
 
-  const rawBlob = new Blob(recordedChunks, { type: recorderMimeType || 'audio/webm' });
-  recordedChunks = [];
+  // Create stereo WAV from mono PCM samples
+  const allSamples = new Float32Array(pcmSamples.reduce((acc, chunk) => acc + chunk.length, 0));
+  let offset = 0;
+  for (const chunk of pcmSamples) {
+    allSamples.set(chunk, offset);
+    offset += chunk.length;
+  }
+  pcmSamples = [];
   
-  // Convert mono to stereo so audio plays in both ears
-  recordingBlob = await convertMonoToStereo(rawBlob);
+  recordingBlob = encodePcmToStereoWav(allSamples, pcmSampleRate);
+  recorderMimeType = 'audio/wav';
   
   if (recordingObjectUrl) {
     URL.revokeObjectURL(recordingObjectUrl);
@@ -579,65 +545,74 @@ async function startRecording() {
   attachViewportWatcher();
 
   try {
-    const stream = await navigator.mediaDevices.getUserMedia({ audio: AUDIO_CONFIG.constraints });
-    recorderStream = stream;
-    recordedChunks = [];
-
-    let selectedMimeType = '';
-    if (typeof MediaRecorder !== 'undefined' && MediaRecorder.isTypeSupported) {
-      selectedMimeType = RECORDER_MIME_TYPES.find((type) => MediaRecorder.isTypeSupported(type)) || '';
-    }
-
-    const recorderOptions = {
-      audioBitsPerSecond: AUDIO_CONFIG.audioBitsPerSecond
+    const constraints = {
+      audio: {
+        echoCancellation: AUDIO_CONFIG.echoCancellation,
+        noiseSuppression: AUDIO_CONFIG.noiseSuppression,
+        autoGainControl: AUDIO_CONFIG.autoGainControl,
+        sampleRate: AUDIO_CONFIG.sampleRate,
+        channelCount: 1
+      }
     };
-    if (selectedMimeType) {
-      recorderOptions.mimeType = selectedMimeType;
-    }
-    mediaRecorder = new MediaRecorder(stream, recorderOptions);
-    recorderMimeType = mediaRecorder.mimeType || selectedMimeType || 'audio/webm';
-
-    mediaRecorder.addEventListener('dataavailable', handleRecorderDataAvailable);
-    mediaRecorder.addEventListener('stop', handleRecorderStopped);
-
-    mediaRecorder.start();
+    
+    const stream = await navigator.mediaDevices.getUserMedia(constraints);
+    recorderStream = stream;
+    pcmSamples = [];
+    
+    // Create AudioContext for PCM capture
+    const AudioContextClass = window.AudioContext || window.webkitAudioContext;
+    pcmAudioContext = new AudioContextClass({ sampleRate: AUDIO_CONFIG.sampleRate });
+    pcmSampleRate = pcmAudioContext.sampleRate;
+    
+    // Create source from microphone stream
+    pcmSourceNode = pcmAudioContext.createMediaStreamSource(stream);
+    
+    // Create ScriptProcessor for capturing raw PCM data
+    // Buffer size 4096 is a good balance between latency and performance
+    pcmScriptProcessor = pcmAudioContext.createScriptProcessor(4096, 1, 1);
+    
+    pcmScriptProcessor.onaudioprocess = (event) => {
+      if (!isRecordingPcm) return;
+      const inputData = event.inputBuffer.getChannelData(0);
+      // Copy the data since the buffer gets reused
+      pcmSamples.push(new Float32Array(inputData));
+    };
+    
+    // Connect: microphone -> scriptProcessor -> destination (needed for it to work)
+    pcmSourceNode.connect(pcmScriptProcessor);
+    pcmScriptProcessor.connect(pcmAudioContext.destination);
+    
+    isRecordingPcm = true;
+    mediaRecorder = { state: 'recording' }; // Fake mediaRecorder for UI compatibility
+    recorderMimeType = 'audio/wav';
+    
     startRecordingTimer();
     updateRecorderUi();
     ensureRecorderVisible({ behavior: 'auto', target: getRecorderVisibilityTarget() });
   } catch (err) {
     console.error('Unable to start recording:', err);
     cleanupRecorderStream();
+    cleanupPcmRecording();
     mediaRecorder = null;
     resetRecordingState({ keepInput: true });
   }
 }
 
 function stopRecording() {
-  if (!mediaRecorder || mediaRecorder.state !== 'recording') return;
-  try {
-    mediaRecorder.stop();
-  } catch (err) {
-    console.error('Error while stopping the recording:', err);
-  }
+  if (!isRecordingPcm) return;
+  isRecordingPcm = false;
+  handleRecorderStopped();
   updateRecorderUi();
   ensureRecorderVisible({ behavior: 'auto', target: getRecorderVisibilityTarget() });
 }
 
 function discardRecording() {
-  if (mediaRecorder && mediaRecorder.state === 'recording') {
-    // Stop recording without saving
-    if (mediaRecorder) {
-      mediaRecorder.removeEventListener('dataavailable', handleRecorderDataAvailable);
-      mediaRecorder.removeEventListener('stop', handleRecorderStopped);
-      try {
-        mediaRecorder.stop();
-      } catch (err) {
-        console.error('Error stopping recording:', err);
-      }
-    }
+  if (isRecordingPcm) {
+    isRecordingPcm = false;
+    cleanupPcmRecording();
     cleanupRecorderStream();
+    pcmSamples = [];
     mediaRecorder = null;
-    recordedChunks = [];
   }
   resetRecordingState({ keepInput: true });
 }
