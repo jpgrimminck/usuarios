@@ -1,986 +1,691 @@
-// audios.js - Audio management for admin panel
-
-const supabase = window.supabase.createClient(window.SUPABASE_URL, window.SUPABASE_ANON_KEY);
-const AUDIO_BUCKET = 'audios';
+const supabase = window.supabase.createClient(SUPABASE_URL, SUPABASE_ANON_KEY);
 
 // State
 let allAudios = [];
-let users = [];
-let songs = [];
+let allUsers = [];
+let allSongs = [];
+let filteredAudios = [];
 let currentAudio = null;
-let audioElement = null;
-let editingAudioId = null;
-let deletingAudioId = null;
+let currentlyPlayingAudio = null;
+let savedScrollPosition = 0;
+let realtimeChannel = null;
 
 // DOM Elements
-const audiosList = document.getElementById('audios-list');
-const searchInput = document.getElementById('search-input');
-const filterUploader = document.getElementById('filter-uploader');
-const filterSong = document.getElementById('filter-song');
-const filterFormat = document.getElementById('filter-format');
-const audiosCount = document.getElementById('audios-count');
+const audioListEl = document.getElementById('audio-list');
+const statCountEl = document.getElementById('stat-count');
+const statSizeEl = document.getElementById('stat-size');
+const filterUploaderEl = document.getElementById('filter-uploader');
+const filterSongEl = document.getElementById('filter-song');
 const refreshBtn = document.getElementById('refresh-btn');
 
-// Toggle elements
-const toggleDetailsBtn = document.getElementById('toggle-details');
-const collapsibleSection = document.getElementById('collapsible-section');
-const toggleAllCardsBtn = document.getElementById('toggle-all-cards');
+// Detail modal elements
+const detailModal = document.getElementById('detail-modal');
+const detailTitle = document.getElementById('detail-title');
+const detailSubtitle = document.getElementById('detail-subtitle');
+const detailSong = document.getElementById('detail-song');
+const detailUploader = document.getElementById('detail-uploader');
+const detailDetail = document.getElementById('detail-detail');
+const detailDate = document.getElementById('detail-date');
+const detailFormat = document.getElementById('detail-format');
+const detailSize = document.getElementById('detail-size');
+const detailDuration = document.getElementById('detail-duration');
+const detailSamplerate = document.getElementById('detail-samplerate');
+const actionEdit = document.getElementById('action-edit');
+const actionDelete = document.getElementById('action-delete');
 
-// Modals
-const editModal = document.getElementById('edit-modal');
-const editNameInput = document.getElementById('edit-name-input');
-const cancelEditBtn = document.getElementById('cancel-edit');
-const saveEditBtn = document.getElementById('save-edit');
+// Edit modal elements
+const editOverlay = document.getElementById('edit-overlay');
+const editInput = document.getElementById('edit-input');
+const editCancel = document.getElementById('edit-cancel');
+const editSave = document.getElementById('edit-save');
 
-const deleteModal = document.getElementById('delete-modal');
-const deleteAudioName = document.getElementById('delete-audio-name');
-const cancelDeleteBtn = document.getElementById('cancel-delete');
-const confirmDeleteBtn = document.getElementById('confirm-delete');
+// Delete modal elements
+const deleteOverlay = document.getElementById('delete-overlay');
+const deleteName = document.getElementById('delete-name');
+const deleteCancel = document.getElementById('delete-cancel');
+const deleteConfirm = document.getElementById('delete-confirm');
 
-// Cleanup modal elements
-const cleanupBtn = document.getElementById('cleanup-btn');
-const cleanupModal = document.getElementById('cleanup-modal');
-const cleanupInfo = document.getElementById('cleanup-info');
-const cleanupList = document.getElementById('cleanup-list');
-const cancelCleanupBtn = document.getElementById('cancel-cleanup');
-const confirmCleanupBtn = document.getElementById('confirm-cleanup');
+// =====================
+// UTILITY FUNCTIONS
+// =====================
 
-// Stats elements
-const statTotalCount = document.getElementById('stat-total-count');
-const statTotalSize = document.getElementById('stat-total-size');
-const statHeaviest = document.getElementById('stat-heaviest');
-const statLongest = document.getElementById('stat-longest');
-const statSizeRange = document.getElementById('stat-size-range');
-const statDurationRange = document.getElementById('stat-duration-range');
-
-let orphanFiles = [];
-
-// Stats data collection
-let audioStats = {
-  sizes: [],
-  durations: [],
-  heaviestName: '',
-  heaviestSize: 0,
-  longestName: '',
-  longestDuration: 0
-};
-
-// Utility functions
-function formatFileSize(bytes) {
-  if (!bytes || bytes === 0) return 'N/A';
-  if (bytes < 1024) return bytes + ' B';
-  if (bytes < 1024 * 1024) return (bytes / 1024).toFixed(1) + ' KB';
-  return (bytes / (1024 * 1024)).toFixed(2) + ' MB';
+function formatBytes(bytes) {
+  if (!bytes || bytes === 0) return '0 B';
+  const k = 1024;
+  const sizes = ['B', 'KB', 'MB', 'GB'];
+  const i = Math.floor(Math.log(bytes) / Math.log(k));
+  return parseFloat((bytes / Math.pow(k, i)).toFixed(2)) + ' ' + sizes[i];
 }
 
 function formatDuration(seconds) {
-  if (!seconds || isNaN(seconds)) return 'N/A';
+  if (!seconds || isNaN(seconds)) return '--:--';
   const mins = Math.floor(seconds / 60);
   const secs = Math.floor(seconds % 60);
   return `${mins}:${secs.toString().padStart(2, '0')}`;
 }
 
-function formatDate(dateString) {
-  if (!dateString) return 'N/A';
-  const date = new Date(dateString);
-  return date.toLocaleDateString('es-CL', {
+function formatDate(dateStr) {
+  if (!dateStr) return '--';
+  const date = new Date(dateStr);
+  return date.toLocaleDateString('es-ES', {
     day: '2-digit',
-    month: '2-digit',
+    month: 'short',
     year: 'numeric',
     hour: '2-digit',
     minute: '2-digit'
   });
 }
 
-function getFormatFromUrl(url) {
-  if (!url) return 'unknown';
-  const ext = url.split('.').pop()?.toLowerCase();
-  if (['wav', 'mp3', 'm4a', 'webm', 'ogg', 'mpeg', 'mp4'].includes(ext)) {
-    if (ext === 'mpeg') return 'mp3';
-    if (ext === 'mp4') return 'm4a';
-    return ext;
-  }
-  return 'unknown';
+function getFormatBadge(url) {
+  if (!url) return { label: 'N/A', class: '' };
+  const ext = url.split('.').pop().toLowerCase();
+  const formats = {
+    'wav': { label: 'WAV', class: 'wav' },
+    'webm': { label: 'WebM', class: 'webm' },
+    'mp3': { label: 'MP3', class: 'mp3' },
+    'ogg': { label: 'OGG', class: 'ogg' },
+    'm4a': { label: 'M4A', class: 'm4a' }
+  };
+  return formats[ext] || { label: ext.toUpperCase(), class: '' };
+}
+
+function getPublicUrl(storagePath) {
+  // Storage path is relative like "audios/filename.wav"
+  // Need to build full public URL using Supabase
+  if (!storagePath) return null;
+  
+  // If already a full URL, return as-is
+  if (storagePath.startsWith('http')) return storagePath;
+  
+  // Build public URL from storage path
+  const { data } = supabase.storage.from('audios').getPublicUrl(storagePath);
+  return data?.publicUrl || null;
 }
 
 function getUserName(userId) {
-  const user = users.find(u => u.id === userId);
-  return user ? user.name : `Usuario ${userId}`;
+  const user = allUsers.find(u => u.id === userId);
+  return user ? user.name : 'Desconocido';
 }
 
-function getSongName(songId) {
-  const song = songs.find(s => s.id === songId);
-  return song ? song.title : `Canción ${songId}`;
+function getSongTitle(songId) {
+  const song = allSongs.find(s => s.id === songId);
+  return song ? song.title : 'Sin canción';
 }
 
-// Update filter dropdowns based on current audios
-function updateFilters() {
-  // Save current selections
-  const currentUploader = filterUploader.value;
-  const currentSong = filterSong.value;
-  
-  // Update uploader filter - only show users that have audios
-  filterUploader.innerHTML = '<option value="">Todos los uploaders</option>';
-  const uploaderIdsWithAudios = new Set(allAudios.map(a => a.uploader_id).filter(Boolean));
-  users.filter(user => uploaderIdsWithAudios.has(user.id)).forEach(user => {
-    const option = document.createElement('option');
-    option.value = user.id;
-    option.textContent = user.name;
-    filterUploader.appendChild(option);
-  });
-  
-  // Update song filter - only show songs that have audios
-  filterSong.innerHTML = '<option value="">Todas las canciones</option>';
-  const songIdsWithAudios = new Set(allAudios.map(a => a.relational_song_id).filter(Boolean));
-  songs.filter(song => songIdsWithAudios.has(song.id)).forEach(song => {
-    const option = document.createElement('option');
-    option.value = song.id;
-    option.textContent = song.title;
-    filterSong.appendChild(option);
-  });
-  
-  // Restore selections if still valid
-  if (uploaderIdsWithAudios.has(parseInt(currentUploader))) {
-    filterUploader.value = currentUploader;
-  }
-  if (songIdsWithAudios.has(parseInt(currentSong))) {
-    filterSong.value = currentSong;
-  }
-}
+// =====================
+// DATA LOADING
+// =====================
 
-// Load data
 async function loadUsers() {
-  try {
-    const { data, error } = await supabase
-      .from('users')
-      .select('id, name')
-      .order('name');
-    
-    if (error) throw error;
-    users = data || [];
-  } catch (err) {
-    console.error('Error loading users:', err);
+  const { data, error } = await supabase
+    .from('users')
+    .select('id, name')
+    .order('name');
+  
+  if (error) {
+    console.error('Error loading users:', error);
+    return;
   }
+  allUsers = data || [];
 }
 
 async function loadSongs() {
-  try {
-    const { data, error } = await supabase
-      .from('songs')
-      .select('id, title')
-      .order('title');
-    
-    if (error) throw error;
-    songs = data || [];
-  } catch (err) {
-    console.error('Error loading songs:', err);
+  const { data, error } = await supabase
+    .from('songs')
+    .select('id, title')
+    .order('title');
+  
+  if (error) {
+    console.error('Error loading songs:', error);
+    return;
   }
+  allSongs = data || [];
 }
 
 async function loadAudios() {
-  refreshBtn.classList.add('loading');
-  audiosList.innerHTML = '<div class="loading-message">Cargando audios...</div>';
-  
-  // Reset stats before loading
-  resetStats();
-  statTotalCount.textContent = '--';
-  statTotalSize.textContent = '--';
-  statHeaviest.textContent = '--';
-  statLongest.textContent = '--';
-  statSizeRange.textContent = '--';
-  statDurationRange.textContent = '--';
-  
-  try {
-    const { data, error } = await supabase
-      .from('audios')
-      .select('*')
-      .order('created_at', { ascending: false });
-    
-    if (error) throw error;
-    allAudios = data || [];
-    
-    // Update total count immediately
-    statTotalCount.textContent = allAudios.length;
-    
-    renderAudios();
-  } catch (err) {
-    console.error('Error loading audios:', err);
-    audiosList.innerHTML = '<div class="error-message">Error al cargar los audios</div>';
-  } finally {
-    refreshBtn.classList.remove('loading');
-  }
-}
-
-function getFilteredAudios() {
-  let filtered = [...allAudios];
-  
-  // Search filter
-  const search = searchInput.value.toLowerCase().trim();
-  if (search) {
-    filtered = filtered.filter(audio => 
-      audio.name?.toLowerCase().includes(search) ||
-      audio.detail?.toLowerCase().includes(search)
-    );
-  }
-  
-  // Uploader filter
-  const uploaderId = filterUploader.value;
-  if (uploaderId) {
-    filtered = filtered.filter(audio => audio.uploader_id === parseInt(uploaderId));
-  }
-  
-  // Song filter
-  const songId = filterSong.value;
-  if (songId) {
-    filtered = filtered.filter(audio => audio.relational_song_id === parseInt(songId));
-  }
-  
-  // Format filter
-  const format = filterFormat.value;
-  if (format) {
-    filtered = filtered.filter(audio => getFormatFromUrl(audio.url) === format);
-  }
-  
-  return filtered;
-}
-
-function renderAudios() {
-  const filtered = getFilteredAudios();
-  
-  audiosCount.textContent = `${filtered.length} de ${allAudios.length} audios`;
-  
-  if (filtered.length === 0) {
-    audiosList.innerHTML = '<div class="empty-message">No se encontraron audios</div>';
-    return;
-  }
-  
-  audiosList.innerHTML = filtered.map(audio => createAudioCard(audio)).join('');
-  
-  // Load metadata for each audio
-  filtered.forEach(audio => {
-    loadAudioMetadata(audio);
-  });
-  
-  // Attach event listeners
-  attachCardListeners();
-}
-
-function createAudioCard(audio) {
-  const format = getFormatFromUrl(audio.url);
-  const uploaderName = getUserName(audio.uploader_id);
-  const songName = getSongName(audio.relational_song_id);
-  
-  return `
-    <div class="audio-card" data-audio-id="${audio.id}">
-      <div class="audio-card-main">
-        <div class="audio-id-badge">#${audio.id}</div>
-        <div class="audio-name">${escapeHtml(audio.name || 'Sin nombre')}</div>
-        <div class="audio-card-actions">
-          <button class="action-btn play" data-action="play" data-audio-id="${audio.id}" title="Play">
-            <svg xmlns="http://www.w3.org/2000/svg" width="14" height="14" viewBox="0 0 24 24" fill="currentColor">
-              <polygon points="5 3 19 12 5 21 5 3"/>
-            </svg>
-          </button>
-          <button class="action-btn edit" data-action="edit" data-audio-id="${audio.id}" title="Editar">
-            <svg xmlns="http://www.w3.org/2000/svg" width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
-              <path d="M11 4H4a2 2 0 0 0-2 2v14a2 2 0 0 0 2 2h14a2 2 0 0 0 2-2v-7"/>
-              <path d="M18.5 2.5a2.121 2.121 0 0 1 3 3L12 15l-4 1 1-4 9.5-9.5z"/>
-            </svg>
-          </button>
-          <button class="action-btn delete" data-action="delete" data-audio-id="${audio.id}" title="Eliminar">
-            <svg xmlns="http://www.w3.org/2000/svg" width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
-              <polyline points="3 6 5 6 21 6"/>
-              <path d="M19 6v14a2 2 0 0 1-2 2H7a2 2 0 0 1-2-2V6m3 0V4a2 2 0 0 1 2-2h4a2 2 0 0 1 2 2v2"/>
-            </svg>
-          </button>
-        </div>
-      </div>
-      
-      <div class="audio-card-details">
-        <div class="audio-card-info">
-          <div class="info-item">
-            <span class="info-label">Canción</span>
-            <span class="info-value">${escapeHtml(songName)}</span>
-          </div>
-          <div class="info-item">
-            <span class="info-label">Subido por</span>
-            <span class="info-value">${escapeHtml(uploaderName)}</span>
-          </div>
-          <div class="info-item">
-            <span class="info-label">Detalle</span>
-            <span class="info-value">${escapeHtml(audio.detail || 'N/A')}</span>
-          </div>
-          <div class="info-item">
-            <span class="info-label">Creado</span>
-            <span class="info-value">${formatDate(audio.created_at)}</span>
-          </div>
-        </div>
-        
-        <div class="audio-card-metadata">
-          <div class="info-item">
-            <span class="info-label">Formato</span>
-            <span class="info-value"><span class="format-badge ${format}">${format.toUpperCase()}</span></span>
-          </div>
-          <div class="info-item">
-            <span class="info-label">Tamaño</span>
-            <span class="info-value loading" data-meta="size-${audio.id}">Cargando...</span>
-          </div>
-          <div class="info-item">
-            <span class="info-label">Duración</span>
-            <span class="info-value loading" data-meta="duration-${audio.id}">Cargando...</span>
-          </div>
-          <div class="info-item">
-            <span class="info-label">Sample Rate</span>
-            <span class="info-value loading" data-meta="samplerate-${audio.id}">Cargando...</span>
-          </div>
-        </div>
-      </div>
+  audioListEl.innerHTML = `
+    <div class="loading-state">
+      <svg xmlns="http://www.w3.org/2000/svg" width="32" height="32" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
+        <path d="M21 2v6h-6M3 22v-6h6M21 12A9 9 0 0 0 6 5.3L3 8M3 12a9 9 0 0 0 15 6.7l3-2.7"/>
+      </svg>
+      <span>Cargando audios...</span>
     </div>
   `;
+
+  const { data, error } = await supabase
+    .from('audios')
+    .select('*')
+    .order('created_at', { ascending: false });
+
+  if (error) {
+    console.error('Error loading audios:', error);
+    audioListEl.innerHTML = `
+      <div class="empty-state">
+        <svg xmlns="http://www.w3.org/2000/svg" width="48" height="48" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
+          <circle cx="12" cy="12" r="10"/>
+          <line x1="12" y1="8" x2="12" y2="12"/>
+          <line x1="12" y1="16" x2="12.01" y2="16"/>
+        </svg>
+        <span>Error al cargar los audios</span>
+      </div>
+    `;
+    return;
+  }
+
+  allAudios = data || [];
+  updateFilters();
+  applyFilters();
+  updateStats();
 }
 
-function escapeHtml(text) {
-  if (!text) return '';
-  const div = document.createElement('div');
-  div.textContent = text;
-  return div.innerHTML;
+// =====================
+// STATS
+// =====================
+
+async function updateStats() {
+  // Count
+  statCountEl.textContent = filteredAudios.length;
+  
+  // Calculate total size from file URLs
+  let totalSize = 0;
+  
+  // Get sizes from storage for all filtered audios
+  const sizePromises = filteredAudios.map(async (audio) => {
+    if (!audio.url) return 0;
+    try {
+      const publicUrl = getPublicUrl(audio.url);
+      const response = await fetch(publicUrl, { method: 'HEAD' });
+      const size = parseInt(response.headers.get('content-length') || '0');
+      return size;
+    } catch {
+      return 0;
+    }
+  });
+  
+  try {
+    const sizes = await Promise.all(sizePromises);
+    totalSize = sizes.reduce((sum, size) => sum + size, 0);
+  } catch (e) {
+    console.error('Error calculating sizes:', e);
+  }
+  
+  statSizeEl.textContent = formatBytes(totalSize);
 }
 
-// Get storage path from url field
-// The url field contains the full path including the folder inside the bucket
-// e.g., "audios/18-filename.webm" means folder "audios" inside bucket "audios"
-function getStoragePath(url) {
-  return url || '';
+// =====================
+// FILTERS
+// =====================
+
+function updateFilters() {
+  // Get unique uploaders and songs that have audios
+  const uploaderIds = [...new Set(allAudios.map(a => a.uploader_id).filter(Boolean))];
+  const songIds = [...new Set(allAudios.map(a => a.relational_song_id).filter(Boolean))];
+  
+  // Filter users to only those with audios
+  const uploadersWithAudios = allUsers.filter(u => uploaderIds.includes(u.id));
+  const songsWithAudios = allSongs.filter(s => songIds.includes(s.id));
+  
+  // Populate uploader filter
+  const currentUploader = filterUploaderEl.value;
+  filterUploaderEl.innerHTML = '<option value="">Todos los usuarios</option>';
+  uploadersWithAudios.forEach(user => {
+    filterUploaderEl.innerHTML += `<option value="${user.id}">${user.name}</option>`;
+  });
+  filterUploaderEl.value = currentUploader;
+  
+  // Populate song filter
+  const currentSong = filterSongEl.value;
+  filterSongEl.innerHTML = '<option value="">Todas las canciones</option>';
+  songsWithAudios.forEach(song => {
+    filterSongEl.innerHTML += `<option value="${song.id}">${song.title}</option>`;
+  });
+  filterSongEl.value = currentSong;
 }
 
-async function loadAudioMetadata(audio) {
-  if (!audio.url) {
-    updateMetadataDisplay(audio.id, { size: 'N/A', duration: 'N/A', sampleRate: 'N/A' });
+function applyFilters() {
+  const uploaderId = filterUploaderEl.value;
+  const songId = filterSongEl.value;
+  
+  filteredAudios = allAudios.filter(audio => {
+    if (uploaderId && audio.uploader_id !== parseInt(uploaderId)) return false;
+    if (songId && audio.relational_song_id !== parseInt(songId)) return false;
+    return true;
+  });
+  
+  renderAudioList();
+  updateStats();
+}
+
+// =====================
+// RENDER
+// =====================
+
+function renderAudioList() {
+  if (filteredAudios.length === 0) {
+    audioListEl.innerHTML = `
+      <div class="empty-state">
+        <svg xmlns="http://www.w3.org/2000/svg" width="48" height="48" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
+          <path d="M9 18V5l12-2v13"/>
+          <circle cx="6" cy="18" r="3"/>
+          <circle cx="18" cy="16" r="3"/>
+        </svg>
+        <span>No hay audios para mostrar</span>
+      </div>
+    `;
     return;
   }
   
-  const storagePath = getStoragePath(audio.url);
-  
-  try {
-    // Get public URL (bucket is public)
-    const { data: urlData } = supabase
-      .storage
-      .from(AUDIO_BUCKET)
-      .getPublicUrl(storagePath);
+  audioListEl.innerHTML = filteredAudios.map(audio => {
+    const format = getFormatBadge(audio.url);
+    const userName = getUserName(audio.uploader_id);
+    const publicUrl = getPublicUrl(audio.url);
     
-    if (!urlData?.publicUrl) {
-      console.warn(`Could not get public URL for audio ${audio.id}`);
-      updateMetadataDisplay(audio.id, { size: 'N/A', duration: 'N/A', sampleRate: 'N/A' });
-      return;
-    }
-    
-    if (urlData?.publicUrl) {
-      // Use AudioContext to get sample rate and duration
-      const audioContext = new (window.AudioContext || window.webkitAudioContext)();
-      
-      try {
-        const response = await fetch(urlData.publicUrl);
-        const arrayBuffer = await response.arrayBuffer();
-        
-        const fileSize = arrayBuffer.byteLength;
-        
-        const audioBuffer = await audioContext.decodeAudioData(arrayBuffer);
-        const duration = audioBuffer.duration;
-        
-        updateMetadataDisplay(audio.id, {
-          size: formatFileSize(fileSize),
-          duration: formatDuration(duration),
-          sampleRate: audioBuffer.sampleRate + ' Hz'
-        });
-        
-        // Collect stats
-        audioStats.sizes.push(fileSize);
-        audioStats.durations.push(duration);
-        
-        if (fileSize > audioStats.heaviestSize) {
-          audioStats.heaviestSize = fileSize;
-          audioStats.heaviestName = audio.name || 'Sin nombre';
-        }
-        
-        if (duration > audioStats.longestDuration) {
-          audioStats.longestDuration = duration;
-          audioStats.longestName = audio.name || 'Sin nombre';
-        }
-        
-        // Update stats display after each audio loads
-        updateStatsDisplay();
-        
-        await audioContext.close();
-      } catch (decodeErr) {
-        console.warn(`Could not decode audio ${audio.id}:`, decodeErr);
-        updateMetadataDisplay(audio.id, {
-          size: 'N/A',
-          duration: 'Error',
-          sampleRate: 'Error'
-        });
-      }
-    } else {
-      updateMetadataDisplay(audio.id, { size: 'N/A', duration: 'N/A', sampleRate: 'N/A' });
-    }
-  } catch (err) {
-    console.error(`Error loading metadata for audio ${audio.id}:`, err);
-    updateMetadataDisplay(audio.id, { size: 'Error', duration: 'Error', sampleRate: 'Error' });
-  }
-}
-
-function resetStats() {
-  audioStats = {
-    sizes: [],
-    durations: [],
-    heaviestName: '',
-    heaviestSize: 0,
-    longestName: '',
-    longestDuration: 0
-  };
-}
-
-function getPercentileRange(arr, lowPercentile, highPercentile) {
-  if (arr.length === 0) return { low: 0, high: 0 };
-  const sorted = [...arr].sort((a, b) => a - b);
-  const lowIndex = Math.floor(sorted.length * lowPercentile);
-  const highIndex = Math.floor(sorted.length * highPercentile) - 1;
-  return {
-    low: sorted[Math.max(0, lowIndex)],
-    high: sorted[Math.min(sorted.length - 1, highIndex)]
-  };
-}
-
-function updateStatsDisplay() {
-  // Total count
-  statTotalCount.textContent = allAudios.length;
-  
-  // Total size
-  const totalSize = audioStats.sizes.reduce((sum, s) => sum + s, 0);
-  statTotalSize.textContent = formatFileSize(totalSize);
-  
-  // Heaviest file
-  if (audioStats.heaviestName) {
-    const shortName = audioStats.heaviestName.length > 20 
-      ? audioStats.heaviestName.substring(0, 20) + '...' 
-      : audioStats.heaviestName;
-    statHeaviest.textContent = `${shortName} (${formatFileSize(audioStats.heaviestSize)})`;
-  }
-  
-  // Longest file
-  if (audioStats.longestName) {
-    const shortName = audioStats.longestName.length > 20 
-      ? audioStats.longestName.substring(0, 20) + '...' 
-      : audioStats.longestName;
-    statLongest.textContent = `${shortName} (${formatDuration(audioStats.longestDuration)})`;
-  }
-  
-  // 80% size range (10th to 90th percentile)
-  if (audioStats.sizes.length >= 3) {
-    const sizeRange = getPercentileRange(audioStats.sizes, 0.10, 0.90);
-    statSizeRange.textContent = `${formatFileSize(sizeRange.low)} - ${formatFileSize(sizeRange.high)}`;
-  }
-  
-  // 80% duration range (10th to 90th percentile)
-  if (audioStats.durations.length >= 3) {
-    const durationRange = getPercentileRange(audioStats.durations, 0.10, 0.90);
-    statDurationRange.textContent = `${formatDuration(durationRange.low)} - ${formatDuration(durationRange.high)}`;
-  }
-}
-
-function updateMetadataDisplay(audioId, metadata) {
-  const sizeEl = document.querySelector(`[data-meta="size-${audioId}"]`);
-  const durationEl = document.querySelector(`[data-meta="duration-${audioId}"]`);
-  const sampleRateEl = document.querySelector(`[data-meta="samplerate-${audioId}"]`);
-  
-  if (sizeEl) {
-    sizeEl.textContent = metadata.size;
-    sizeEl.classList.remove('loading');
-  }
-  if (durationEl) {
-    durationEl.textContent = metadata.duration;
-    durationEl.classList.remove('loading');
-  }
-  if (sampleRateEl) {
-    sampleRateEl.textContent = metadata.sampleRate;
-    sampleRateEl.classList.remove('loading');
-  }
-}
-
-function attachCardListeners() {
-  document.querySelectorAll('.action-btn').forEach(btn => {
-    btn.addEventListener('click', handleActionClick);
-  });
-  
-  // Toggle card expansion by clicking on the card
-  document.querySelectorAll('.audio-card').forEach(card => {
-    card.addEventListener('click', (e) => {
-      // Don't toggle if clicking on action buttons
-      if (e.target.closest('.audio-card-actions')) return;
-      card.classList.toggle('expanded');
-    });
-  });
-}
-
-async function handleActionClick(event) {
-  const btn = event.currentTarget;
-  const action = btn.dataset.action;
-  const audioId = parseInt(btn.dataset.audioId);
-  
-  switch (action) {
-    case 'play':
-      await togglePlayAudio(audioId, btn);
-      break;
-    case 'edit':
-      openEditModal(audioId);
-      break;
-    case 'delete':
-      openDeleteModal(audioId);
-      break;
-  }
-}
-
-async function togglePlayAudio(audioId, btn) {
-  const audio = allAudios.find(a => a.id === audioId);
-  if (!audio || !audio.url) return;
-  
-  // Stop current audio if playing
-  if (audioElement) {
-    audioElement.pause();
-    audioElement = null;
-    document.querySelectorAll('.action-btn.play.playing').forEach(b => {
-      b.classList.remove('playing');
-      b.innerHTML = `
-        <svg xmlns="http://www.w3.org/2000/svg" width="14" height="14" viewBox="0 0 24 24" fill="currentColor">
-          <polygon points="5 3 19 12 5 21 5 3"/>
-        </svg>
-      `;
-      b.title = 'Play';
-    });
-    
-    if (currentAudio === audioId) {
-      currentAudio = null;
-      return;
-    }
-  }
-  
-  const storagePath = getStoragePath(audio.url);
-  
-  try {
-    const { data: urlData } = supabase
-      .storage
-      .from(AUDIO_BUCKET)
-      .getPublicUrl(storagePath);
-    
-    if (!urlData?.publicUrl) {
-      alert('No se pudo obtener la URL del audio');
-      return;
-    }
-    
-    audioElement = new Audio(urlData.publicUrl);
-    currentAudio = audioId;
-    
-    btn.classList.add('playing');
-    btn.innerHTML = `
-      <svg xmlns="http://www.w3.org/2000/svg" width="14" height="14" viewBox="0 0 24 24" fill="currentColor">
-        <rect x="6" y="4" width="4" height="16"/>
-        <rect x="14" y="4" width="4" height="16"/>
-      </svg>
+    return `
+      <div class="audio-item" data-id="${audio.id}">
+        <button class="play-btn" data-url="${publicUrl}" data-id="${audio.id}">
+          <svg class="play-icon" xmlns="http://www.w3.org/2000/svg" width="20" height="20" viewBox="0 0 24 24" fill="currentColor">
+            <polygon points="5 3 19 12 5 21 5 3"/>
+          </svg>
+          <svg class="pause-icon" xmlns="http://www.w3.org/2000/svg" width="20" height="20" viewBox="0 0 24 24" fill="currentColor" style="display:none">
+            <rect x="6" y="4" width="4" height="16"/>
+            <rect x="14" y="4" width="4" height="16"/>
+          </svg>
+        </button>
+        <div class="audio-info" data-id="${audio.id}">
+          <div class="audio-name">${audio.name || 'Sin nombre'}</div>
+          <div class="audio-meta">
+            <span>${userName}</span>
+            <span class="format-badge ${format.class}">${format.label}</span>
+          </div>
+        </div>
+      </div>
     `;
-    btn.title = 'Pausa';
-    
-    audioElement.play();
-    
-    audioElement.onended = () => {
-      btn.classList.remove('playing');
-      btn.innerHTML = `
-        <svg xmlns="http://www.w3.org/2000/svg" width="14" height="14" viewBox="0 0 24 24" fill="currentColor">
-          <polygon points="5 3 19 12 5 21 5 3"/>
-        </svg>
-      `;
-      btn.title = 'Play';
-      currentAudio = null;
-      audioElement = null;
-    };
-  } catch (err) {
-    console.error('Error playing audio:', err);
-    alert('Error al reproducir el audio');
-  }
+  }).join('');
+  
+  // Add event listeners
+  document.querySelectorAll('.play-btn').forEach(btn => {
+    btn.addEventListener('click', handlePlayClick);
+  });
+  
+  document.querySelectorAll('.audio-info').forEach(info => {
+    info.addEventListener('click', handleInfoClick);
+  });
 }
 
-// Variables to store scroll and zoom state
-let savedScrollPosition = 0;
-let savedZoom = 1;
+// =====================
+// PLAY FUNCTIONALITY
+// =====================
 
-function openEditModal(audioId) {
+function handlePlayClick(e) {
+  e.stopPropagation();
+  const btn = e.currentTarget;
+  const url = btn.dataset.url;
+  const audioId = btn.dataset.id;
+  
+  // Stop currently playing audio if any
+  if (currentlyPlayingAudio) {
+    currentlyPlayingAudio.pause();
+    currentlyPlayingAudio.currentTime = 0;
+    
+    // Reset all play buttons
+    document.querySelectorAll('.play-btn').forEach(b => {
+      b.querySelector('.play-icon').style.display = '';
+      b.querySelector('.pause-icon').style.display = 'none';
+      b.classList.remove('playing');
+    });
+    
+    // If clicking the same audio, just stop
+    if (currentlyPlayingAudio.dataset.audioId === audioId) {
+      currentlyPlayingAudio = null;
+      return;
+    }
+  }
+  
+  // Create and play new audio
+  const audio = new Audio(url);
+  audio.dataset.audioId = audioId;
+  
+  audio.addEventListener('ended', () => {
+    btn.querySelector('.play-icon').style.display = '';
+    btn.querySelector('.pause-icon').style.display = 'none';
+    btn.classList.remove('playing');
+    currentlyPlayingAudio = null;
+  });
+  
+  audio.addEventListener('error', (e) => {
+    console.error('Error playing audio:', e);
+    btn.querySelector('.play-icon').style.display = '';
+    btn.querySelector('.pause-icon').style.display = 'none';
+    btn.classList.remove('playing');
+    currentlyPlayingAudio = null;
+  });
+  
+  audio.play().then(() => {
+    btn.querySelector('.play-icon').style.display = 'none';
+    btn.querySelector('.pause-icon').style.display = '';
+    btn.classList.add('playing');
+    currentlyPlayingAudio = audio;
+  }).catch(err => {
+    console.error('Error playing audio:', err);
+  });
+}
+
+// =====================
+// DETAIL MODAL
+// =====================
+
+function handleInfoClick(e) {
+  const audioId = parseInt(e.currentTarget.dataset.id);
   const audio = allAudios.find(a => a.id === audioId);
   if (!audio) return;
   
-  // Save current scroll position
+  currentAudio = audio;
+  openDetailModal(audio);
+}
+
+function openDetailModal(audio) {
   savedScrollPosition = window.scrollY;
-  
-  // Save current zoom (visual viewport scale)
-  if (window.visualViewport) {
-    savedZoom = window.visualViewport.scale;
-  }
-  
-  // Lock body scroll
-  document.body.style.top = `-${savedScrollPosition}px`;
   document.body.classList.add('modal-open');
   
-  editingAudioId = audioId;
-  editNameInput.value = audio.name || '';
-  editModal.classList.remove('hidden');
+  // Set basic info
+  detailTitle.textContent = audio.name || 'Sin nombre';
+  detailSubtitle.textContent = `ID: ${audio.id}`;
+  detailSong.textContent = getSongTitle(audio.relational_song_id);
+  detailUploader.textContent = getUserName(audio.uploader_id);
+  detailDetail.textContent = audio.detail || '--';
+  detailDate.textContent = formatDate(audio.created_at);
   
-  // Small delay to ensure modal is visible before focusing
-  setTimeout(() => {
-    editNameInput.focus();
-  }, 50);
+  const format = getFormatBadge(audio.url);
+  detailFormat.innerHTML = `<span class="format-badge ${format.class}">${format.label}</span>`;
+  
+  // Reset loading states
+  detailSize.textContent = 'Cargando...';
+  detailSize.classList.add('loading');
+  detailDuration.textContent = 'Cargando...';
+  detailDuration.classList.add('loading');
+  detailSamplerate.textContent = 'Cargando...';
+  detailSamplerate.classList.add('loading');
+  
+  // Show modal
+  detailModal.classList.add('active');
+  
+  // Load audio metadata
+  const publicUrl = getPublicUrl(audio.url);
+  loadAudioMetadata(publicUrl);
+}
+
+async function loadAudioMetadata(url) {
+  if (!url) {
+    detailSize.textContent = '--';
+    detailSize.classList.remove('loading');
+    detailDuration.textContent = '--';
+    detailDuration.classList.remove('loading');
+    detailSamplerate.textContent = '--';
+    detailSamplerate.classList.remove('loading');
+    return;
+  }
+  
+  // Get file size
+  try {
+    const response = await fetch(url, { method: 'HEAD' });
+    const size = parseInt(response.headers.get('content-length') || '0');
+    detailSize.textContent = formatBytes(size);
+    detailSize.classList.remove('loading');
+  } catch {
+    detailSize.textContent = '--';
+    detailSize.classList.remove('loading');
+  }
+  
+  // Get duration and sample rate
+  try {
+    const audio = new Audio();
+    audio.src = url;
+    
+    await new Promise((resolve, reject) => {
+      audio.addEventListener('loadedmetadata', () => {
+        detailDuration.textContent = formatDuration(audio.duration);
+        detailDuration.classList.remove('loading');
+        resolve();
+      });
+      audio.addEventListener('error', reject);
+      setTimeout(reject, 5000); // Timeout after 5 seconds
+    });
+    
+    // Try to get sample rate using AudioContext
+    try {
+      const audioContext = new (window.AudioContext || window.webkitAudioContext)();
+      const response = await fetch(url);
+      const arrayBuffer = await response.arrayBuffer();
+      const audioBuffer = await audioContext.decodeAudioData(arrayBuffer);
+      detailSamplerate.textContent = `${audioBuffer.sampleRate} Hz`;
+      detailSamplerate.classList.remove('loading');
+      audioContext.close();
+    } catch {
+      detailSamplerate.textContent = '--';
+      detailSamplerate.classList.remove('loading');
+    }
+  } catch {
+    detailDuration.textContent = '--';
+    detailDuration.classList.remove('loading');
+    detailSamplerate.textContent = '--';
+    detailSamplerate.classList.remove('loading');
+  }
+}
+
+function closeDetailModal() {
+  detailModal.classList.remove('active');
+  document.body.classList.remove('modal-open');
+  window.scrollTo(0, savedScrollPosition);
+  currentAudio = null;
+}
+
+// =====================
+// EDIT MODAL
+// =====================
+
+function openEditModal() {
+  if (!currentAudio) return;
+  editInput.value = currentAudio.name || '';
+  editOverlay.classList.add('active');
+  editInput.focus();
 }
 
 function closeEditModal() {
-  editModal.classList.add('hidden');
-  editingAudioId = null;
-  editNameInput.value = '';
-  
-  // Unlock body scroll and restore position
-  document.body.classList.remove('modal-open');
-  document.body.style.top = '';
-  window.scrollTo(0, savedScrollPosition);
+  editOverlay.classList.remove('active');
 }
 
 async function saveEdit() {
-  if (!editingAudioId) return;
+  if (!currentAudio) return;
   
-  const newName = editNameInput.value.trim();
-  if (!newName) {
-    alert('El nombre no puede estar vacío');
+  const newName = editInput.value.trim();
+  if (!newName) return;
+  
+  editSave.disabled = true;
+  editSave.textContent = 'Guardando...';
+  
+  const { error } = await supabase
+    .from('audios')
+    .update({ name: newName })
+    .eq('id', currentAudio.id);
+  
+  editSave.disabled = false;
+  editSave.textContent = 'Guardar';
+  
+  if (error) {
+    console.error('Error updating audio:', error);
+    alert('Error al guardar');
     return;
   }
   
-  saveEditBtn.disabled = true;
-  saveEditBtn.textContent = 'Guardando...';
+  // Update local data
+  currentAudio.name = newName;
+  const idx = allAudios.findIndex(a => a.id === currentAudio.id);
+  if (idx !== -1) allAudios[idx].name = newName;
   
-  try {
-    const { error } = await supabase
-      .from('audios')
-      .update({ name: newName })
-      .eq('id', editingAudioId);
-    
-    if (error) throw error;
-    
-    // Update local data
-    const audio = allAudios.find(a => a.id === editingAudioId);
-    if (audio) {
-      audio.name = newName;
-    }
-    
-    closeEditModal();
-    renderAudios();
-  } catch (err) {
-    console.error('Error updating audio name:', err);
-    alert('Error al actualizar el nombre');
-  } finally {
-    saveEditBtn.disabled = false;
-    saveEditBtn.textContent = 'Guardar';
-  }
+  // Update UI
+  detailTitle.textContent = newName;
+  applyFilters();
+  closeEditModal();
 }
 
-function openDeleteModal(audioId) {
-  const audio = allAudios.find(a => a.id === audioId);
-  if (!audio) return;
-  
-  deletingAudioId = audioId;
-  deleteAudioName.textContent = `"${audio.name || 'Sin nombre'}" (ID: ${audio.id})`;
-  deleteModal.classList.remove('hidden');
+// =====================
+// DELETE MODAL
+// =====================
+
+function openDeleteModal() {
+  if (!currentAudio) return;
+  deleteName.textContent = currentAudio.name || 'Sin nombre';
+  deleteOverlay.classList.add('active');
 }
 
 function closeDeleteModal() {
-  deleteModal.classList.add('hidden');
-  deletingAudioId = null;
+  deleteOverlay.classList.remove('active');
 }
 
 async function confirmDelete() {
-  if (!deletingAudioId) return;
+  if (!currentAudio) return;
   
-  const audio = allAudios.find(a => a.id === deletingAudioId);
-  if (!audio) return;
+  deleteConfirm.disabled = true;
+  deleteConfirm.textContent = 'Eliminando...';
   
-  confirmDeleteBtn.disabled = true;
-  confirmDeleteBtn.textContent = 'Eliminando...';
+  // Extract file path from URL for storage deletion
+  const url = currentAudio.url;
+  let filePath = null;
   
-  let storageDeleted = false;
-  
-  try {
-    // Delete from storage first
-    if (audio.url) {
-      // The url field contains the path inside the bucket (e.g., "audios/filename.wav")
-      const storagePath = audio.url;
-      
-      const { data: deleteData, error: storageError } = await supabase
-        .storage
-        .from(AUDIO_BUCKET)
-        .remove([storagePath]);
-      
-      if (storageError) {
-        console.error('Error deleting file from storage:', storageError);
-        const continueDelete = confirm(
-          `No se pudo eliminar el archivo del storage: ${storageError.message}\n\n¿Desea eliminar solo el registro de la base de datos?`
-        );
-        if (!continueDelete) {
-          confirmDeleteBtn.disabled = false;
-          confirmDeleteBtn.textContent = 'Eliminar';
-          return;
-        }
-      } else if (deleteData?.length > 0) {
-        storageDeleted = true;
-      }
+  if (url) {
+    // URL format: .../storage/v1/object/public/audios/audios/filename.ext
+    const match = url.match(/\/audios\/audios\/(.+)$/);
+    if (match) {
+      filePath = `audios/${match[1]}`;
     }
-    
-    // Delete from database
-    const { error: dbError } = await supabase
+  }
+  
+  // Delete from storage first
+  if (filePath) {
+    const { error: storageError } = await supabase.storage
       .from('audios')
-      .delete()
-      .eq('id', deletingAudioId);
+      .remove([filePath]);
     
-    if (dbError) throw dbError;
-    
-    // Update local data
-    allAudios = allAudios.filter(a => a.id !== deletingAudioId);
-    
-    closeDeleteModal();
-    renderAudios();
-  } catch (err) {
-    console.error('Error deleting audio:', err);
-    alert('Error al eliminar el audio');
-  } finally {
-    confirmDeleteBtn.disabled = false;
-    confirmDeleteBtn.textContent = 'Eliminar';
-  }
-}
-
-// Event listeners
-searchInput.addEventListener('input', debounce(renderAudios, 300));
-filterUploader.addEventListener('change', renderAudios);
-filterSong.addEventListener('change', renderAudios);
-filterFormat.addEventListener('change', renderAudios);
-refreshBtn.addEventListener('click', loadAudios);
-
-// Toggle details section
-toggleDetailsBtn.addEventListener('click', () => {
-  const isCollapsed = collapsibleSection.classList.toggle('collapsed');
-  toggleDetailsBtn.classList.toggle('collapsed', isCollapsed);
-  audiosList.classList.toggle('expanded', !isCollapsed);
-  // Save preference
-  localStorage.setItem('audiosDetailsCollapsed', isCollapsed);
-});
-
-// Restore collapsed state from localStorage
-const savedCollapsed = localStorage.getItem('audiosDetailsCollapsed');
-if (savedCollapsed === 'true') {
-  collapsibleSection.classList.add('collapsed');
-  toggleDetailsBtn.classList.add('collapsed');
-} else {
-  audiosList.classList.add('expanded');
-}
-
-// Toggle all cards expand/collapse
-let allCardsExpanded = false;
-toggleAllCardsBtn.addEventListener('click', () => {
-  allCardsExpanded = !allCardsExpanded;
-  const cards = document.querySelectorAll('.audio-card');
-  cards.forEach(card => {
-    if (allCardsExpanded) {
-      card.classList.add('expanded');
-    } else {
-      card.classList.remove('expanded');
+    if (storageError) {
+      console.warn('Error deleting from storage:', storageError);
+      // Continue anyway to delete db record
     }
-  });
-  toggleAllCardsBtn.classList.toggle('all-expanded', allCardsExpanded);
-  toggleAllCardsBtn.querySelector('.toggle-text').textContent = allCardsExpanded ? 'Contraer todas' : 'Expandir todas';
-});
-
-cancelEditBtn.addEventListener('click', closeEditModal);
-saveEditBtn.addEventListener('click', saveEdit);
-editNameInput.addEventListener('keypress', (e) => {
-  if (e.key === 'Enter') saveEdit();
-});
-
-cancelDeleteBtn.addEventListener('click', closeDeleteModal);
-confirmDeleteBtn.addEventListener('click', confirmDelete);
-
-// Close modals on outside click
-editModal.addEventListener('click', (e) => {
-  if (e.target === editModal) closeEditModal();
-});
-deleteModal.addEventListener('click', (e) => {
-  if (e.target === deleteModal) closeDeleteModal();
-});
-cleanupModal.addEventListener('click', (e) => {
-  if (e.target === cleanupModal) closeCleanupModal();
-});
-
-// Cleanup functionality
-cleanupBtn.addEventListener('click', openCleanupModal);
-cancelCleanupBtn.addEventListener('click', closeCleanupModal);
-confirmCleanupBtn.addEventListener('click', confirmCleanup);
-
-async function openCleanupModal() {
-  cleanupModal.classList.remove('hidden');
-  cleanupInfo.textContent = 'Buscando archivos huérfanos...';
-  cleanupList.innerHTML = '';
-  cleanupList.classList.remove('has-files');
-  confirmCleanupBtn.disabled = true;
-  orphanFiles = [];
-  
-  try {
-    // Get all files from storage
-    const { data: storageFiles, error: listError } = await supabase
-      .storage
-      .from(AUDIO_BUCKET)
-      .list('audios');
-    
-    if (listError) {
-      cleanupInfo.textContent = 'Error al listar archivos: ' + listError.message;
-      return;
-    }
-    
-    // Get all URLs from database
-    const { data: dbAudios, error: dbError } = await supabase
-      .from('audios')
-      .select('url');
-    
-    if (dbError) {
-      cleanupInfo.textContent = 'Error al obtener registros: ' + dbError.message;
-      return;
-    }
-    
-    // Create a set of all URLs in the database
-    const dbUrls = new Set(dbAudios.map(a => a.url));
-    
-    // Find orphan files (in storage but not in database)
-    orphanFiles = storageFiles
-      .filter(f => f.name !== '.emptyFolderPlaceholder')
-      .filter(f => {
-        const storagePath = 'audios/' + f.name;
-        return !dbUrls.has(storagePath);
-      })
-      .map(f => f.name);
-    
-    if (orphanFiles.length === 0) {
-      cleanupInfo.textContent = 'No se encontraron archivos huérfanos.';
-    } else {
-      cleanupInfo.textContent = `Se encontraron ${orphanFiles.length} archivo(s) huérfano(s):`;
-      cleanupList.classList.add('has-files');
-      cleanupList.innerHTML = orphanFiles.map(f => 
-        `<div class="cleanup-item"><span class="file-name">${escapeHtml(f)}</span></div>`
-      ).join('');
-      confirmCleanupBtn.disabled = false;
-    }
-  } catch (err) {
-    cleanupInfo.textContent = 'Error: ' + err.message;
-  }
-}
-
-function closeCleanupModal() {
-  cleanupModal.classList.add('hidden');
-  orphanFiles = [];
-}
-
-async function confirmCleanup() {
-  if (orphanFiles.length === 0) return;
-  
-  confirmCleanupBtn.disabled = true;
-  confirmCleanupBtn.textContent = 'Eliminando...';
-  
-  try {
-    const pathsToDelete = orphanFiles.map(f => 'audios/' + f);
-    
-    const { data, error } = await supabase
-      .storage
-      .from(AUDIO_BUCKET)
-      .remove(pathsToDelete);
-    
-    if (error) {
-      alert('Error al eliminar archivos: ' + error.message);
-    } else {
-      const deletedCount = data?.length || 0;
-      alert(`Se eliminaron ${deletedCount} archivo(s) huérfano(s).`);
-      closeCleanupModal();
-    }
-  } catch (err) {
-    alert('Error: ' + err.message);
   }
   
-  confirmCleanupBtn.disabled = false;
-  confirmCleanupBtn.textContent = 'Eliminar';
+  // Delete from database
+  const { error } = await supabase
+    .from('audios')
+    .delete()
+    .eq('id', currentAudio.id);
+  
+  deleteConfirm.disabled = false;
+  deleteConfirm.textContent = 'Eliminar';
+  
+  if (error) {
+    console.error('Error deleting audio:', error);
+    alert('Error al eliminar');
+    return;
+  }
+  
+  // Update local data
+  allAudios = allAudios.filter(a => a.id !== currentAudio.id);
+  
+  // Close modals and refresh
+  closeDeleteModal();
+  closeDetailModal();
+  updateFilters();
+  applyFilters();
 }
 
-// Utility
-function debounce(func, wait) {
-  let timeout;
-  return function executedFunction(...args) {
-    const later = () => {
-      clearTimeout(timeout);
-      func(...args);
-    };
-    clearTimeout(timeout);
-    timeout = setTimeout(later, wait);
-  };
-}
+// =====================
+// REALTIME
+// =====================
 
-// Real-time subscription
-function setupRealtimeSubscription() {
-  const channel = supabase
+function setupRealtime() {
+  realtimeChannel = supabase
     .channel('audios-changes')
-    .on(
-      'postgres_changes',
-      {
-        event: '*',
-        schema: 'public',
-        table: 'audios'
-      },
+    .on('postgres_changes', 
+      { event: '*', schema: 'public', table: 'audios' },
       (payload) => {
-        console.log('Realtime update:', payload.eventType);
+        console.log('Realtime event:', payload.eventType);
         
         if (payload.eventType === 'INSERT') {
-          // Add new audio to the list
           allAudios.unshift(payload.new);
-          renderAudios();
-          // Load metadata for the new audio
-          loadAudioMetadata(payload.new);
+          updateFilters();
+          applyFilters();
         } else if (payload.eventType === 'UPDATE') {
-          // Update existing audio
-          const index = allAudios.findIndex(a => a.id === payload.new.id);
-          if (index !== -1) {
-            allAudios[index] = payload.new;
-            renderAudios();
-          }
+          const idx = allAudios.findIndex(a => a.id === payload.new.id);
+          if (idx !== -1) allAudios[idx] = payload.new;
+          applyFilters();
         } else if (payload.eventType === 'DELETE') {
-          // Remove deleted audio
-          const index = allAudios.findIndex(a => a.id === payload.old.id);
-          if (index !== -1) {
-            allAudios.splice(index, 1);
-            updateFilters();
-            renderAudios();
-            // Recalculate stats
-            loadAudios();
+          const deletedId = payload.old?.id;
+          if (deletedId) {
+            // Animate deletion
+            const item = document.querySelector(`.audio-item[data-id="${deletedId}"]`);
+            if (item) {
+              item.classList.add('deleting');
+              setTimeout(() => {
+                allAudios = allAudios.filter(a => a.id !== deletedId);
+                updateFilters();
+                applyFilters();
+              }, 500);
+            } else {
+              allAudios = allAudios.filter(a => a.id !== deletedId);
+              updateFilters();
+              applyFilters();
+            }
           }
         }
       }
     )
-    .subscribe((status) => {
-      console.log('Realtime subscription status:', status);
-    });
-  
-  return channel;
+    .subscribe();
 }
 
-// Initialize
+// =====================
+// EVENT LISTENERS
+// =====================
+
+// Filters
+filterUploaderEl.addEventListener('change', applyFilters);
+filterSongEl.addEventListener('change', applyFilters);
+
+// Refresh
+refreshBtn.addEventListener('click', loadAudios);
+
+// Detail modal
+detailModal.addEventListener('click', (e) => {
+  if (e.target === detailModal) closeDetailModal();
+});
+
+actionEdit.addEventListener('click', openEditModal);
+actionDelete.addEventListener('click', openDeleteModal);
+
+// Edit modal
+editCancel.addEventListener('click', closeEditModal);
+editSave.addEventListener('click', saveEdit);
+editOverlay.addEventListener('click', (e) => {
+  if (e.target === editOverlay) closeEditModal();
+});
+editInput.addEventListener('keyup', (e) => {
+  if (e.key === 'Enter') saveEdit();
+  if (e.key === 'Escape') closeEditModal();
+});
+
+// Delete modal
+deleteCancel.addEventListener('click', closeDeleteModal);
+deleteConfirm.addEventListener('click', confirmDelete);
+deleteOverlay.addEventListener('click', (e) => {
+  if (e.target === deleteOverlay) closeDeleteModal();
+});
+
+// =====================
+// INIT
+// =====================
+
 async function init() {
-  await loadAudios();
   await Promise.all([loadUsers(), loadSongs()]);
-  updateFilters();
-  setupRealtimeSubscription();
+  await loadAudios();
+  setupRealtime();
 }
 
 init();

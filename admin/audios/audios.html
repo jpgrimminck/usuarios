@@ -3,145 +3,152 @@
 <head>
   <meta charset="UTF-8">
   <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no">
-  <title>Gestión de Audios</title>
-  <link rel="stylesheet" href="../../styles.css">
+  <title>Audios</title>
   <link rel="stylesheet" href="audios.css">
   <script src="https://cdn.jsdelivr.net/npm/@supabase/supabase-js@2"></script>
   <script src="../../config.js"></script>
 </head>
 <body class="audios-body">
-  <a href="../index.html" class="back-button">
-    <svg xmlns="http://www.w3.org/2000/svg" width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
-      <path d="M19 12H5M12 19l-7-7 7-7"/>
-    </svg>
-    Audios
-  </a>
-
-  <!-- Stats Section -->
-  <div class="stats-section">
-    <div class="stats-main">
-      <div class="stat-big">
-        <span id="stat-total-count" class="stat-value">--</span>
-        <span class="stat-label">Total Audios</span>
-      </div>
-      <div class="stat-big">
-        <span id="stat-total-size" class="stat-value">--</span>
-        <span class="stat-label">Espacio Usado</span>
-      </div>
-      <button id="toggle-details" class="toggle-details-btn" title="Mostrar/ocultar detalles">
+  
+  <!-- Header -->
+  <header class="header">
+    <div class="header-top">
+      <a href="../index.html" class="back-btn">
         <svg xmlns="http://www.w3.org/2000/svg" width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
-          <polyline points="6 9 12 15 18 9"></polyline>
+          <path d="M19 12H5M12 19l-7-7 7-7"/>
         </svg>
-      </button>
+      </a>
+      <h1 class="header-title">Audios</h1>
+      <div class="header-actions">
+        <button id="refresh-btn" class="icon-btn" title="Actualizar">
+          <svg xmlns="http://www.w3.org/2000/svg" width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
+            <path d="M21 2v6h-6M3 22v-6h6M21 12A9 9 0 0 0 6 5.3L3 8M3 12a9 9 0 0 0 15 6.7l3-2.7"/>
+          </svg>
+        </button>
+      </div>
     </div>
     
-    <button id="toggle-all-cards" class="toggle-all-cards-btn">
-      <svg class="icon-expand" xmlns="http://www.w3.org/2000/svg" width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
-        <polyline points="7 13 12 18 17 13"></polyline>
-        <polyline points="7 6 12 11 17 6"></polyline>
-      </svg>
-      <svg class="icon-collapse" xmlns="http://www.w3.org/2000/svg" width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
-        <polyline points="17 11 12 6 7 11"></polyline>
-        <polyline points="17 18 12 13 7 18"></polyline>
-      </svg>
-      <span class="toggle-text">Expandir todas</span>
-    </button>
+    <!-- Stats -->
+    <div class="stats-row">
+      <div class="stat-item">
+        <div id="stat-count" class="stat-value">--</div>
+        <div class="stat-label">Total Audios</div>
+      </div>
+      <div class="stat-item">
+        <div id="stat-size" class="stat-value">--</div>
+        <div class="stat-label">Espacio Usado</div>
+      </div>
+    </div>
     
-    <div id="collapsible-section" class="collapsible-section">
-      <div class="stats-details">
-        <div class="stat-row">
-          <span class="stat-icon">📦</span>
-          <span class="stat-text">Más pesado: <strong id="stat-heaviest">--</strong></span>
-        </div>
-        <div class="stat-row">
-          <span class="stat-icon">⏱️</span>
-          <span class="stat-text">Más largo: <strong id="stat-longest">--</strong></span>
-        </div>
-        <div class="stat-row">
-          <span class="stat-icon">📊</span>
-          <span class="stat-text">80% pesan entre: <strong id="stat-size-range">--</strong></span>
-        </div>
-        <div class="stat-row">
-          <span class="stat-icon">🎵</span>
-          <span class="stat-text">80% duran entre: <strong id="stat-duration-range">--</strong></span>
-        </div>
-      </div>
+    <!-- Filters -->
+    <div class="filters-row">
+      <select id="filter-uploader" class="filter-select">
+        <option value="">Todos los usuarios</option>
+      </select>
+      <select id="filter-song" class="filter-select">
+        <option value="">Todas las canciones</option>
+      </select>
+    </div>
+  </header>
 
-      <div class="audios-filters">
-        <div class="filters-row">
-          <input type="text" id="search-input" placeholder="Buscar por nombre..." class="filter-input">
-          <select id="filter-uploader" class="filter-select">
-            <option value="">Todos los uploaders</option>
-          </select>
+  <!-- Main content -->
+  <main class="main-content">
+    <div id="audio-list" class="audio-list">
+      <div class="loading-state">
+        <svg xmlns="http://www.w3.org/2000/svg" width="32" height="32" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
+          <path d="M21 2v6h-6M3 22v-6h6M21 12A9 9 0 0 0 6 5.3L3 8M3 12a9 9 0 0 0 15 6.7l3-2.7"/>
+        </svg>
+        <span>Cargando audios...</span>
+      </div>
+    </div>
+  </main>
+
+  <!-- Detail Modal (Bottom Sheet) -->
+  <div id="detail-modal" class="modal-overlay">
+    <div class="modal-sheet">
+      <div class="modal-handle">
+        <div class="modal-handle-bar"></div>
+      </div>
+      <div class="modal-header">
+        <h2 id="detail-title" class="modal-title">Nombre del audio</h2>
+        <div id="detail-subtitle" class="modal-subtitle">ID: 123</div>
+      </div>
+      <div class="modal-body">
+        <div class="detail-grid">
+          <div class="detail-item">
+            <span class="detail-label">Canción</span>
+            <span id="detail-song" class="detail-value">--</span>
+          </div>
+          <div class="detail-item">
+            <span class="detail-label">Subido por</span>
+            <span id="detail-uploader" class="detail-value">--</span>
+          </div>
+          <div class="detail-item">
+            <span class="detail-label">Detalle</span>
+            <span id="detail-detail" class="detail-value">--</span>
+          </div>
+          <div class="detail-item">
+            <span class="detail-label">Fecha</span>
+            <span id="detail-date" class="detail-value">--</span>
+          </div>
+          <div class="detail-item">
+            <span class="detail-label">Formato</span>
+            <span id="detail-format" class="detail-value">--</span>
+          </div>
+          <div class="detail-item">
+            <span class="detail-label">Tamaño</span>
+            <span id="detail-size" class="detail-value loading">Cargando...</span>
+          </div>
+          <div class="detail-item">
+            <span class="detail-label">Duración</span>
+            <span id="detail-duration" class="detail-value loading">Cargando...</span>
+          </div>
+          <div class="detail-item">
+            <span class="detail-label">Sample Rate</span>
+            <span id="detail-samplerate" class="detail-value loading">Cargando...</span>
+          </div>
         </div>
-        <div class="filters-row">
-          <select id="filter-song" class="filter-select">
-            <option value="">Todas las canciones</option>
-          </select>
-          <select id="filter-format" class="filter-select">
-            <option value="">Todos los formatos</option>
-            <option value="wav">WAV</option>
-            <option value="mp3">MP3</option>
-            <option value="m4a">M4A</option>
-            <option value="webm">WebM</option>
-            <option value="ogg">OGG</option>
-          </select>
-        </div>
-        <div class="filters-stats">
-          <span id="audios-count">Cargando...</span>
-          <button id="cleanup-btn" class="cleanup-btn" title="Limpiar archivos huérfanos">
-            <svg xmlns="http://www.w3.org/2000/svg" width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
-              <path d="M3 6h18M19 6v14a2 2 0 0 1-2 2H7a2 2 0 0 1-2-2V6M8 6V4a2 2 0 0 1 2-2h4a2 2 0 0 1 2 2v2"/>
+        <div class="modal-actions">
+          <button id="action-edit" class="action-btn primary">
+            <svg xmlns="http://www.w3.org/2000/svg" width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
+              <path d="M11 4H4a2 2 0 0 0-2 2v14a2 2 0 0 0 2 2h14a2 2 0 0 0 2-2v-7"/>
+              <path d="M18.5 2.5a2.121 2.121 0 0 1 3 3L12 15l-4 1 1-4 9.5-9.5z"/>
             </svg>
+            Editar nombre
           </button>
-          <button id="refresh-btn" class="refresh-btn" title="Actualizar">
-            <svg xmlns="http://www.w3.org/2000/svg" width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
-              <path d="M21 2v6h-6M3 22v-6h6M21 12A9 9 0 0 0 6 5.3L3 8M3 12a9 9 0 0 0 15 6.7l3-2.7"/>
+          <button id="action-delete" class="action-btn danger">
+            <svg xmlns="http://www.w3.org/2000/svg" width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
+              <polyline points="3 6 5 6 21 6"/>
+              <path d="M19 6v14a2 2 0 0 1-2 2H7a2 2 0 0 1-2-2V6m3 0V4a2 2 0 0 1 2-2h4a2 2 0 0 1 2 2v2"/>
             </svg>
+            Eliminar audio
           </button>
         </div>
       </div>
     </div>
   </div>
 
-  <div id="audios-list" class="audios-list">
-    <div class="loading-message">Cargando audios...</div>
-  </div>
-
-  <!-- Modal para editar nombre -->
-  <div id="edit-modal" class="modal hidden">
-    <div class="modal-content">
-      <h3>Editar nombre del audio</h3>
-      <input type="text" id="edit-name-input" class="modal-input" placeholder="Nombre del audio">
-      <div class="modal-buttons">
-        <button id="cancel-edit" class="modal-btn cancel">Cancelar</button>
-        <button id="save-edit" class="modal-btn save">Guardar</button>
+  <!-- Edit Modal -->
+  <div id="edit-overlay" class="edit-overlay">
+    <div class="edit-modal">
+      <h3>Editar nombre</h3>
+      <input type="text" id="edit-input" class="edit-input" placeholder="Nombre del audio">
+      <div class="edit-buttons">
+        <button id="edit-cancel" class="action-btn secondary">Cancelar</button>
+        <button id="edit-save" class="action-btn primary">Guardar</button>
       </div>
     </div>
   </div>
 
-  <!-- Modal para confirmar eliminación -->
-  <div id="delete-modal" class="modal hidden">
-    <div class="modal-content">
+  <!-- Delete Modal -->
+  <div id="delete-overlay" class="delete-overlay">
+    <div class="delete-modal">
       <h3>¿Eliminar audio?</h3>
-      <p id="delete-audio-name" class="delete-audio-name"></p>
-      <p class="delete-warning">Esta acción no se puede deshacer. Se eliminará el archivo y el registro.</p>
-      <div class="modal-buttons">
-        <button id="cancel-delete" class="modal-btn cancel">Cancelar</button>
-        <button id="confirm-delete" class="modal-btn delete">Eliminar</button>
-      </div>
-    </div>
-  </div>
-
-  <!-- Modal para limpiar huérfanos -->
-  <div id="cleanup-modal" class="modal hidden">
-    <div class="modal-content">
-      <h3>Limpiar archivos huérfanos</h3>
-      <p id="cleanup-info" class="cleanup-info">Buscando archivos...</p>
-      <div id="cleanup-list" class="cleanup-list"></div>
-      <div class="modal-buttons">
-        <button id="cancel-cleanup" class="modal-btn cancel">Cancelar</button>
-        <button id="confirm-cleanup" class="modal-btn delete" disabled>Eliminar</button>
+      <p id="delete-name" class="confirm-name"></p>
+      <p class="warning">Esta acción no se puede deshacer. Se eliminará el archivo y el registro.</p>
+      <div class="delete-buttons">
+        <button id="delete-cancel" class="action-btn secondary">Cancelar</button>
+        <button id="delete-confirm" class="action-btn danger">Eliminar</button>
       </div>
     </div>
   </div>
