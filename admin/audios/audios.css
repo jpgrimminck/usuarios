@@ -463,10 +463,18 @@
   justify-content: center;
   z-index: 200;
   padding: 1rem;
+  overflow: hidden;
 }
 
 .modal.hidden {
   display: none;
+}
+
+/* Prevent body scroll when modal is open */
+body.modal-open {
+  overflow: hidden;
+  position: fixed;
+  width: 100%;
 }
 
 .modal-content {

@@ -590,20 +590,45 @@ async function togglePlayAudio(audioId, btn) {
   }
 }
 
+// Variables to store scroll and zoom state
+let savedScrollPosition = 0;
+let savedZoom = 1;
+
 function openEditModal(audioId) {
   const audio = allAudios.find(a => a.id === audioId);
   if (!audio) return;
   
+  // Save current scroll position
+  savedScrollPosition = window.scrollY;
+  
+  // Save current zoom (visual viewport scale)
+  if (window.visualViewport) {
+    savedZoom = window.visualViewport.scale;
+  }
+  
+  // Lock body scroll
+  document.body.style.top = `-${savedScrollPosition}px`;
+  document.body.classList.add('modal-open');
+  
   editingAudioId = audioId;
   editNameInput.value = audio.name || '';
   editModal.classList.remove('hidden');
-  editNameInput.focus();
+  
+  // Small delay to ensure modal is visible before focusing
+  setTimeout(() => {
+    editNameInput.focus();
+  }, 50);
 }
 
 function closeEditModal() {
   editModal.classList.add('hidden');
   editingAudioId = null;
   editNameInput.value = '';
+  
+  // Unlock body scroll and restore position
+  document.body.classList.remove('modal-open');
+  document.body.style.top = '';
+  window.scrollTo(0, savedScrollPosition);
 }
 
 async function saveEdit() {
