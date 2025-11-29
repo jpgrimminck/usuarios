@@ -840,10 +840,57 @@ function debounce(func, wait) {
   };
 }
 
+// Real-time subscription
+function setupRealtimeSubscription() {
+  const channel = supabase
+    .channel('audios-changes')
+    .on(
+      'postgres_changes',
+      {
+        event: '*',
+        schema: 'public',
+        table: 'audios'
+      },
+      (payload) => {
+        console.log('Realtime update:', payload.eventType);
+        
+        if (payload.eventType === 'INSERT') {
+          // Add new audio to the list
+          allAudios.unshift(payload.new);
+          renderAudios();
+          // Load metadata for the new audio
+          loadAudioMetadata(payload.new);
+        } else if (payload.eventType === 'UPDATE') {
+          // Update existing audio
+          const index = allAudios.findIndex(a => a.id === payload.new.id);
+          if (index !== -1) {
+            allAudios[index] = payload.new;
+            renderAudios();
+          }
+        } else if (payload.eventType === 'DELETE') {
+          // Remove deleted audio
+          const index = allAudios.findIndex(a => a.id === payload.old.id);
+          if (index !== -1) {
+            allAudios.splice(index, 1);
+            renderAudios();
+            // Recalculate stats
+            loadAudios();
+          }
+        }
+      }
+    )
+    .subscribe((status) => {
+      console.log('Realtime subscription status:', status);
+    });
+  
+  return channel;
+}
+
 // Initialize
 async function init() {
   await Promise.all([loadUsers(), loadSongs()]);
   await loadAudios();
+  setupRealtimeSubscription();
 }
 
 init();
