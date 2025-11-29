@@ -213,7 +213,28 @@ function expandCard(card) {
   state.currentExpandedCard = card;
 }
 
-function scheduleAudiosRefresh() {
+function scheduleAudiosRefresh(payload) {
+  // Handle DELETE with animation
+  if (payload && payload.eventType === 'DELETE' && payload.old?.id) {
+    const deletedId = payload.old.id;
+    const card = document.querySelector(`.audio-card[data-audio-id="${deletedId}"]`);
+    if (card) {
+      // Add deleting animation class
+      card.classList.add('audio-card--deleting');
+      // Remove card after animation completes (0.4s sweep + 0.4s fade)
+      setTimeout(() => {
+        card.remove();
+        // Update count or show empty state if needed
+        const container = document.getElementById('audio-cards');
+        if (container && container.querySelectorAll('.audio-card').length === 0) {
+          container.innerHTML = '<p class="text-gray-400 text-center py-8">No hay audios disponibles</p>';
+        }
+      }, 800);
+      return;
+    }
+  }
+  
+  // For INSERT and UPDATE, do a full refresh
   if (state.audiosRefreshTimeout) {
     clearTimeout(state.audiosRefreshTimeout);
   }
