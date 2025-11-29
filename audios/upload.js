@@ -15,7 +15,7 @@ const AUDIO_CONFIG = {
     echoCancellation: false,
     noiseSuppression: false,
     autoGainControl: false,
-    channelCount: 1
+    channelCount: 2
   },
   // MediaRecorder bitrate (128 kbps for medium quality)
   audioBitsPerSecond: 128000
