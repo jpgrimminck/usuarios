@@ -217,16 +217,32 @@ async function updateStats() {
 // =====================
 
 function updateFilters() {
-  // Get unique uploaders and songs that have audios
-  const uploaderIds = [...new Set(allAudios.map(a => a.uploader_id).filter(Boolean))];
-  const songIds = [...new Set(allAudios.map(a => a.relational_song_id).filter(Boolean))];
+  const currentUploader = filterUploaderEl.value;
+  const currentSong = filterSongEl.value;
   
-  // Filter users to only those with audios
+  // Filter audios based on current selections to determine available options
+  let audiosForUploaderFilter = allAudios;
+  let audiosForSongFilter = allAudios;
+  
+  // If a song is selected, uploaders should only show those with audios for that song
+  if (currentSong) {
+    audiosForUploaderFilter = allAudios.filter(a => a.relational_song_id === parseInt(currentSong));
+  }
+  
+  // If an uploader is selected, songs should only show those with audios from that uploader
+  if (currentUploader) {
+    audiosForSongFilter = allAudios.filter(a => a.uploader_id === parseInt(currentUploader));
+  }
+  
+  // Get unique uploaders and songs from filtered sets
+  const uploaderIds = [...new Set(audiosForUploaderFilter.map(a => a.uploader_id).filter(Boolean))];
+  const songIds = [...new Set(audiosForSongFilter.map(a => a.relational_song_id).filter(Boolean))];
+  
+  // Filter users and songs to only those available
   const uploadersWithAudios = allUsers.filter(u => uploaderIds.includes(u.id));
   const songsWithAudios = allSongs.filter(s => songIds.includes(s.id));
   
   // Populate uploader filter
-  const currentUploader = filterUploaderEl.value;
   filterUploaderEl.innerHTML = '<option value="">Todos los usuarios</option>';
   uploadersWithAudios.forEach(user => {
     filterUploaderEl.innerHTML += `<option value="${user.id}">${user.name}</option>`;
@@ -234,7 +250,6 @@ function updateFilters() {
   filterUploaderEl.value = currentUploader;
   
   // Populate song filter
-  const currentSong = filterSongEl.value;
   filterSongEl.innerHTML = '<option value="">Todas las canciones</option>';
   songsWithAudios.forEach(song => {
     filterSongEl.innerHTML += `<option value="${song.id}">${song.title}</option>`;
@@ -251,6 +266,9 @@ function applyFilters() {
     if (songId && audio.relational_song_id !== parseInt(songId)) return false;
     return true;
   });
+  
+  // Update the other filter based on current selection
+  updateFilters();
   
   renderAudioList();
   updateStats();
