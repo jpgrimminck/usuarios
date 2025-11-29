@@ -21,6 +21,11 @@ const filterFormat = document.getElementById('filter-format');
 const audiosCount = document.getElementById('audios-count');
 const refreshBtn = document.getElementById('refresh-btn');
 
+// Toggle elements
+const toggleDetailsBtn = document.getElementById('toggle-details');
+const collapsibleSection = document.getElementById('collapsible-section');
+const toggleAllCardsBtn = document.getElementById('toggle-all-cards');
+
 // Modals
 const editModal = document.getElementById('edit-modal');
 const editNameInput = document.getElementById('edit-name-input');
@@ -250,70 +255,68 @@ function createAudioCard(audio) {
   
   return `
     <div class="audio-card" data-audio-id="${audio.id}">
-      <div class="audio-card-header">
+      <div class="audio-card-main">
+        <div class="audio-id-badge">#${audio.id}</div>
         <div class="audio-name">${escapeHtml(audio.name || 'Sin nombre')}</div>
-        <div class="audio-id">#${audio.id}</div>
-      </div>
-      
-      <div class="audio-card-info">
-        <div class="info-item">
-          <span class="info-label">Canción</span>
-          <span class="info-value">${escapeHtml(songName)}</span>
-        </div>
-        <div class="info-item">
-          <span class="info-label">Subido por</span>
-          <span class="info-value">${escapeHtml(uploaderName)}</span>
-        </div>
-        <div class="info-item">
-          <span class="info-label">Detalle</span>
-          <span class="info-value">${escapeHtml(audio.detail || 'N/A')}</span>
-        </div>
-        <div class="info-item">
-          <span class="info-label">Creado</span>
-          <span class="info-value">${formatDate(audio.created_at)}</span>
-        </div>
-      </div>
-      
-      <div class="audio-card-metadata">
-        <div class="info-item">
-          <span class="info-label">Formato</span>
-          <span class="info-value"><span class="format-badge ${format}">${format.toUpperCase()}</span></span>
-        </div>
-        <div class="info-item">
-          <span class="info-label">Tamaño</span>
-          <span class="info-value loading" data-meta="size-${audio.id}">Cargando...</span>
-        </div>
-        <div class="info-item">
-          <span class="info-label">Duración</span>
-          <span class="info-value loading" data-meta="duration-${audio.id}">Cargando...</span>
-        </div>
-        <div class="info-item">
-          <span class="info-label">Sample Rate</span>
-          <span class="info-value loading" data-meta="samplerate-${audio.id}">Cargando...</span>
+        <div class="audio-card-actions">
+          <button class="action-btn play" data-action="play" data-audio-id="${audio.id}" title="Play">
+            <svg xmlns="http://www.w3.org/2000/svg" width="14" height="14" viewBox="0 0 24 24" fill="currentColor">
+              <polygon points="5 3 19 12 5 21 5 3"/>
+            </svg>
+          </button>
+          <button class="action-btn edit" data-action="edit" data-audio-id="${audio.id}" title="Editar">
+            <svg xmlns="http://www.w3.org/2000/svg" width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
+              <path d="M11 4H4a2 2 0 0 0-2 2v14a2 2 0 0 0 2 2h14a2 2 0 0 0 2-2v-7"/>
+              <path d="M18.5 2.5a2.121 2.121 0 0 1 3 3L12 15l-4 1 1-4 9.5-9.5z"/>
+            </svg>
+          </button>
+          <button class="action-btn delete" data-action="delete" data-audio-id="${audio.id}" title="Eliminar">
+            <svg xmlns="http://www.w3.org/2000/svg" width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
+              <polyline points="3 6 5 6 21 6"/>
+              <path d="M19 6v14a2 2 0 0 1-2 2H7a2 2 0 0 1-2-2V6m3 0V4a2 2 0 0 1 2-2h4a2 2 0 0 1 2 2v2"/>
+            </svg>
+          </button>
         </div>
       </div>
       
-      <div class="audio-card-actions">
-        <button class="action-btn play" data-action="play" data-audio-id="${audio.id}">
-          <svg xmlns="http://www.w3.org/2000/svg" width="14" height="14" viewBox="0 0 24 24" fill="currentColor">
-            <polygon points="5 3 19 12 5 21 5 3"/>
-          </svg>
-          Play
-        </button>
-        <button class="action-btn edit" data-action="edit" data-audio-id="${audio.id}">
-          <svg xmlns="http://www.w3.org/2000/svg" width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
-            <path d="M11 4H4a2 2 0 0 0-2 2v14a2 2 0 0 0 2 2h14a2 2 0 0 0 2-2v-7"/>
-            <path d="M18.5 2.5a2.121 2.121 0 0 1 3 3L12 15l-4 1 1-4 9.5-9.5z"/>
-          </svg>
-          Editar
-        </button>
-        <button class="action-btn delete" data-action="delete" data-audio-id="${audio.id}">
-          <svg xmlns="http://www.w3.org/2000/svg" width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
-            <polyline points="3 6 5 6 21 6"/>
-            <path d="M19 6v14a2 2 0 0 1-2 2H7a2 2 0 0 1-2-2V6m3 0V4a2 2 0 0 1 2-2h4a2 2 0 0 1 2 2v2"/>
-          </svg>
-          Eliminar
-        </button>
+      <div class="audio-card-details">
+        <div class="audio-card-info">
+          <div class="info-item">
+            <span class="info-label">Canción</span>
+            <span class="info-value">${escapeHtml(songName)}</span>
+          </div>
+          <div class="info-item">
+            <span class="info-label">Subido por</span>
+            <span class="info-value">${escapeHtml(uploaderName)}</span>
+          </div>
+          <div class="info-item">
+            <span class="info-label">Detalle</span>
+            <span class="info-value">${escapeHtml(audio.detail || 'N/A')}</span>
+          </div>
+          <div class="info-item">
+            <span class="info-label">Creado</span>
+            <span class="info-value">${formatDate(audio.created_at)}</span>
+          </div>
+        </div>
+        
+        <div class="audio-card-metadata">
+          <div class="info-item">
+            <span class="info-label">Formato</span>
+            <span class="info-value"><span class="format-badge ${format}">${format.toUpperCase()}</span></span>
+          </div>
+          <div class="info-item">
+            <span class="info-label">Tamaño</span>
+            <span class="info-value loading" data-meta="size-${audio.id}">Cargando...</span>
+          </div>
+          <div class="info-item">
+            <span class="info-label">Duración</span>
+            <span class="info-value loading" data-meta="duration-${audio.id}">Cargando...</span>
+          </div>
+          <div class="info-item">
+            <span class="info-label">Sample Rate</span>
+            <span class="info-value loading" data-meta="samplerate-${audio.id}">Cargando...</span>
+          </div>
+        </div>
       </div>
     </div>
   `;
@@ -490,6 +493,15 @@ function attachCardListeners() {
   document.querySelectorAll('.action-btn').forEach(btn => {
     btn.addEventListener('click', handleActionClick);
   });
+  
+  // Toggle card expansion by clicking on the card
+  document.querySelectorAll('.audio-card').forEach(card => {
+    card.addEventListener('click', (e) => {
+      // Don't toggle if clicking on action buttons
+      if (e.target.closest('.audio-card-actions')) return;
+      card.classList.toggle('expanded');
+    });
+  });
 }
 
 async function handleActionClick(event) {
@@ -524,8 +536,8 @@ async function togglePlayAudio(audioId, btn) {
         <svg xmlns="http://www.w3.org/2000/svg" width="14" height="14" viewBox="0 0 24 24" fill="currentColor">
           <polygon points="5 3 19 12 5 21 5 3"/>
         </svg>
-        Play
       `;
+      b.title = 'Play';
     });
     
     if (currentAudio === audioId) {
@@ -556,8 +568,8 @@ async function togglePlayAudio(audioId, btn) {
         <rect x="6" y="4" width="4" height="16"/>
         <rect x="14" y="4" width="4" height="16"/>
       </svg>
-      Pausa
     `;
+    btn.title = 'Pausa';
     
     audioElement.play();
     
@@ -567,8 +579,8 @@ async function togglePlayAudio(audioId, btn) {
         <svg xmlns="http://www.w3.org/2000/svg" width="14" height="14" viewBox="0 0 24 24" fill="currentColor">
           <polygon points="5 3 19 12 5 21 5 3"/>
         </svg>
-        Play
       `;
+      btn.title = 'Play';
       currentAudio = null;
       audioElement = null;
     };
@@ -710,6 +722,40 @@ filterUploader.addEventListener('change', renderAudios);
 filterSong.addEventListener('change', renderAudios);
 filterFormat.addEventListener('change', renderAudios);
 refreshBtn.addEventListener('click', loadAudios);
+
+// Toggle details section
+toggleDetailsBtn.addEventListener('click', () => {
+  const isCollapsed = collapsibleSection.classList.toggle('collapsed');
+  toggleDetailsBtn.classList.toggle('collapsed', isCollapsed);
+  audiosList.classList.toggle('expanded', !isCollapsed);
+  // Save preference
+  localStorage.setItem('audiosDetailsCollapsed', isCollapsed);
+});
+
+// Restore collapsed state from localStorage
+const savedCollapsed = localStorage.getItem('audiosDetailsCollapsed');
+if (savedCollapsed === 'true') {
+  collapsibleSection.classList.add('collapsed');
+  toggleDetailsBtn.classList.add('collapsed');
+} else {
+  audiosList.classList.add('expanded');
+}
+
+// Toggle all cards expand/collapse
+let allCardsExpanded = false;
+toggleAllCardsBtn.addEventListener('click', () => {
+  allCardsExpanded = !allCardsExpanded;
+  const cards = document.querySelectorAll('.audio-card');
+  cards.forEach(card => {
+    if (allCardsExpanded) {
+      card.classList.add('expanded');
+    } else {
+      card.classList.remove('expanded');
+    }
+  });
+  toggleAllCardsBtn.classList.toggle('all-expanded', allCardsExpanded);
+  toggleAllCardsBtn.querySelector('.toggle-text').textContent = allCardsExpanded ? 'Contraer todas' : 'Expandir todas';
+});
 
 cancelEditBtn.addEventListener('click', closeEditModal);
 saveEditBtn.addEventListener('click', saveEdit);
