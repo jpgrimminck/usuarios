@@ -38,10 +38,77 @@
   flex-shrink: 0;
 }
 
+/* Stats Section */
+.stats-section {
+  position: fixed;
+  top: calc(44px + env(safe-area-inset-top, 0px));
+  left: 0;
+  right: 0;
+  background: linear-gradient(135deg, #1e3a5f 0%, #1f2937 100%);
+  padding: 1rem;
+  z-index: 60;
+  border-bottom: 1px solid #374151;
+}
+
+.stats-main {
+  display: flex;
+  justify-content: space-around;
+  margin-bottom: 0.75rem;
+}
+
+.stat-big {
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  text-align: center;
+}
+
+.stat-value {
+  font-size: 2rem;
+  font-weight: 700;
+  color: #60a5fa;
+  line-height: 1.2;
+}
+
+.stat-label {
+  font-size: 0.75rem;
+  color: #9ca3af;
+  text-transform: uppercase;
+  letter-spacing: 0.05em;
+}
+
+.stats-details {
+  display: flex;
+  flex-direction: column;
+  gap: 0.375rem;
+}
+
+.stat-row {
+  display: flex;
+  align-items: center;
+  gap: 0.375rem;
+  font-size: 0.75rem;
+  color: #d1d5db;
+}
+
+.stat-icon {
+  font-size: 0.875rem;
+}
+
+.stat-text {
+  white-space: nowrap;
+  overflow: hidden;
+  text-overflow: ellipsis;
+}
+
+.stat-text strong {
+  color: #fbbf24;
+}
+
 /* Filters section */
 .audios-filters {
   position: fixed;
-  top: calc(44px + env(safe-area-inset-top, 0px));
+  top: calc(44px + 200px + env(safe-area-inset-top, 0px));
   left: 0;
   right: 0;
   background-color: #1f2937;
@@ -83,8 +150,10 @@
   align-items: center;
   font-size: 0.875rem;
   color: #9ca3af;
+  gap: 0.5rem;
 }
 
+.cleanup-btn,
 .refresh-btn {
   background: none;
   border: none;
@@ -96,6 +165,11 @@
   align-items: center;
   justify-content: center;
   transition: color 0.2s, background-color 0.2s;
+}
+
+.cleanup-btn:hover {
+  color: #f87171;
+  background-color: #374151;
 }
 
 .refresh-btn:hover {
@@ -115,7 +189,7 @@
 /* Audios list */
 .audios-list {
   padding: 1rem;
-  padding-top: calc(44px + 140px + env(safe-area-inset-top, 0px));
+  padding-top: calc(44px + 200px + 140px + env(safe-area-inset-top, 0px));
   padding-bottom: 2rem;
   display: flex;
   flex-direction: column;
@@ -386,3 +460,39 @@
 .format-badge.webm { background-color: #f59e0b; color: #000000; }
 .format-badge.ogg { background-color: #ec4899; color: #ffffff; }
 .format-badge.unknown { background-color: #6b7280; color: #ffffff; }
+
+/* Cleanup modal */
+.cleanup-info {
+  color: #9ca3af;
+  font-size: 0.875rem;
+  margin: 0 0 1rem 0;
+}
+
+.cleanup-list {
+  max-height: 200px;
+  overflow-y: auto;
+  margin-bottom: 1rem;
+  border: 1px solid #374151;
+  border-radius: 0.5rem;
+  display: none;
+}
+
+.cleanup-list.has-files {
+  display: block;
+}
+
+.cleanup-item {
+  padding: 0.5rem 0.75rem;
+  font-size: 0.75rem;
+  color: #d1d5db;
+  border-bottom: 1px solid #374151;
+  word-break: break-all;
+}
+
+.cleanup-item:last-child {
+  border-bottom: none;
+}
+
+.cleanup-item .file-name {
+  color: #f87171;
+}

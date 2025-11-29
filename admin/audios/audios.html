@@ -17,6 +17,38 @@
     Audios
   </a>
 
+  <!-- Stats Section -->
+  <div class="stats-section">
+    <div class="stats-main">
+      <div class="stat-big">
+        <span id="stat-total-count" class="stat-value">--</span>
+        <span class="stat-label">Total Audios</span>
+      </div>
+      <div class="stat-big">
+        <span id="stat-total-size" class="stat-value">--</span>
+        <span class="stat-label">Espacio Usado</span>
+      </div>
+    </div>
+    <div class="stats-details">
+      <div class="stat-row">
+        <span class="stat-icon">📦</span>
+        <span class="stat-text">Más pesado: <strong id="stat-heaviest">--</strong></span>
+      </div>
+      <div class="stat-row">
+        <span class="stat-icon">⏱️</span>
+        <span class="stat-text">Más largo: <strong id="stat-longest">--</strong></span>
+      </div>
+      <div class="stat-row">
+        <span class="stat-icon">📊</span>
+        <span class="stat-text">80% pesan entre: <strong id="stat-size-range">--</strong></span>
+      </div>
+      <div class="stat-row">
+        <span class="stat-icon">🎵</span>
+        <span class="stat-text">80% duran entre: <strong id="stat-duration-range">--</strong></span>
+      </div>
+    </div>
+  </div>
+
   <div class="audios-filters">
     <div class="filters-row">
       <input type="text" id="search-input" placeholder="Buscar por nombre..." class="filter-input">
@@ -39,6 +71,11 @@
     </div>
     <div class="filters-stats">
       <span id="audios-count">Cargando...</span>
+      <button id="cleanup-btn" class="cleanup-btn" title="Limpiar archivos huérfanos">
+        <svg xmlns="http://www.w3.org/2000/svg" width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
+          <path d="M3 6h18M19 6v14a2 2 0 0 1-2 2H7a2 2 0 0 1-2-2V6M8 6V4a2 2 0 0 1 2-2h4a2 2 0 0 1 2 2v2"/>
+        </svg>
+      </button>
       <button id="refresh-btn" class="refresh-btn" title="Actualizar">
         <svg xmlns="http://www.w3.org/2000/svg" width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
           <path d="M21 2v6h-6M3 22v-6h6M21 12A9 9 0 0 0 6 5.3L3 8M3 12a9 9 0 0 0 15 6.7l3-2.7"/>
@@ -72,6 +109,19 @@
       <div class="modal-buttons">
         <button id="cancel-delete" class="modal-btn cancel">Cancelar</button>
         <button id="confirm-delete" class="modal-btn delete">Eliminar</button>
+      </div>
+    </div>
+  </div>
+
+  <!-- Modal para limpiar huérfanos -->
+  <div id="cleanup-modal" class="modal hidden">
+    <div class="modal-content">
+      <h3>Limpiar archivos huérfanos</h3>
+      <p id="cleanup-info" class="cleanup-info">Buscando archivos...</p>
+      <div id="cleanup-list" class="cleanup-list"></div>
+      <div class="modal-buttons">
+        <button id="cancel-cleanup" class="modal-btn cancel">Cancelar</button>
+        <button id="confirm-cleanup" class="modal-btn delete" disabled>Eliminar</button>
       </div>
     </div>
   </div>

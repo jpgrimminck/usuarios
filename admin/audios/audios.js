@@ -32,6 +32,34 @@ const deleteAudioName = document.getElementById('delete-audio-name');
 const cancelDeleteBtn = document.getElementById('cancel-delete');
 const confirmDeleteBtn = document.getElementById('confirm-delete');
 
+// Cleanup modal elements
+const cleanupBtn = document.getElementById('cleanup-btn');
+const cleanupModal = document.getElementById('cleanup-modal');
+const cleanupInfo = document.getElementById('cleanup-info');
+const cleanupList = document.getElementById('cleanup-list');
+const cancelCleanupBtn = document.getElementById('cancel-cleanup');
+const confirmCleanupBtn = document.getElementById('confirm-cleanup');
+
+// Stats elements
+const statTotalCount = document.getElementById('stat-total-count');
+const statTotalSize = document.getElementById('stat-total-size');
+const statHeaviest = document.getElementById('stat-heaviest');
+const statLongest = document.getElementById('stat-longest');
+const statSizeRange = document.getElementById('stat-size-range');
+const statDurationRange = document.getElementById('stat-duration-range');
+
+let orphanFiles = [];
+
+// Stats data collection
+let audioStats = {
+  sizes: [],
+  durations: [],
+  heaviestName: '',
+  heaviestSize: 0,
+  longestName: '',
+  longestDuration: 0
+};
+
 // Utility functions
 function formatFileSize(bytes) {
   if (!bytes || bytes === 0) return 'N/A';
@@ -77,7 +105,7 @@ function getUserName(userId) {
 
 function getSongName(songId) {
   const song = songs.find(s => s.id === songId);
-  return song ? song.name : `Canción ${songId}`;
+  return song ? song.title : `Canción ${songId}`;
 }
 
 // Load data
@@ -108,8 +136,8 @@ async function loadSongs() {
   try {
     const { data, error } = await supabase
       .from('songs')
-      .select('id, name')
-      .order('name');
+      .select('id, title')
+      .order('title');
     
     if (error) throw error;
     songs = data || [];
@@ -119,7 +147,7 @@ async function loadSongs() {
     songs.forEach(song => {
       const option = document.createElement('option');
       option.value = song.id;
-      option.textContent = song.name;
+      option.textContent = song.title;
       filterSong.appendChild(option);
     });
   } catch (err) {
@@ -131,6 +159,15 @@ async function loadAudios() {
   refreshBtn.classList.add('loading');
   audiosList.innerHTML = '<div class="loading-message">Cargando audios...</div>';
   
+  // Reset stats before loading
+  resetStats();
+  statTotalCount.textContent = '--';
+  statTotalSize.textContent = '--';
+  statHeaviest.textContent = '--';
+  statLongest.textContent = '--';
+  statSizeRange.textContent = '--';
+  statDurationRange.textContent = '--';
+  
   try {
     const { data, error } = await supabase
       .from('audios')
@@ -139,6 +176,9 @@ async function loadAudios() {
     
     if (error) throw error;
     allAudios = data || [];
+    
+    // Update total count immediately
+    statTotalCount.textContent = allAudios.length;
     
     renderAudios();
   } catch (err) {
@@ -286,61 +326,75 @@ function escapeHtml(text) {
   return div.innerHTML;
 }
 
+// Get storage path from url field
+// The url field contains the full path including the folder inside the bucket
+// e.g., "audios/18-filename.webm" means folder "audios" inside bucket "audios"
+function getStoragePath(url) {
+  return url || '';
+}
+
 async function loadAudioMetadata(audio) {
   if (!audio.url) {
     updateMetadataDisplay(audio.id, { size: 'N/A', duration: 'N/A', sampleRate: 'N/A' });
     return;
   }
   
+  const storagePath = getStoragePath(audio.url);
+  
   try {
-    // Get file size from storage
-    const { data: fileData, error: listError } = await supabase
+    // Get public URL (bucket is public)
+    const { data: urlData } = supabase
       .storage
       .from(AUDIO_BUCKET)
-      .list(audio.url.substring(0, audio.url.lastIndexOf('/')), {
-        search: audio.url.split('/').pop()
-      });
+      .getPublicUrl(storagePath);
     
-    let fileSize = null;
-    if (!listError && fileData && fileData.length > 0) {
-      const file = fileData.find(f => audio.url.endsWith(f.name));
-      if (file && file.metadata) {
-        fileSize = file.metadata.size;
-      }
+    if (!urlData?.publicUrl) {
+      console.warn(`Could not get public URL for audio ${audio.id}`);
+      updateMetadataDisplay(audio.id, { size: 'N/A', duration: 'N/A', sampleRate: 'N/A' });
+      return;
     }
     
-    // Get audio URL for duration and sample rate
-    const { data: urlData } = await supabase
-      .storage
-      .from(AUDIO_BUCKET)
-      .createSignedUrl(audio.url, 60);
-    
-    if (urlData?.signedUrl) {
+    if (urlData?.publicUrl) {
       // Use AudioContext to get sample rate and duration
       const audioContext = new (window.AudioContext || window.webkitAudioContext)();
       
       try {
-        const response = await fetch(urlData.signedUrl);
+        const response = await fetch(urlData.publicUrl);
         const arrayBuffer = await response.arrayBuffer();
         
-        // Update file size from response if not available from metadata
-        if (!fileSize) {
-          fileSize = arrayBuffer.byteLength;
-        }
+        const fileSize = arrayBuffer.byteLength;
         
         const audioBuffer = await audioContext.decodeAudioData(arrayBuffer);
+        const duration = audioBuffer.duration;
         
         updateMetadataDisplay(audio.id, {
           size: formatFileSize(fileSize),
-          duration: formatDuration(audioBuffer.duration),
+          duration: formatDuration(duration),
           sampleRate: audioBuffer.sampleRate + ' Hz'
         });
+        
+        // Collect stats
+        audioStats.sizes.push(fileSize);
+        audioStats.durations.push(duration);
+        
+        if (fileSize > audioStats.heaviestSize) {
+          audioStats.heaviestSize = fileSize;
+          audioStats.heaviestName = audio.name || 'Sin nombre';
+        }
+        
+        if (duration > audioStats.longestDuration) {
+          audioStats.longestDuration = duration;
+          audioStats.longestName = audio.name || 'Sin nombre';
+        }
+        
+        // Update stats display after each audio loads
+        updateStatsDisplay();
         
         await audioContext.close();
       } catch (decodeErr) {
         console.warn(`Could not decode audio ${audio.id}:`, decodeErr);
         updateMetadataDisplay(audio.id, {
-          size: fileSize ? formatFileSize(fileSize) : 'N/A',
+          size: 'N/A',
           duration: 'Error',
           sampleRate: 'Error'
         });
@@ -351,6 +405,65 @@ async function loadAudioMetadata(audio) {
   } catch (err) {
     console.error(`Error loading metadata for audio ${audio.id}:`, err);
     updateMetadataDisplay(audio.id, { size: 'Error', duration: 'Error', sampleRate: 'Error' });
+  }
+}
+
+function resetStats() {
+  audioStats = {
+    sizes: [],
+    durations: [],
+    heaviestName: '',
+    heaviestSize: 0,
+    longestName: '',
+    longestDuration: 0
+  };
+}
+
+function getPercentileRange(arr, lowPercentile, highPercentile) {
+  if (arr.length === 0) return { low: 0, high: 0 };
+  const sorted = [...arr].sort((a, b) => a - b);
+  const lowIndex = Math.floor(sorted.length * lowPercentile);
+  const highIndex = Math.floor(sorted.length * highPercentile) - 1;
+  return {
+    low: sorted[Math.max(0, lowIndex)],
+    high: sorted[Math.min(sorted.length - 1, highIndex)]
+  };
+}
+
+function updateStatsDisplay() {
+  // Total count
+  statTotalCount.textContent = allAudios.length;
+  
+  // Total size
+  const totalSize = audioStats.sizes.reduce((sum, s) => sum + s, 0);
+  statTotalSize.textContent = formatFileSize(totalSize);
+  
+  // Heaviest file
+  if (audioStats.heaviestName) {
+    const shortName = audioStats.heaviestName.length > 20 
+      ? audioStats.heaviestName.substring(0, 20) + '...' 
+      : audioStats.heaviestName;
+    statHeaviest.textContent = `${shortName} (${formatFileSize(audioStats.heaviestSize)})`;
+  }
+  
+  // Longest file
+  if (audioStats.longestName) {
+    const shortName = audioStats.longestName.length > 20 
+      ? audioStats.longestName.substring(0, 20) + '...' 
+      : audioStats.longestName;
+    statLongest.textContent = `${shortName} (${formatDuration(audioStats.longestDuration)})`;
+  }
+  
+  // 80% size range (10th to 90th percentile)
+  if (audioStats.sizes.length >= 3) {
+    const sizeRange = getPercentileRange(audioStats.sizes, 0.10, 0.90);
+    statSizeRange.textContent = `${formatFileSize(sizeRange.low)} - ${formatFileSize(sizeRange.high)}`;
+  }
+  
+  // 80% duration range (10th to 90th percentile)
+  if (audioStats.durations.length >= 3) {
+    const durationRange = getPercentileRange(audioStats.durations, 0.10, 0.90);
+    statDurationRange.textContent = `${formatDuration(durationRange.low)} - ${formatDuration(durationRange.high)}`;
   }
 }
 
@@ -421,18 +534,20 @@ async function togglePlayAudio(audioId, btn) {
     }
   }
   
+  const storagePath = getStoragePath(audio.url);
+  
   try {
-    const { data: urlData } = await supabase
+    const { data: urlData } = supabase
       .storage
       .from(AUDIO_BUCKET)
-      .createSignedUrl(audio.url, 300);
+      .getPublicUrl(storagePath);
     
-    if (!urlData?.signedUrl) {
+    if (!urlData?.publicUrl) {
       alert('No se pudo obtener la URL del audio');
       return;
     }
     
-    audioElement = new Audio(urlData.signedUrl);
+    audioElement = new Audio(urlData.publicUrl);
     currentAudio = audioId;
     
     btn.classList.add('playing');
@@ -539,17 +654,31 @@ async function confirmDelete() {
   confirmDeleteBtn.disabled = true;
   confirmDeleteBtn.textContent = 'Eliminando...';
   
+  let storageDeleted = false;
+  
   try {
     // Delete from storage first
     if (audio.url) {
-      const { error: storageError } = await supabase
+      // The url field contains the path inside the bucket (e.g., "audios/filename.wav")
+      const storagePath = audio.url;
+      
+      const { data: deleteData, error: storageError } = await supabase
         .storage
         .from(AUDIO_BUCKET)
-        .remove([audio.url]);
+        .remove([storagePath]);
       
       if (storageError) {
-        console.warn('Error deleting file from storage:', storageError);
-        // Continue anyway to delete the record
+        console.error('Error deleting file from storage:', storageError);
+        const continueDelete = confirm(
+          `No se pudo eliminar el archivo del storage: ${storageError.message}\n\n¿Desea eliminar solo el registro de la base de datos?`
+        );
+        if (!continueDelete) {
+          confirmDeleteBtn.disabled = false;
+          confirmDeleteBtn.textContent = 'Eliminar';
+          return;
+        }
+      } else if (deleteData?.length > 0) {
+        storageDeleted = true;
       }
     }
     
@@ -598,6 +727,105 @@ editModal.addEventListener('click', (e) => {
 deleteModal.addEventListener('click', (e) => {
   if (e.target === deleteModal) closeDeleteModal();
 });
+cleanupModal.addEventListener('click', (e) => {
+  if (e.target === cleanupModal) closeCleanupModal();
+});
+
+// Cleanup functionality
+cleanupBtn.addEventListener('click', openCleanupModal);
+cancelCleanupBtn.addEventListener('click', closeCleanupModal);
+confirmCleanupBtn.addEventListener('click', confirmCleanup);
+
+async function openCleanupModal() {
+  cleanupModal.classList.remove('hidden');
+  cleanupInfo.textContent = 'Buscando archivos huérfanos...';
+  cleanupList.innerHTML = '';
+  cleanupList.classList.remove('has-files');
+  confirmCleanupBtn.disabled = true;
+  orphanFiles = [];
+  
+  try {
+    // Get all files from storage
+    const { data: storageFiles, error: listError } = await supabase
+      .storage
+      .from(AUDIO_BUCKET)
+      .list('audios');
+    
+    if (listError) {
+      cleanupInfo.textContent = 'Error al listar archivos: ' + listError.message;
+      return;
+    }
+    
+    // Get all URLs from database
+    const { data: dbAudios, error: dbError } = await supabase
+      .from('audios')
+      .select('url');
+    
+    if (dbError) {
+      cleanupInfo.textContent = 'Error al obtener registros: ' + dbError.message;
+      return;
+    }
+    
+    // Create a set of all URLs in the database
+    const dbUrls = new Set(dbAudios.map(a => a.url));
+    
+    // Find orphan files (in storage but not in database)
+    orphanFiles = storageFiles
+      .filter(f => f.name !== '.emptyFolderPlaceholder')
+      .filter(f => {
+        const storagePath = 'audios/' + f.name;
+        return !dbUrls.has(storagePath);
+      })
+      .map(f => f.name);
+    
+    if (orphanFiles.length === 0) {
+      cleanupInfo.textContent = 'No se encontraron archivos huérfanos.';
+    } else {
+      cleanupInfo.textContent = `Se encontraron ${orphanFiles.length} archivo(s) huérfano(s):`;
+      cleanupList.classList.add('has-files');
+      cleanupList.innerHTML = orphanFiles.map(f => 
+        `<div class="cleanup-item"><span class="file-name">${escapeHtml(f)}</span></div>`
+      ).join('');
+      confirmCleanupBtn.disabled = false;
+    }
+  } catch (err) {
+    cleanupInfo.textContent = 'Error: ' + err.message;
+  }
+}
+
+function closeCleanupModal() {
+  cleanupModal.classList.add('hidden');
+  orphanFiles = [];
+}
+
+async function confirmCleanup() {
+  if (orphanFiles.length === 0) return;
+  
+  confirmCleanupBtn.disabled = true;
+  confirmCleanupBtn.textContent = 'Eliminando...';
+  
+  try {
+    const pathsToDelete = orphanFiles.map(f => 'audios/' + f);
+    
+    const { data, error } = await supabase
+      .storage
+      .from(AUDIO_BUCKET)
+      .remove(pathsToDelete);
+    
+    if (error) {
+      alert('Error al eliminar archivos: ' + error.message);
+    } else {
+      const deletedCount = data?.length || 0;
+      alert(`Se eliminaron ${deletedCount} archivo(s) huérfano(s).`);
+      closeCleanupModal();
+    }
+  } catch (err) {
+    alert('Error: ' + err.message);
+  }
+  
+  confirmCleanupBtn.disabled = false;
+  confirmCleanupBtn.textContent = 'Eliminar';
+}
 
 // Utility
 function debounce(func, wait) {
