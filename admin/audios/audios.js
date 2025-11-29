@@ -113,6 +113,41 @@ function getSongName(songId) {
   return song ? song.title : `Canción ${songId}`;
 }
 
+// Update filter dropdowns based on current audios
+function updateFilters() {
+  // Save current selections
+  const currentUploader = filterUploader.value;
+  const currentSong = filterSong.value;
+  
+  // Update uploader filter - only show users that have audios
+  filterUploader.innerHTML = '<option value="">Todos los uploaders</option>';
+  const uploaderIdsWithAudios = new Set(allAudios.map(a => a.uploader_id).filter(Boolean));
+  users.filter(user => uploaderIdsWithAudios.has(user.id)).forEach(user => {
+    const option = document.createElement('option');
+    option.value = user.id;
+    option.textContent = user.name;
+    filterUploader.appendChild(option);
+  });
+  
+  // Update song filter - only show songs that have audios
+  filterSong.innerHTML = '<option value="">Todas las canciones</option>';
+  const songIdsWithAudios = new Set(allAudios.map(a => a.relational_song_id).filter(Boolean));
+  songs.filter(song => songIdsWithAudios.has(song.id)).forEach(song => {
+    const option = document.createElement('option');
+    option.value = song.id;
+    option.textContent = song.title;
+    filterSong.appendChild(option);
+  });
+  
+  // Restore selections if still valid
+  if (uploaderIdsWithAudios.has(parseInt(currentUploader))) {
+    filterUploader.value = currentUploader;
+  }
+  if (songIdsWithAudios.has(parseInt(currentSong))) {
+    filterSong.value = currentSong;
+  }
+}
+
 // Load data
 async function loadUsers() {
   try {
@@ -123,15 +158,6 @@ async function loadUsers() {
     
     if (error) throw error;
     users = data || [];
-    
-    // Populate uploader filter
-    filterUploader.innerHTML = '<option value="">Todos los uploaders</option>';
-    users.forEach(user => {
-      const option = document.createElement('option');
-      option.value = user.id;
-      option.textContent = user.name;
-      filterUploader.appendChild(option);
-    });
   } catch (err) {
     console.error('Error loading users:', err);
   }
@@ -146,15 +172,6 @@ async function loadSongs() {
     
     if (error) throw error;
     songs = data || [];
-    
-    // Populate song filter
-    filterSong.innerHTML = '<option value="">Todas las canciones</option>';
-    songs.forEach(song => {
-      const option = document.createElement('option');
-      option.value = song.id;
-      option.textContent = song.title;
-      filterSong.appendChild(option);
-    });
   } catch (err) {
     console.error('Error loading songs:', err);
   }
@@ -943,6 +960,7 @@ function setupRealtimeSubscription() {
           const index = allAudios.findIndex(a => a.id === payload.old.id);
           if (index !== -1) {
             allAudios.splice(index, 1);
+            updateFilters();
             renderAudios();
             // Recalculate stats
             loadAudios();
@@ -959,8 +977,9 @@ function setupRealtimeSubscription() {
 
 // Initialize
 async function init() {
-  await Promise.all([loadUsers(), loadSongs()]);
   await loadAudios();
+  await Promise.all([loadUsers(), loadSongs()]);
+  updateFilters();
   setupRealtimeSubscription();
 }
 
