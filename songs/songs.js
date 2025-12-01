@@ -333,7 +333,7 @@ function scheduleSongsRefresh() {
 function initSongsRealtime() {
   const channel = supabase
     .channel('songs_realtime')
-    .on('postgres_changes', { event: '*', schema: 'public', table: 'canciones' }, scheduleSongsRefresh)
+    .on('postgres_changes', { event: '*', schema: 'public', table: 'songs' }, scheduleSongsRefresh)
     .on('postgres_changes', { event: '*', schema: 'public', table: 'artists' }, scheduleSongsRefresh)
     .on('postgres_changes', { event: '*', schema: 'public', table: 'user_songs' }, scheduleSongsRefresh);
 
