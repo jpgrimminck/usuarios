@@ -210,6 +210,7 @@ function buildPendingUploadCard(pendingUpload) {
        </div>`
     : '';
 
+  const seekSeconds = 3;
   container.innerHTML = `
     <div class="audio-card__header">
       <p class="audio-card__title text-lg font-semibold text-white">
@@ -217,8 +218,14 @@ function buildPendingUploadCard(pendingUpload) {
         ${statusHtml}
       </p>
       <div class="audio-card__controls" data-role="controls">
-        <button type="button" class="flex items-center justify-center rounded-full bg-[var(--primary-color)] text-white" data-role="play-button" aria-label="Reproducir o pausar" title="Reproducir o pausar" ${isUploading ? '' : ''}>
+        <button type="button" class="flex items-center justify-center rounded-full bg-gray-700 text-white transition-colors hover:bg-gray-600" data-role="rewind-button" aria-label="Retroceder ${seekSeconds} segundos" title="Retroceder ${seekSeconds} segundos">
+          <span class="material-symbols-outlined text-3xl">fast_rewind</span>
+        </button>
+        <button type="button" class="flex items-center justify-center rounded-full bg-[var(--primary-color)] text-white" data-role="play-button" aria-label="Reproducir o pausar" title="Reproducir o pausar">
           <span class="material-symbols-outlined text-4xl">play_arrow</span>
+        </button>
+        <button type="button" class="flex items-center justify-center rounded-full bg-gray-700 text-white transition-colors hover:bg-gray-600" data-role="forward-button" aria-label="Avanzar ${seekSeconds} segundos" title="Avanzar ${seekSeconds} segundos">
+          <span class="material-symbols-outlined text-3xl">fast_forward</span>
         </button>
       </div>
     </div>
@@ -232,6 +239,8 @@ function buildPendingUploadCard(pendingUpload) {
   
   // Set up audio playback for pending upload
   const playButton = container.querySelector('[data-role="play-button"]');
+  const rewindButton = container.querySelector('[data-role="rewind-button"]');
+  const forwardButton = container.querySelector('[data-role="forward-button"]');
   const sliderTrack = container.querySelector('[data-role="slider-track"]');
   const sliderFill = container.querySelector('[data-role="slider-fill"]');
   
@@ -252,8 +261,37 @@ function buildPendingUploadCard(pendingUpload) {
   
   container.appendChild(audio);
   
+  // Expand/collapse functionality
+  const expandPendingCard = () => {
+    // Collapse any other expanded cards (including regular ones)
+    document.querySelectorAll('.audio-card--expanded, .audio-card--controls-visible').forEach(card => {
+      if (card !== container) {
+        card.classList.remove('audio-card--expanded', 'audio-card--controls-visible');
+      }
+    });
+    container.classList.add('audio-card--expanded', 'audio-card--controls-visible');
+  };
+  
+  const collapsePendingCard = () => {
+    container.classList.remove('audio-card--expanded', 'audio-card--controls-visible');
+  };
+  
+  // Click on card to expand/collapse
+  container.addEventListener('click', (event) => {
+    // Don't toggle if clicking on controls or actions
+    if (event.target.closest('[data-role="play-button"], [data-role="rewind-button"], [data-role="forward-button"], .audio-card__controls, .pending-upload__actions')) return;
+    
+    if (container.classList.contains('audio-card--expanded')) {
+      collapsePendingCard();
+    } else {
+      expandPendingCard();
+    }
+  });
+  
   if (playButton) {
-    playButton.addEventListener('click', () => {
+    playButton.addEventListener('click', (event) => {
+      event.stopPropagation();
+      expandPendingCard();
       if (audio.paused) {
         audio.play();
         const icon = playButton.querySelector('.material-symbols-outlined');
@@ -263,6 +301,22 @@ function buildPendingUploadCard(pendingUpload) {
         const icon = playButton.querySelector('.material-symbols-outlined');
         if (icon) icon.textContent = 'play_arrow';
       }
+    });
+  }
+  
+  if (rewindButton) {
+    rewindButton.addEventListener('click', (event) => {
+      event.stopPropagation();
+      expandPendingCard();
+      audio.currentTime = Math.max(0, audio.currentTime - seekSeconds);
+    });
+  }
+  
+  if (forwardButton) {
+    forwardButton.addEventListener('click', (event) => {
+      event.stopPropagation();
+      expandPendingCard();
+      audio.currentTime = Math.min(audio.duration || 0, audio.currentTime + seekSeconds);
     });
   }
   
