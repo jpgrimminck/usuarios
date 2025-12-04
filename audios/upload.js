@@ -318,17 +318,63 @@ export function renderPendingUploads() {
   // Remove existing pending cards
   container.querySelectorAll('.audio-card--pending').forEach(card => card.remove());
   
-  // Add pending cards at the top
+  // Add pending cards in their alphabetically correct position
   uploads.forEach(upload => {
     const card = buildPendingUploadCard(upload);
-    // Insert after the user section header if it exists, otherwise at top
-    const userSection = container.querySelector('h3');
-    if (userSection && userSection.parentElement) {
-      userSection.parentElement.insertAdjacentElement('afterend', card);
+    insertCardAlphabetically(container, card, upload.title);
+  });
+}
+
+// Insert a card in alphabetical order within the user's audio section
+function insertCardAlphabetically(container, card, title) {
+  const titleLower = (title || '').toLowerCase();
+  
+  // Find user's audio cards (not in "Otros usuarios" section)
+  const allCards = Array.from(container.querySelectorAll('.audio-card'));
+  const otherUsersHeader = Array.from(container.querySelectorAll('h3')).find(h => 
+    h.textContent.includes('Otros usuarios')
+  );
+  
+  // Get only user's cards (before "Otros usuarios" section)
+  let userCards = allCards;
+  if (otherUsersHeader) {
+    const otherUsersSection = otherUsersHeader.closest('.mb-6');
+    if (otherUsersSection) {
+      userCards = allCards.filter(c => !otherUsersSection.contains(c));
+    }
+  }
+  
+  // Filter out pending cards from comparison
+  userCards = userCards.filter(c => !c.classList.contains('audio-card--pending'));
+  
+  // Find the right position alphabetically
+  let insertBefore = null;
+  for (const existingCard of userCards) {
+    const existingTitle = existingCard.querySelector('.audio-card__title')?.textContent?.trim()?.toLowerCase() || '';
+    if (titleLower.localeCompare(existingTitle) < 0) {
+      insertBefore = existingCard;
+      break;
+    }
+  }
+  
+  if (insertBefore) {
+    insertBefore.parentNode.insertBefore(card, insertBefore);
+  } else if (userCards.length > 0) {
+    // Insert after the last user card
+    const lastUserCard = userCards[userCards.length - 1];
+    lastUserCard.parentNode.insertBefore(card, lastUserCard.nextSibling);
+  } else {
+    // No user cards yet - insert after the user section header if exists
+    const userHeader = Array.from(container.querySelectorAll('h3')).find(h => 
+      !h.textContent.includes('Otros usuarios')
+    );
+    if (userHeader && userHeader.parentElement) {
+      userHeader.parentElement.insertAdjacentElement('afterend', card);
     } else {
+      // No sections at all, just prepend
       container.insertBefore(card, container.firstChild);
     }
-  });
+  }
 }
 
 // Update a specific pending card's UI
@@ -1096,17 +1142,11 @@ async function uploadRecording() {
   // Save to localStorage immediately
   addPendingUpload(pendingUpload);
   
-  // Show optimistic card immediately
+  // Show optimistic card immediately in its correct alphabetical position
   const container = document.querySelector('.space-y-4');
   if (container) {
     const card = buildPendingUploadCard(pendingUpload);
-    // Insert after user section header if exists
-    const userSection = container.querySelector('h3');
-    if (userSection && userSection.parentElement) {
-      userSection.parentElement.insertAdjacentElement('afterend', card);
-    } else {
-      container.insertBefore(card, container.firstChild);
-    }
+    insertCardAlphabetically(container, card, titleValue);
   }
   
   // Reset recorder UI immediately (user sees instant feedback)
