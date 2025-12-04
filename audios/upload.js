@@ -748,6 +748,14 @@ export function initRecorderControls() {
       return `${mins}:${secs.toString().padStart(2, '0')}`;
     };
 
+    // Prevent play button from stealing focus (keeps keyboard open)
+    elements.previewPlayButton.addEventListener('mousedown', (e) => {
+      e.preventDefault();
+    });
+    elements.previewPlayButton.addEventListener('touchstart', (e) => {
+      e.preventDefault();
+    });
+
     elements.previewPlayButton.addEventListener('click', () => {
       if (elements.previewAudio.paused) {
         elements.previewAudio.play();
@@ -790,6 +798,14 @@ export function initRecorderControls() {
     });
 
     if (elements.previewSlider) {
+      // Prevent slider from stealing focus (keeps keyboard open)
+      elements.previewSlider.addEventListener('mousedown', (e) => {
+        e.preventDefault();
+      });
+      elements.previewSlider.addEventListener('touchstart', (e) => {
+        e.preventDefault();
+      });
+
       elements.previewSlider.addEventListener('click', (e) => {
         const rect = elements.previewSlider.getBoundingClientRect();
         const percent = (e.clientX - rect.left) / rect.width;
