@@ -1,3 +1,11 @@
+import {
+  isFallbackRecorderAvailable,
+  startFallbackRecording,
+  stopFallbackRecording,
+  isFallbackRecording,
+  cleanupFallbackRecording
+} from './fallback-recorder.js';
+
 // Audio recording configuration - PCM direct capture
 const AUDIO_CONFIG = {
   sampleRate: 44100,
@@ -13,6 +21,7 @@ let pcmSourceNode = null;
 let pcmSamples = [];
 let pcmSampleRate = 44100;
 let isRecordingPcm = false;
+let usingFallbackRecorder = false; // Track if we're using fallback
 
 // Encode mono PCM samples to stereo WAV (duplicates mono to both L and R channels)
 function encodePcmToStereoWav(samples, sampleRate) {
@@ -940,6 +949,7 @@ function resetRecordingState(options = {}) {
   }
   recordingBlob = null;
   recordedChunks = [];
+  usingFallbackRecorder = false;
   const elements = ensureRecorderElements();
   if (elements) {
     if (!keepInput && elements.titleInput) {
@@ -1062,9 +1072,13 @@ async function startRecording() {
   resetRecordingState({ keepInput: true });
   pendingTitleFocus = false;
   keepRecorderVisible = true;
+  usingFallbackRecorder = false;
   ensureRecorderVisible({ behavior: 'auto', force: true, target: getRecorderVisibilityTarget() });
   attachViewportWatcher();
 
+  // Try primary PCM recording method first
+  let primaryMethodSucceeded = false;
+  
   try {
     const constraints = {
       audio: {
@@ -1106,20 +1120,74 @@ async function startRecording() {
     isRecordingPcm = true;
     mediaRecorder = { state: 'recording' }; // Fake mediaRecorder for UI compatibility
     recorderMimeType = 'audio/wav';
+    primaryMethodSucceeded = true;
     
     startRecordingTimer();
     updateRecorderUi();
     ensureRecorderVisible({ behavior: 'auto', target: getRecorderVisibilityTarget() });
   } catch (err) {
-    console.error('Unable to start recording:', err);
+    console.warn('Primary recording method failed, trying fallback:', err);
     cleanupRecorderStream();
     cleanupPcmRecording();
     mediaRecorder = null;
+  }
+  
+  // If primary method failed, try fallback MediaRecorder
+  if (!primaryMethodSucceeded && isFallbackRecorderAvailable()) {
+    try {
+      console.log('Using fallback MediaRecorder');
+      const result = await startFallbackRecording();
+      usingFallbackRecorder = true;
+      mediaRecorder = { state: 'recording' }; // Fake for UI compatibility
+      recorderMimeType = result.mimeType;
+      
+      startRecordingTimer();
+      updateRecorderUi();
+      ensureRecorderVisible({ behavior: 'auto', target: getRecorderVisibilityTarget() });
+    } catch (fallbackErr) {
+      console.error('Fallback recording also failed:', fallbackErr);
+      cleanupFallbackRecording();
+      mediaRecorder = null;
+      resetRecordingState({ keepInput: true });
+    }
+  } else if (!primaryMethodSucceeded) {
+    console.error('No recording method available');
     resetRecordingState({ keepInput: true });
   }
 }
 
 function stopRecording() {
+  if (usingFallbackRecorder) {
+    // Handle fallback recorder stop
+    stopFallbackRecording()
+      .then(({ blob, mimeType }) => {
+        recordingBlob = blob;
+        recorderMimeType = mimeType;
+        if (recordingObjectUrl) {
+          URL.revokeObjectURL(recordingObjectUrl);
+        }
+        recordingObjectUrl = URL.createObjectURL(recordingBlob);
+        stopRecordingTimer();
+        mediaRecorder = null;
+        
+        updateRecorderUi();
+        keepRecorderVisible = true;
+        attachViewportWatcher();
+        ensureRecorderVisible({ behavior: 'auto', force: true, target: 'dynamic' });
+        if (pendingTitleFocus) {
+          pendingTitleFocus = false;
+          queueFocusOnTitle();
+        } else {
+          setTimeout(() => ensureRecorderVisible({ behavior: 'smooth', force: true, target: 'dynamic' }), 260);
+        }
+      })
+      .catch(err => {
+        console.error('Error stopping fallback recording:', err);
+        resetRecordingState({ keepInput: true });
+      });
+    return;
+  }
+  
   if (!isRecordingPcm) return;
   isRecordingPcm = false;
   handleRecorderStopped();
@@ -1128,6 +1196,14 @@ function stopRecording() {
 }
 
 function discardRecording() {
+  if (usingFallbackRecorder) {
+    cleanupFallbackRecording();
+    usingFallbackRecorder = false;
+    mediaRecorder = null;
+    resetRecordingState({ keepInput: true });
+    return;
+  }
+  
   if (isRecordingPcm) {
     isRecordingPcm = false;
     cleanupPcmRecording();
