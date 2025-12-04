@@ -50,12 +50,18 @@ export function setPendingSuggestedScrollSongId(id) {
   pendingSuggestedScrollSongId = id;
 }
 
+// Create song step state (1 = title, 2 = artist)
+let createSongStep = 1;
+
 function getModalElements() {
   return {
     createButton: document.getElementById('create-new-song'),
+    nextButton: document.getElementById('create-song-next'),
     addButton: document.getElementById('add-selected-songs'),
     titleInput: document.getElementById('new-song-title'),
     artistInput: document.getElementById('new-song-artist'),
+    titleField: document.querySelector('.suggested-field--title'),
+    artistField: document.querySelector('.suggested-field--artist'),
     toggleButton: document.getElementById('toggle-create-song'),
     createForm: document.getElementById('create-song-form'),
     createFieldsSlot: document.getElementById('create-song-fields-slot'),
@@ -67,10 +73,11 @@ function getModalElements() {
   };
 }
 
-function focusCreateSongTitle(options = {}) {
+function focusCreateSongInput(options = {}) {
   const { preventScroll = false } = options;
-  const { titleInput, dialog } = getModalElements();
-  if (!titleInput || titleInput.disabled) return;
+  const { titleInput, artistInput, dialog } = getModalElements();
+  const targetInput = createSongStep === 1 ? titleInput : artistInput;
+  if (!targetInput || targetInput.disabled) return;
 
   if (dialog) {
     dialog.scrollTop = 0;
@@ -86,25 +93,30 @@ function focusCreateSongTitle(options = {}) {
 
   try {
     if (preventScroll) {
-      titleInput.focus({ preventScroll: true });
+      targetInput.focus({ preventScroll: true });
     } else {
-      titleInput.focus();
+      targetInput.focus();
     }
   } catch (_) {
-    titleInput.focus();
+    targetInput.focus();
   }
 
-  if (titleInput.scrollIntoView) {
+  if (targetInput.scrollIntoView) {
     try {
-      titleInput.scrollIntoView({ block: 'center', inline: 'nearest', behavior: 'auto' });
+      targetInput.scrollIntoView({ block: 'center', inline: 'nearest', behavior: 'auto' });
     } catch (_) {
-      titleInput.scrollIntoView();
+      targetInput.scrollIntoView();
     }
   }
 }
 
-function queueFocusOnCreateSongTitle() {
-  const attempt = () => focusCreateSongTitle({ preventScroll: false });
+// Alias for backward compatibility
+function focusCreateSongTitle(options = {}) {
+  focusCreateSongInput(options);
+}
+
+function queueFocusOnCreateSongInput() {
+  const attempt = () => focusCreateSongInput({ preventScroll: false });
   attempt();
   if (typeof requestAnimationFrame === 'function') {
     requestAnimationFrame(attempt);
@@ -113,10 +125,87 @@ function queueFocusOnCreateSongTitle() {
   setTimeout(attempt, 320);
 }
 
+function queueFocusOnCreateSongTitle() {
+  queueFocusOnCreateSongInput();
+}
+
+function setCreateSongStep(step) {
+  createSongStep = step;
+  const { titleField, artistField, nextButton, createButton, titleInput, artistInput, modalTitle } = getModalElements();
+  
+  if (step === 1) {
+    // Step 1: Show title field and Next button, hide artist field and Create button
+    if (titleField) {
+      titleField.hidden = false;
+      titleField.style.display = '';
+    }
+    if (artistField) {
+      artistField.hidden = true;
+      artistField.style.display = 'none';
+    }
+    if (nextButton) {
+      nextButton.hidden = false;
+      nextButton.style.display = '';
+    }
+    if (createButton) {
+      createButton.hidden = true;
+      createButton.style.display = 'none';
+    }
+    if (modalTitle) modalTitle.textContent = 'Nombre de la Canción';
+  } else {
+    // Step 2: Show artist field and Create button, hide title field and Next button
+    if (titleField) {
+      titleField.hidden = true;
+      titleField.style.display = 'none';
+    }
+    if (artistField) {
+      artistField.hidden = false;
+      artistField.style.display = '';
+    }
+    if (nextButton) {
+      nextButton.hidden = true;
+      nextButton.style.display = 'none';
+    }
+    if (createButton) {
+      createButton.hidden = false;
+      createButton.style.display = '';
+    }
+    if (modalTitle) modalTitle.textContent = 'Artista';
+  }
+  
+  updateNextButtonState();
+  updateCreateButtonState();
+}
+
+function updateNextButtonState() {
+  const { nextButton, titleInput } = getModalElements();
+  if (!nextButton || !titleInput) return;
+  const title = titleInput.value.trim();
+  if (title) {
+    nextButton.classList.add('suggested-secondary--active');
+  } else {
+    nextButton.classList.remove('suggested-secondary--active');
+  }
+}
+
+function updateCreateButtonState() {
+  const { createButton, artistInput } = getModalElements();
+  if (!createButton || !artistInput) return;
+  const artist = artistInput.value.trim();
+  if (artist) {
+    createButton.classList.add('suggested-secondary--active');
+  } else {
+    createButton.classList.remove('suggested-secondary--active');
+  }
+}
+
 export function updateModalButtonsDisabledState() {
-  const { createButton, addButton, titleInput, artistInput, toggleButton, createForm } = getModalElements();
+  const { createButton, nextButton, addButton, titleInput, artistInput, toggleButton, createForm } = getModalElements();
   if (createButton) {
     createButton.disabled = modalWorking;
+  }
+  if (nextButton) {
+    nextButton.disabled = modalWorking;
   }
   if (titleInput) {
     titleInput.disabled = modalWorking;
@@ -171,6 +260,11 @@ export function setCreateMode(enable) {
   } = getModalElements();
 
   const shouldEnable = !!enable;
+
+  // Reset to step 1 when entering create mode
+  if (shouldEnable) {
+    setCreateSongStep(1);
+  }
 
   if (createForm && createFieldElements.length === 0) {
     createFieldElements = Array.from(createForm.querySelectorAll('.suggested-field'));
@@ -237,10 +331,11 @@ export function setCreateMode(enable) {
     }
   }
 
-  if (modalTitle) {
+  // Modal title is now set by setCreateSongStep when in create mode
+  if (!shouldEnable && modalTitle) {
     modalTitle.style.display = '';
     modalTitle.setAttribute('aria-hidden', 'false');
-    modalTitle.textContent = shouldEnable ? 'Crear Canción' : 'Otras Canciones';
+    modalTitle.textContent = 'Otras Canciones';
   }
 
   if (addButton && shouldEnable) {
@@ -288,7 +383,7 @@ export function setModalWorkingState(isWorking) {
 }
 
 export function resetNewSongForm() {
-  const { titleInput, artistInput, createButton } = getModalElements();
+  const { titleInput, artistInput, createButton, nextButton } = getModalElements();
   if (titleInput) {
     titleInput.value = '';
   }
@@ -298,6 +393,10 @@ export function resetNewSongForm() {
   if (createButton) {
     createButton.classList.remove('suggested-secondary--active');
   }
+  if (nextButton) {
+    nextButton.classList.remove('suggested-secondary--active');
+  }
+  createSongStep = 1;
   setCreateMode(false);
   lastCreatedSongId = null;
 }
@@ -513,27 +612,32 @@ export function initAddSongModal(exitEraseMode) {
 
   const addSelectedButton = document.getElementById('add-selected-songs');
   const createSongButton = document.getElementById('create-new-song');
+  const nextButton = document.getElementById('create-song-next');
   const newSongTitleInput = document.getElementById('new-song-title');
   const newSongArtistInput = document.getElementById('new-song-artist');
   const toggleCreateButton = document.getElementById('toggle-create-song');
   const createSongForm = document.getElementById('create-song-form');
 
-  function updateCreateButtonState() {
-    if (!createSongButton || !newSongTitleInput || !newSongArtistInput) return;
-    const title = newSongTitleInput.value.trim();
-    const artist = newSongArtistInput.value.trim();
-    if (title && artist) {
-      createSongButton.classList.add('suggested-secondary--active');
-    } else {
-      createSongButton.classList.remove('suggested-secondary--active');
-    }
-  }
-
+  // Input listeners for step validation
   if (newSongTitleInput) {
-    newSongTitleInput.addEventListener('input', updateCreateButtonState);
+    newSongTitleInput.addEventListener('input', updateNextButtonState);
   }
   if (newSongArtistInput) {
     newSongArtistInput.addEventListener('input', updateCreateButtonState);
+  }
+
+  // Next button handler - go to step 2
+  if (nextButton) {
+    nextButton.addEventListener('click', () => {
+      if (modalWorking) return;
+      const title = newSongTitleInput?.value?.trim() || '';
+      if (!title) {
+        newSongTitleInput?.focus();
+        return;
+      }
+      setCreateSongStep(2);
+      queueFocusOnCreateSongInput();
+    });
   }
 
   const handleSuggestionSelect = (song) => {
@@ -613,6 +717,14 @@ export function initAddSongModal(exitEraseMode) {
     toggleCreateButton.addEventListener('click', () => {
       const isCreateMode = createSongForm && !createSongForm.hidden;
       if (isCreateMode) {
+        // If on step 2, go back to step 1 instead of exiting create mode
+        if (createSongStep === 2) {
+          if (newSongArtistInput) newSongArtistInput.value = '';
+          setCreateSongStep(1);
+          queueFocusOnCreateSongInput();
+          return;
+        }
+        // On step 1, exit create mode
         if (newSongTitleInput) newSongTitleInput.value = '';
         if (newSongArtistInput) newSongArtistInput.value = '';
         resetViewportZoom();
@@ -654,7 +766,10 @@ export function initAddSongModal(exitEraseMode) {
       const artistValue = (newSongArtistInput?.value || '').trim();
 
       if (!titleValue || !artistValue) {
-        console.warn('Debe agregar título y artista para crear una canción.');
+        // Focus the appropriate field
+        if (!artistValue) {
+          newSongArtistInput?.focus();
+        }
         return;
       }
 

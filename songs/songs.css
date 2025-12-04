@@ -389,6 +389,15 @@ body, html {
   margin-bottom: 0.5rem;
 }
 
+.suggested-field--title,
+.suggested-field--artist {
+  transition: opacity 0.2s ease;
+}
+
+.suggested-field--artist[hidden] {
+  display: none;
+}
+
 .suggested-input {
   width: 100%;
   padding: 0.5rem;
@@ -411,6 +420,10 @@ body, html {
   justify-content: center;
   margin-top: 0;
   transition: background-color 0.2s;
+}
+
+.suggested-secondary[hidden] {
+  display: none;
 }
 
 .suggested-secondary--active {

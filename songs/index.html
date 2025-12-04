@@ -48,13 +48,14 @@
           <span>Crear Canción</span>
         </button>
         <div id="create-song-form" class="suggested-create-form" hidden>
-          <div class="suggested-field">
-            <input type="text" id="new-song-title" class="suggested-input" placeholder="Nuevo título de canción" autocomplete="off"/>
+          <div class="suggested-field suggested-field--title">
+            <input type="text" id="new-song-title" class="suggested-input" placeholder="Nombre de la canción" autocomplete="off"/>
           </div>
-          <div class="suggested-field">
+          <button type="button" id="create-song-next" class="suggested-secondary">Siguiente</button>
+          <div class="suggested-field suggested-field--artist" hidden>
             <input type="text" id="new-song-artist" class="suggested-input" placeholder="Nombre del artista" autocomplete="off"/>
           </div>
-          <button type="button" id="create-new-song" class="suggested-secondary">Crear</button>
+          <button type="button" id="create-new-song" class="suggested-secondary" hidden>Crear</button>
         </div>
         <button type="button" id="add-selected-songs" class="suggested-primary" disabled>Añadir a mi lista</button>
       </div>
