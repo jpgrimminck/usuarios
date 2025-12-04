@@ -533,59 +533,76 @@
 }
 
 .recorder-section__preview {
+  display: flex;
+  align-items: center;
+  gap: 0.75rem;
   width: 100%;
-  height: 54px;
-  max-height: 54px;
+  padding: 0.75rem 1rem;
+  border-radius: 1rem;
+  background: rgba(15, 23, 42, 0.6);
   opacity: 1;
   transition: opacity 0.2s ease;
-  border-radius: 1rem;
-  background: transparent;
-  accent-color: var(--primary-color, #137fec);
 }
 
-.recorder-section__preview::-webkit-media-controls-panel {
-  background: rgba(15, 23, 42, 0.6);
-  border-radius: 1rem;
-  padding: 0 1rem;
-  justify-content: space-between;
-}
-
-.recorder-section__preview::-webkit-media-controls-play-button {
-  background-color: var(--primary-color, #137fec);
+.recorder-preview__play-button {
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  width: 2.5rem;
+  height: 2.5rem;
+  flex-shrink: 0;
+  border: none;
   border-radius: 50%;
-  flex-shrink: 0;
+  background-color: var(--primary-color, #137fec);
+  color: white;
+  cursor: pointer;
+  transition: transform 0.15s ease, background-color 0.15s ease;
 }
 
-.recorder-section__preview::-webkit-media-controls-current-time-display,
-.recorder-section__preview::-webkit-media-controls-time-remaining-display {
-  color: #f8fafc;
-  font-size: 0.85rem;
-  flex-shrink: 0;
+.recorder-preview__play-button:hover {
+  background-color: #1a8fff;
 }
 
-.recorder-section__preview::-webkit-media-controls-timeline {
-  background: rgba(148, 163, 184, 0.25);
-  border-radius: 9999px;
-  height: 6px;
+.recorder-preview__play-button:active {
+  transform: scale(0.95);
+}
+
+.recorder-preview__play-button .material-symbols-outlined {
+  font-size: 1.5rem;
+}
+
+.recorder-preview__slider {
+  position: relative;
   flex: 1;
-  margin: 0 1rem;
+  height: 6px;
+  border-radius: 9999px;
+  background: rgba(148, 163, 184, 0.25);
+  cursor: pointer;
+  overflow: hidden;
 }
 
-.recorder-section__preview::-webkit-media-controls-volume-slider-container,
-.recorder-section__preview::-webkit-media-controls-volume-slider,
-.recorder-section__preview::-webkit-media-controls-mute-button {
+.recorder-preview__slider-track {
+  width: 100%;
+  height: 100%;
+}
+
+.recorder-preview__slider-fill {
+  width: 0%;
+  height: 100%;
+  background: var(--primary-color, #137fec);
+  transition: width 0.1s linear;
+}
+
+.recorder-preview__time {
   flex-shrink: 0;
-}
-
-.recorder-section__preview::-webkit-media-controls-enclosure {
-  background: transparent;
-  border-radius: 1rem;
+  font-size: 0.85rem;
+  color: #f8fafc;
+  min-width: 2.5rem;
+  text-align: right;
 }
 
 .recorder-section__preview--hidden {
-  opacity: 0;
-  visibility: hidden;
-  pointer-events: none;
+  display: none;
 }
 
 /* Status Buttons */

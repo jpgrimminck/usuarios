@@ -118,6 +118,7 @@ function ensureRecorderElements() {
   if (recorderElements) return recorderElements;
   const section = document.querySelector('[data-recorder-section]');
   if (!section) return null;
+  const previewEl = section.querySelector('[data-recorder-preview]');
   recorderElements = {
     section,
     dynamicContainer: section.querySelector('[data-recorder-dynamic]'),
@@ -126,7 +127,12 @@ function ensureRecorderElements() {
     toggleButton: section.querySelector('[data-recorder-action="toggle"]'),
     discardButton: section.querySelector('[data-recorder-action="discard"]'),
     timerEl: section.querySelector('[data-recorder-timer]'),
-    previewEl: section.querySelector('[data-recorder-preview]'),
+    previewEl,
+    previewAudio: previewEl?.querySelector('[data-recorder-audio]'),
+    previewPlayButton: previewEl?.querySelector('[data-recorder-play]'),
+    previewSlider: previewEl?.querySelector('[data-recorder-slider]'),
+    previewFill: previewEl?.querySelector('[data-recorder-fill]'),
+    previewTime: previewEl?.querySelector('[data-recorder-time]'),
     initialized: false
   };
   return recorderElements;
@@ -391,15 +397,21 @@ export function updateRecorderUi() {
     elements.titleInput.disabled = isUploadingRecording;
   }
 
-  if (elements.previewEl) {
+  if (elements.previewEl && elements.previewAudio) {
     const shouldShowPreview = hasRecording && !!recordingObjectUrl;
     elements.previewEl.classList.toggle('recorder-section__preview--hidden', !shouldShowPreview);
     if (!shouldShowPreview) {
-      elements.previewEl.pause();
-      elements.previewEl.removeAttribute('src');
-      elements.previewEl.load();
+      elements.previewAudio.pause();
+      elements.previewAudio.removeAttribute('src');
+      elements.previewAudio.load();
+      if (elements.previewFill) elements.previewFill.style.width = '0%';
+      if (elements.previewTime) elements.previewTime.textContent = '0:00';
+      if (elements.previewPlayButton) {
+        const icon = elements.previewPlayButton.querySelector('.material-symbols-outlined');
+        if (icon) icon.textContent = 'play_arrow';
+      }
     } else if (recordingObjectUrl) {
-      elements.previewEl.src = recordingObjectUrl;
+      elements.previewAudio.src = recordingObjectUrl;
     }
   }
 
@@ -433,11 +445,17 @@ function resetRecordingState(options = {}) {
     if (!keepInput && elements.titleInput) {
       elements.titleInput.value = '';
     }
-    if (elements.previewEl) {
-      elements.previewEl.pause();
-      elements.previewEl.removeAttribute('src');
-      elements.previewEl.load();
+    if (elements.previewEl && elements.previewAudio) {
+      elements.previewAudio.pause();
+      elements.previewAudio.removeAttribute('src');
+      elements.previewAudio.load();
       elements.previewEl.classList.add('recorder-section__preview--hidden');
+      if (elements.previewFill) elements.previewFill.style.width = '0%';
+      if (elements.previewTime) elements.previewTime.textContent = '0:00';
+      if (elements.previewPlayButton) {
+        const icon = elements.previewPlayButton.querySelector('.material-symbols-outlined');
+        if (icon) icon.textContent = 'play_arrow';
+      }
     }
     if (elements.titleLabel) {
       elements.titleLabel.classList.add('recorder-section__label--hidden');
@@ -720,6 +738,68 @@ export function initRecorderControls() {
     event.preventDefault();
     discardRecording();
   });
+
+  // Custom preview player controls
+  if (elements.previewAudio && elements.previewPlayButton) {
+    const formatTime = (seconds) => {
+      if (!isFinite(seconds) || isNaN(seconds)) return '0:00';
+      const mins = Math.floor(seconds / 60);
+      const secs = Math.floor(seconds % 60);
+      return `${mins}:${secs.toString().padStart(2, '0')}`;
+    };
+
+    elements.previewPlayButton.addEventListener('click', () => {
+      if (elements.previewAudio.paused) {
+        elements.previewAudio.play();
+      } else {
+        elements.previewAudio.pause();
+      }
+    });
+
+    elements.previewAudio.addEventListener('play', () => {
+      const icon = elements.previewPlayButton.querySelector('.material-symbols-outlined');
+      if (icon) icon.textContent = 'pause';
+    });
+
+    elements.previewAudio.addEventListener('pause', () => {
+      const icon = elements.previewPlayButton.querySelector('.material-symbols-outlined');
+      if (icon) icon.textContent = 'play_arrow';
+    });
+
+    elements.previewAudio.addEventListener('ended', () => {
+      const icon = elements.previewPlayButton.querySelector('.material-symbols-outlined');
+      if (icon) icon.textContent = 'play_arrow';
+      if (elements.previewFill) elements.previewFill.style.width = '0%';
+    });
+
+    elements.previewAudio.addEventListener('timeupdate', () => {
+      const duration = elements.previewAudio.duration || 0;
+      const currentTime = elements.previewAudio.currentTime || 0;
+      if (elements.previewFill && duration > 0) {
+        elements.previewFill.style.width = `${(currentTime / duration) * 100}%`;
+      }
+      if (elements.previewTime) {
+        elements.previewTime.textContent = formatTime(currentTime);
+      }
+    });
+
+    elements.previewAudio.addEventListener('loadedmetadata', () => {
+      if (elements.previewTime) {
+        elements.previewTime.textContent = formatTime(elements.previewAudio.duration);
+      }
+    });
+
+    if (elements.previewSlider) {
+      elements.previewSlider.addEventListener('click', (e) => {
+        const rect = elements.previewSlider.getBoundingClientRect();
+        const percent = (e.clientX - rect.left) / rect.width;
+        const duration = elements.previewAudio.duration || 0;
+        if (duration > 0) {
+          elements.previewAudio.currentTime = percent * duration;
+        }
+      });
+    }
+  }
 
   updateRecorderUi();
 }
