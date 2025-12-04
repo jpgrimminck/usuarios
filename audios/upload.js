@@ -105,6 +105,406 @@ let viewportResizeHandler = null;
 let keepRecorderVisible = false;
 let recorderViewportBaseHeight = null;
 
+// Pending uploads storage key
+const PENDING_UPLOADS_KEY = 'usuarios:pendingAudioUploads';
+
+// Get pending uploads from localStorage
+function getPendingUploads() {
+  try {
+    const stored = localStorage.getItem(PENDING_UPLOADS_KEY);
+    return stored ? JSON.parse(stored) : [];
+  } catch (e) {
+    console.error('Error reading pending uploads:', e);
+    return [];
+  }
+}
+
+// Save pending uploads to localStorage
+function savePendingUploads(uploads) {
+  try {
+    localStorage.setItem(PENDING_UPLOADS_KEY, JSON.stringify(uploads));
+  } catch (e) {
+    console.error('Error saving pending uploads:', e);
+  }
+}
+
+// Add a pending upload
+function addPendingUpload(upload) {
+  const uploads = getPendingUploads();
+  uploads.push(upload);
+  savePendingUploads(uploads);
+}
+
+// Remove a pending upload by tempId
+function removePendingUpload(tempId) {
+  const uploads = getPendingUploads();
+  const filtered = uploads.filter(u => u.tempId !== tempId);
+  savePendingUploads(filtered);
+}
+
+// Update a pending upload's status
+function updatePendingUploadStatus(tempId, status, error = null) {
+  const uploads = getPendingUploads();
+  const upload = uploads.find(u => u.tempId === tempId);
+  if (upload) {
+    upload.status = status;
+    upload.error = error;
+    upload.lastAttempt = Date.now();
+    savePendingUploads(uploads);
+  }
+}
+
+// Convert blob to base64 for storage
+function blobToBase64(blob) {
+  return new Promise((resolve, reject) => {
+    const reader = new FileReader();
+    reader.onloadend = () => resolve(reader.result);
+    reader.onerror = reject;
+    reader.readAsDataURL(blob);
+  });
+}
+
+// Convert base64 back to blob
+function base64ToBlob(base64, mimeType) {
+  const byteString = atob(base64.split(',')[1]);
+  const ab = new ArrayBuffer(byteString.length);
+  const ia = new Uint8Array(ab);
+  for (let i = 0; i < byteString.length; i++) {
+    ia[i] = byteString.charCodeAt(i);
+  }
+  return new Blob([ab], { type: mimeType });
+}
+
+// Build an optimistic audio card for pending upload
+function buildPendingUploadCard(pendingUpload) {
+  const container = document.createElement('div');
+  container.className = 'audio-card audio-card--pending flex flex-col gap-4 rounded-lg bg-gray-800 p-4';
+  container.dataset.pendingId = pendingUpload.tempId;
+  container.dataset.status = pendingUpload.status;
+  
+  const isUploading = pendingUpload.status === 'uploading';
+  const isFailed = pendingUpload.status === 'failed';
+  
+  const statusHtml = isUploading 
+    ? `<span class="pending-upload__status pending-upload__status--uploading">
+        <span class="pending-upload__spinner"></span>
+        <span>Subiendo...</span>
+       </span>`
+    : isFailed
+    ? `<span class="pending-upload__status pending-upload__status--failed">
+        <span class="material-symbols-outlined">error</span>
+        <span>Error al subir</span>
+       </span>`
+    : '';
+  
+  const actionsHtml = isFailed
+    ? `<div class="pending-upload__actions">
+        <button type="button" class="pending-upload__retry" data-action="retry" data-temp-id="${pendingUpload.tempId}">
+          <span class="material-symbols-outlined">refresh</span>
+          Reintentar
+        </button>
+        <button type="button" class="pending-upload__delete" data-action="delete" data-temp-id="${pendingUpload.tempId}">
+          <span class="material-symbols-outlined">delete</span>
+          Eliminar
+        </button>
+       </div>`
+    : '';
+
+  container.innerHTML = `
+    <div class="audio-card__header">
+      <p class="audio-card__title text-lg font-semibold text-white">
+        ${pendingUpload.title || 'Audio sin nombre'}
+        ${statusHtml}
+      </p>
+      <div class="audio-card__controls" data-role="controls">
+        <button type="button" class="flex items-center justify-center rounded-full bg-[var(--primary-color)] text-white" data-role="play-button" aria-label="Reproducir o pausar" title="Reproducir o pausar" ${isUploading ? '' : ''}>
+          <span class="material-symbols-outlined text-4xl">play_arrow</span>
+        </button>
+      </div>
+    </div>
+    <div class="audio-slider" data-visualizer="slider">
+      <div class="audio-slider__track" data-role="slider-track">
+        <div class="audio-slider__fill" data-role="slider-fill"></div>
+      </div>
+    </div>
+    ${actionsHtml}
+  `;
+  
+  // Set up audio playback for pending upload
+  const playButton = container.querySelector('[data-role="play-button"]');
+  const sliderTrack = container.querySelector('[data-role="slider-track"]');
+  const sliderFill = container.querySelector('[data-role="slider-fill"]');
+  
+  // Create hidden audio element for playback
+  const audio = document.createElement('audio');
+  audio.preload = 'metadata';
+  
+  // Use the blob URL if available, otherwise convert from base64
+  if (pendingUpload.blobUrl) {
+    audio.src = pendingUpload.blobUrl;
+  } else if (pendingUpload.base64Data) {
+    const blob = base64ToBlob(pendingUpload.base64Data, pendingUpload.mimeType || 'audio/wav');
+    const url = URL.createObjectURL(blob);
+    audio.src = url;
+    // Store for later cleanup
+    container.dataset.blobUrl = url;
+  }
+  
+  container.appendChild(audio);
+  
+  if (playButton) {
+    playButton.addEventListener('click', () => {
+      if (audio.paused) {
+        audio.play();
+        const icon = playButton.querySelector('.material-symbols-outlined');
+        if (icon) icon.textContent = 'pause';
+      } else {
+        audio.pause();
+        const icon = playButton.querySelector('.material-symbols-outlined');
+        if (icon) icon.textContent = 'play_arrow';
+      }
+    });
+  }
+  
+  audio.addEventListener('ended', () => {
+    const icon = playButton?.querySelector('.material-symbols-outlined');
+    if (icon) icon.textContent = 'play_arrow';
+    if (sliderFill) sliderFill.style.width = '0%';
+  });
+  
+  audio.addEventListener('timeupdate', () => {
+    if (audio.duration && sliderFill) {
+      sliderFill.style.width = `${(audio.currentTime / audio.duration) * 100}%`;
+    }
+  });
+  
+  if (sliderTrack) {
+    sliderTrack.addEventListener('click', (e) => {
+      const rect = sliderTrack.getBoundingClientRect();
+      const percent = (e.clientX - rect.left) / rect.width;
+      if (audio.duration) {
+        audio.currentTime = percent * audio.duration;
+      }
+    });
+  }
+  
+  // Set up retry/delete handlers
+  const retryBtn = container.querySelector('[data-action="retry"]');
+  const deleteBtn = container.querySelector('[data-action="delete"]');
+  
+  if (retryBtn) {
+    retryBtn.addEventListener('click', () => {
+      retryPendingUpload(pendingUpload.tempId);
+    });
+  }
+  
+  if (deleteBtn) {
+    deleteBtn.addEventListener('click', () => {
+      deletePendingUpload(pendingUpload.tempId);
+    });
+  }
+  
+  return container;
+}
+
+// Render all pending upload cards
+export function renderPendingUploads() {
+  const container = document.querySelector('.space-y-4');
+  if (!container) return;
+  
+  const currentSongId = getSongId();
+  const uploads = getPendingUploads().filter(u => String(u.songId) === String(currentSongId));
+  
+  // Remove existing pending cards
+  container.querySelectorAll('.audio-card--pending').forEach(card => card.remove());
+  
+  // Add pending cards at the top
+  uploads.forEach(upload => {
+    const card = buildPendingUploadCard(upload);
+    // Insert after the user section header if it exists, otherwise at top
+    const userSection = container.querySelector('h3');
+    if (userSection && userSection.parentElement) {
+      userSection.parentElement.insertAdjacentElement('afterend', card);
+    } else {
+      container.insertBefore(card, container.firstChild);
+    }
+  });
+}
+
+// Update a specific pending card's UI
+function updatePendingCardUi(tempId, status) {
+  const card = document.querySelector(`[data-pending-id="${tempId}"]`);
+  if (!card) return;
+  
+  card.dataset.status = status;
+  const titleEl = card.querySelector('.audio-card__title');
+  if (!titleEl) return;
+  
+  // Update status indicator
+  const existingStatus = titleEl.querySelector('.pending-upload__status');
+  if (existingStatus) existingStatus.remove();
+  
+  // Remove existing actions
+  const existingActions = card.querySelector('.pending-upload__actions');
+  if (existingActions) existingActions.remove();
+  
+  if (status === 'uploading') {
+    titleEl.insertAdjacentHTML('beforeend', `
+      <span class="pending-upload__status pending-upload__status--uploading">
+        <span class="pending-upload__spinner"></span>
+        <span>Subiendo...</span>
+      </span>
+    `);
+  } else if (status === 'failed') {
+    titleEl.insertAdjacentHTML('beforeend', `
+      <span class="pending-upload__status pending-upload__status--failed">
+        <span class="material-symbols-outlined">error</span>
+        <span>Error al subir</span>
+      </span>
+    `);
+    card.insertAdjacentHTML('beforeend', `
+      <div class="pending-upload__actions">
+        <button type="button" class="pending-upload__retry" data-action="retry" data-temp-id="${tempId}">
+          <span class="material-symbols-outlined">refresh</span>
+          Reintentar
+        </button>
+        <button type="button" class="pending-upload__delete" data-action="delete" data-temp-id="${tempId}">
+          <span class="material-symbols-outlined">delete</span>
+          Eliminar
+        </button>
+      </div>
+    `);
+    
+    // Re-attach event listeners
+    const retryBtn = card.querySelector('[data-action="retry"]');
+    const deleteBtn = card.querySelector('[data-action="delete"]');
+    if (retryBtn) retryBtn.addEventListener('click', () => retryPendingUpload(tempId));
+    if (deleteBtn) deleteBtn.addEventListener('click', () => deletePendingUpload(tempId));
+  }
+}
+
+// Delete a pending upload
+function deletePendingUpload(tempId) {
+  // Remove from localStorage
+  removePendingUpload(tempId);
+  
+  // Remove card from DOM
+  const card = document.querySelector(`[data-pending-id="${tempId}"]`);
+  if (card) {
+    // Cleanup blob URL if exists
+    const blobUrl = card.dataset.blobUrl;
+    if (blobUrl) URL.revokeObjectURL(blobUrl);
+    card.remove();
+  }
+}
+
+// Retry a failed upload
+async function retryPendingUpload(tempId) {
+  const uploads = getPendingUploads();
+  const upload = uploads.find(u => u.tempId === tempId);
+  if (!upload) return;
+  
+  updatePendingUploadStatus(tempId, 'uploading');
+  updatePendingCardUi(tempId, 'uploading');
+  
+  try {
+    await performUpload(upload);
+    // Success - remove from pending and reload
+    removePendingUpload(tempId);
+    const card = document.querySelector(`[data-pending-id="${tempId}"]`);
+    if (card) card.remove();
+    reloadAudios({ skipRealtimeSetup: true });
+  } catch (err) {
+    console.error('Retry upload failed:', err);
+    updatePendingUploadStatus(tempId, 'failed', err.message);
+    updatePendingCardUi(tempId, 'failed');
+  }
+}
+
+// Perform the actual upload (used by both initial upload and retry)
+async function performUpload(uploadData) {
+  const { base64Data, mimeType, title, songId, songColumn, uploaderId, nextAudioId } = uploadData;
+  
+  // Convert base64 back to blob
+  const blob = base64ToBlob(base64Data, mimeType);
+  
+  const extension = determineFileExtension(mimeType);
+  const safeName = slugifyFileName(title).slice(0, 48) || 'recording';
+  const fileName = `${safeName}.${extension}`;
+  const storageName = `${nextAudioId}-${fileName}`;
+  const filePath = `${audioBucket}/${storageName}`;
+  
+  // Upload to storage
+  const { error: uploadError } = await supabaseClient
+    .storage
+    .from(audioBucket)
+    .upload(filePath, blob, {
+      cacheControl: '3600',
+      upsert: false,
+      contentType: mimeType || 'audio/webm'
+    });
+
+  if (uploadError) {
+    throw new Error(`Storage upload failed: ${uploadError.message}`);
+  }
+
+  // Insert database record
+  const insertPayload = {
+    id: nextAudioId,
+    detail: 'recording',
+    name: title,
+    uploader_id: uploaderId,
+    url: filePath
+  };
+  insertPayload[songColumn] = songId;
+
+  const { error: insertError } = await supabaseClient
+    .from('audios')
+    .insert(insertPayload);
+
+  if (insertError) {
+    throw new Error(`Database insert failed: ${insertError.message}`);
+  }
+  
+  return true;
+}
+
+// Resume pending uploads on page load
+export async function resumePendingUploads() {
+  const currentSongId = getSongId();
+  if (!currentSongId) return;
+  
+  const uploads = getPendingUploads().filter(
+    u => String(u.songId) === String(currentSongId) && u.status !== 'uploading'
+  );
+  
+  for (const upload of uploads) {
+    // Only auto-retry if it was interrupted (not explicitly failed many times)
+    if (upload.status === 'pending' || (upload.status === 'failed' && (!upload.retryCount || upload.retryCount < 3))) {
+      updatePendingUploadStatus(upload.tempId, 'uploading');
+      updatePendingCardUi(upload.tempId, 'uploading');
+      
+      try {
+        await performUpload(upload);
+        removePendingUpload(upload.tempId);
+        const card = document.querySelector(`[data-pending-id="${upload.tempId}"]`);
+        if (card) card.remove();
+        reloadAudios({ skipRealtimeSetup: true });
+      } catch (err) {
+        console.error('Resume upload failed:', err);
+        const uploads = getPendingUploads();
+        const u = uploads.find(x => x.tempId === upload.tempId);
+        if (u) {
+          u.retryCount = (u.retryCount || 0) + 1;
+          savePendingUploads(uploads);
+        }
+        updatePendingUploadStatus(upload.tempId, 'failed', err.message);
+        updatePendingCardUi(upload.tempId, 'failed');
+      }
+    }
+  }
+}
+
 export function initializeUploadModule(options = {}) {
   supabaseClient = options.supabase || null;
   audioBucket = options.audioBucket || 'audios';
@@ -655,11 +1055,6 @@ async function uploadRecording() {
   const nextAudioId = await fetchNextAudioId();
   if (!nextAudioId) return;
 
-  const extension = determineFileExtension(recordingBlob.type || recorderMimeType);
-  const safeName = slugifyFileName(titleValue).slice(0, 48) || 'recording';
-  const fileName = `${safeName}.${extension}`;
-  const storageName = `${nextAudioId}-${fileName}`;
-  const filePath = `${audioBucket}/${storageName}`;
   const uploaderId = (() => {
     const raw = getUserParam();
     if (!raw) return null;
@@ -667,50 +1062,73 @@ async function uploadRecording() {
     return Number.isFinite(numericId) ? numericId : raw;
   })();
 
-  isUploadingRecording = true;
-  updateRecorderUi();
-
+  const mimeType = recordingBlob.type || recorderMimeType || 'audio/wav';
+  const songColumn = getAudiosSongColumn();
+  
+  // Generate a temporary ID for this upload
+  const tempId = `pending-${Date.now()}-${Math.random().toString(36).slice(2, 9)}`;
+  
+  // Convert blob to base64 for localStorage persistence
+  let base64Data;
   try {
-    const { error: uploadError } = await supabaseClient
-      .storage
-      .from(audioBucket)
-      .upload(filePath, recordingBlob, {
-        cacheControl: '3600',
-        upsert: false,
-        contentType: recordingBlob.type || recorderMimeType || 'audio/webm'
-      });
-
-    if (uploadError) {
-      console.error('Error uploading the recording:', uploadError);
-      return;
+    base64Data = await blobToBase64(recordingBlob);
+  } catch (err) {
+    console.error('Failed to convert blob to base64:', err);
+    return;
+  }
+  
+  // Create pending upload data
+  const pendingUpload = {
+    tempId,
+    title: titleValue,
+    songId,
+    songColumn,
+    uploaderId,
+    nextAudioId,
+    mimeType,
+    base64Data,
+    blobUrl: recordingObjectUrl, // Keep for immediate playback
+    status: 'uploading',
+    createdAt: Date.now(),
+    retryCount: 0
+  };
+  
+  // Save to localStorage immediately
+  addPendingUpload(pendingUpload);
+  
+  // Show optimistic card immediately
+  const container = document.querySelector('.space-y-4');
+  if (container) {
+    const card = buildPendingUploadCard(pendingUpload);
+    // Insert after user section header if exists
+    const userSection = container.querySelector('h3');
+    if (userSection && userSection.parentElement) {
+      userSection.parentElement.insertAdjacentElement('afterend', card);
+    } else {
+      container.insertBefore(card, container.firstChild);
     }
-
-    const insertPayload = {
-      id: nextAudioId,
-      detail: 'recording',
-      name: titleValue,
-      uploader_id: uploaderId,
-      url: filePath
-    };
-    const songColumnForInsert = getAudiosSongColumn();
-    insertPayload[songColumnForInsert] = songId;
-
-    const { error: insertError } = await supabaseClient
-      .from('audios')
-      .insert(insertPayload);
-
-    if (insertError) {
-      console.error('Error saving the recording record:', insertError);
-      return;
+  }
+  
+  // Reset recorder UI immediately (user sees instant feedback)
+  resetRecordingState({ keepInput: false });
+  
+  // Perform upload in background
+  try {
+    await performUpload(pendingUpload);
+    
+    // Success - remove from pending and reload to show real card
+    removePendingUpload(tempId);
+    const pendingCard = document.querySelector(`[data-pending-id="${tempId}"]`);
+    if (pendingCard) {
+      const blobUrl = pendingCard.dataset.blobUrl;
+      if (blobUrl) URL.revokeObjectURL(blobUrl);
+      pendingCard.remove();
     }
-
-    resetRecordingState({ keepInput: false });
     reloadAudios({ skipRealtimeSetup: true });
   } catch (err) {
-    console.error('Unexpected error while uploading the recording:', err);
-  } finally {
-    isUploadingRecording = false;
-    updateRecorderUi();
+    console.error('Upload failed:', err);
+    updatePendingUploadStatus(tempId, 'failed', err.message);
+    updatePendingCardUi(tempId, 'failed');
   }
 }
 

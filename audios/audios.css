@@ -641,3 +641,103 @@
   color: #6ee7b7;
   border-color: #059669;
 }
+
+/* Pending Upload Card Styles */
+.audio-card--pending {
+  position: relative;
+  border: 1px dashed rgba(59, 130, 246, 0.5);
+}
+
+.audio-card--pending[data-status="uploading"] {
+  border-color: rgba(59, 130, 246, 0.6);
+}
+
+.audio-card--pending[data-status="failed"] {
+  border-color: rgba(239, 68, 68, 0.6);
+}
+
+.pending-upload__status {
+  display: inline-flex;
+  align-items: center;
+  gap: 0.35rem;
+  margin-left: 0.5rem;
+  font-size: 0.7rem;
+  font-weight: 500;
+  padding: 0.15rem 0.5rem;
+  border-radius: 9999px;
+  vertical-align: middle;
+}
+
+.pending-upload__status--uploading {
+  background-color: rgba(59, 130, 246, 0.2);
+  color: #93c5fd;
+}
+
+.pending-upload__status--failed {
+  background-color: rgba(239, 68, 68, 0.2);
+  color: #fca5a5;
+}
+
+.pending-upload__status .material-symbols-outlined {
+  font-size: 0.875rem;
+}
+
+.pending-upload__spinner {
+  width: 12px;
+  height: 12px;
+  border: 2px solid rgba(147, 197, 253, 0.3);
+  border-top-color: #93c5fd;
+  border-radius: 50%;
+  animation: pendingSpinner 0.8s linear infinite;
+}
+
+@keyframes pendingSpinner {
+  to {
+    transform: rotate(360deg);
+  }
+}
+
+.pending-upload__actions {
+  display: flex;
+  gap: 0.75rem;
+  margin-top: 0.5rem;
+  padding-top: 0.75rem;
+  border-top: 1px solid rgba(255, 255, 255, 0.1);
+}
+
+.pending-upload__retry,
+.pending-upload__delete {
+  display: inline-flex;
+  align-items: center;
+  gap: 0.35rem;
+  padding: 0.4rem 0.75rem;
+  border-radius: 0.5rem;
+  font-size: 0.8rem;
+  font-weight: 500;
+  cursor: pointer;
+  transition: background-color 0.2s;
+  border: none;
+}
+
+.pending-upload__retry {
+  background-color: rgba(59, 130, 246, 0.2);
+  color: #93c5fd;
+}
+
+.pending-upload__retry:hover {
+  background-color: rgba(59, 130, 246, 0.35);
+}
+
+.pending-upload__delete {
+  background-color: rgba(239, 68, 68, 0.2);
+  color: #fca5a5;
+}
+
+.pending-upload__delete:hover {
+  background-color: rgba(239, 68, 68, 0.35);
+}
+
+.pending-upload__retry .material-symbols-outlined,
+.pending-upload__delete .material-symbols-outlined {
+  font-size: 1rem;
+}

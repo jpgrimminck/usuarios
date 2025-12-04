@@ -29,7 +29,9 @@ import {
   initializeUploadModule,
   initRecorderControls,
   setDefaultRecorderStatus,
-  updateRecorderUi
+  updateRecorderUi,
+  renderPendingUploads,
+  resumePendingUploads
 } from './upload.js';
 
 const AUDIO_BUCKET = 'audios';
@@ -610,6 +612,10 @@ async function loadAudios(options = {}) {
 
     setDefaultRecorderStatus();
     updateRecorderUi();
+    
+    // Render any pending uploads and attempt to resume them
+    renderPendingUploads();
+    resumePendingUploads();
 
     if (!skipRealtimeSetup && (previousSongId !== state.currentSongIdResolved || !state.audiosChannel)) {
       initAudiosRealtime();
