@@ -312,11 +312,6 @@ function updateRecordingTimer() {
 
 function startRecordingTimer() {
   recordingStartTime = Date.now();
-  const elements = ensureRecorderElements();
-  if (elements?.timerEl) {
-    elements.timerEl.classList.remove('recorder-section__timer--hidden');
-    updateRecordingTimer();
-  }
   recordingTimerInterval = setInterval(updateRecordingTimer, 1000);
 }
 
@@ -349,6 +344,14 @@ export function updateRecorderUi() {
 
   if (elements.dynamicContainer) {
     elements.dynamicContainer.classList.toggle('recorder-section__dynamic--recorded', shouldShowTitle);
+  }
+
+  // Show/hide timer based on recording state
+  if (elements.timerEl) {
+    elements.timerEl.classList.toggle('recorder-section__timer--hidden', !isRecording);
+    if (isRecording) {
+      updateRecordingTimer();
+    }
   }
 
   if (elements.toggleButton) {
