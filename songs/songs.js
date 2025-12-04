@@ -48,6 +48,8 @@ function getStoredUserId() {
 const selectedUserId = urlParams.get('id') || getStoredUserId();
 let songsRefreshTimeoutId = null;
 let pendingScrollSongId = null;
+let isLoadingSongs = false;
+let pendingLoadSongs = false;
 
 // ============================================
 // Funciones de UI
@@ -169,6 +171,15 @@ async function persistStatusTag(songId, nextStatus) {
 async function loadSongs() {
   const container = document.getElementById('songs-container');
   if (!container) return;
+  
+  // Prevent concurrent loads - queue a refresh if already loading
+  if (isLoadingSongs) {
+    pendingLoadSongs = true;
+    return;
+  }
+  
+  isLoadingSongs = true;
+  pendingLoadSongs = false;
   container.innerHTML = '';
 
   try {
@@ -313,6 +324,13 @@ async function loadSongs() {
     refreshEraseMode();
   } catch (err) {
     console.error('Error in loadSongs:', err);
+  } finally {
+    isLoadingSongs = false;
+    // If another load was requested while we were loading, do it now
+    if (pendingLoadSongs) {
+      pendingLoadSongs = false;
+      loadSongs();
+    }
   }
 }
 
