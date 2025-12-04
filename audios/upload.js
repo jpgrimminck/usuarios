@@ -187,7 +187,7 @@ function buildPendingUploadCard(pendingUpload) {
   
   const statusHtml = isUploading 
     ? `<span class="pending-upload__status pending-upload__status--uploading">
-        <span class="pending-upload__spinner"></span>
+        <span class="material-symbols-outlined">cloud_upload</span>
         <span>Subiendo...</span>
        </span>`
     : isFailed
@@ -397,7 +397,7 @@ function updatePendingCardUi(tempId, status) {
   if (status === 'uploading') {
     titleEl.insertAdjacentHTML('beforeend', `
       <span class="pending-upload__status pending-upload__status--uploading">
-        <span class="pending-upload__spinner"></span>
+        <span class="material-symbols-outlined">cloud_upload</span>
         <span>Subiendo...</span>
       </span>
     `);
