@@ -748,20 +748,39 @@ export function initRecorderControls() {
       return `${mins}:${secs.toString().padStart(2, '0')}`;
     };
 
+    // Helper to restore focus to title input (keeps keyboard open on mobile)
+    const restoreTitleFocus = () => {
+      if (elements.titleInput && document.activeElement !== elements.titleInput) {
+        elements.titleInput.focus();
+      }
+    };
+
     // Prevent play button from stealing focus (keeps keyboard open)
     elements.previewPlayButton.addEventListener('mousedown', (e) => {
       e.preventDefault();
     });
     elements.previewPlayButton.addEventListener('touchstart', (e) => {
       e.preventDefault();
-    });
-
-    elements.previewPlayButton.addEventListener('click', () => {
+    }, { passive: false });
+    elements.previewPlayButton.addEventListener('touchend', (e) => {
+      e.preventDefault();
       if (elements.previewAudio.paused) {
         elements.previewAudio.play();
       } else {
         elements.previewAudio.pause();
       }
+      restoreTitleFocus();
+    });
+
+    elements.previewPlayButton.addEventListener('click', (e) => {
+      // Only handle click for non-touch devices (touch handled by touchend)
+      if (e.sourceCapabilities?.firesTouchEvents) return;
+      if (elements.previewAudio.paused) {
+        elements.previewAudio.play();
+      } else {
+        elements.previewAudio.pause();
+      }
+      restoreTitleFocus();
     });
 
     elements.previewAudio.addEventListener('play', () => {
@@ -804,15 +823,29 @@ export function initRecorderControls() {
       });
       elements.previewSlider.addEventListener('touchstart', (e) => {
         e.preventDefault();
-      });
+      }, { passive: false });
 
-      elements.previewSlider.addEventListener('click', (e) => {
+      const handleSliderSeek = (clientX) => {
         const rect = elements.previewSlider.getBoundingClientRect();
-        const percent = (e.clientX - rect.left) / rect.width;
+        const percent = (clientX - rect.left) / rect.width;
         const duration = elements.previewAudio.duration || 0;
         if (duration > 0) {
           elements.previewAudio.currentTime = percent * duration;
         }
+        restoreTitleFocus();
+      };
+
+      elements.previewSlider.addEventListener('touchend', (e) => {
+        e.preventDefault();
+        if (e.changedTouches && e.changedTouches.length > 0) {
+          handleSliderSeek(e.changedTouches[0].clientX);
+        }
+      });
+
+      elements.previewSlider.addEventListener('click', (e) => {
+        // Only handle click for non-touch devices
+        if (e.sourceCapabilities?.firesTouchEvents) return;
+        handleSliderSeek(e.clientX);
       });
     }
   }
