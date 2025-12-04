@@ -377,17 +377,36 @@
 .recorder-section__controls {
   display: flex;
   align-items: center;
-  justify-content: space-between;
+  justify-content: center;
   gap: 3rem;
   margin: 0;
+  position: relative;
 }
 
-.recorder-section__controls::before,
-.recorder-section__controls::after {
-  content: '';
-  flex: 1;
+.recorder-button-erase {
+  position: absolute;
+  left: 0;
+  width: 3.5rem;
+  height: 3.5rem;
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  border-radius: 50%;
+  background: rgba(239, 68, 68, 0.8);
+  color: #f8fafc;
+  transition: all 0.2s ease;
+  border: none;
+  cursor: pointer;
 }
 
+.recorder-button-erase[hidden] {
+  display: none !important;
+}
+
+.recorder-button-erase:hover {
+  background: rgba(220, 38, 38, 0.9);
+  transform: scale(1.05);
+}
 
 .recorder-section__label {
   display: block;
@@ -434,29 +453,6 @@
   border-radius: 0.5rem;
   font-size: 1.1rem;
   font-weight: 600;
-}
-
-.recorder-button-erase {
-  width: 3.5rem;
-  height: 3.5rem;
-  display: inline-flex;
-  align-items: center;
-  justify-content: center;
-  border-radius: 50%;
-  background: rgba(239, 68, 68, 0.8);
-  color: #f8fafc;
-  transition: all 0.2s ease;
-  border: none;
-  cursor: pointer;
-}
-
-.recorder-button-erase[hidden] {
-  display: none !important;
-}
-
-.recorder-button-erase:hover {
-  background: rgba(220, 38, 38, 0.9);
-  transform: scale(1.05);
 }
 
 .recorder-section__timer {
