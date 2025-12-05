@@ -346,7 +346,7 @@ function insertCardAlphabetically(container, card, title) {
   const otherUsersHeader = allHeaders.find(h => h.textContent.includes('Otros usuarios'));
   const userHeader = allHeaders.find(h => !h.textContent.includes('Otros usuarios'));
   
-  // Find the user's section div
+  // Find the user's section div and other users section div
   let userSection = userHeader?.closest('.mb-6');
   let otherUsersSection = otherUsersHeader?.closest('.mb-6');
   
@@ -383,9 +383,16 @@ function insertCardAlphabetically(container, card, title) {
     }
   }
   
-  // Get all audio cards in the user's section (not pending ones)
-  const userCards = Array.from(userSection.querySelectorAll('.audio-card'))
-    .filter(c => !c.classList.contains('audio-card--pending'));
+  // Cards are NOT inside the section divs - they're siblings in the container
+  // We need to find cards that come after userSection but before otherUsersSection
+  const allElements = Array.from(container.children);
+  const userSectionIndex = allElements.indexOf(userSection);
+  const otherUsersSectionIndex = otherUsersSection ? allElements.indexOf(otherUsersSection) : allElements.length;
+  
+  // Get cards between user section and other users section
+  const userCards = allElements
+    .slice(userSectionIndex + 1, otherUsersSectionIndex)
+    .filter(el => el.classList.contains('audio-card'));
   
   // Find the right position alphabetically
   let insertBefore = null;
@@ -407,10 +414,19 @@ function insertCardAlphabetically(container, card, title) {
   }
   
   if (insertBefore) {
-    userSection.insertBefore(card, insertBefore);
+    container.insertBefore(card, insertBefore);
   } else {
-    // Insert at end of user section
-    userSection.appendChild(card);
+    // Insert after the last user card, or after userSection if no cards
+    if (userCards.length > 0) {
+      const lastUserCard = userCards[userCards.length - 1];
+      lastUserCard.insertAdjacentElement('afterend', card);
+    } else if (otherUsersSection) {
+      // No user cards yet, insert before "Otros usuarios" section
+      container.insertBefore(card, otherUsersSection);
+    } else {
+      // No other users section, just append after user section
+      userSection.insertAdjacentElement('afterend', card);
+    }
   }
 }
 
@@ -432,6 +448,14 @@ async function performUpload(uploadData) {
   const fileName = `${safeName}.${extension}`;
   const storageName = `${nextAudioId}-${fileName}`;
   const filePath = `${audioBucket}/${storageName}`;
+  
+  // Try to delete any existing file first (handles orphaned files from deleted DB records)
+  // This is a best-effort cleanup - ignore errors since file might not exist
+  try {
+    await supabaseClient.storage.from(audioBucket).remove([filePath]);
+  } catch (e) {
+    // Ignore - file probably doesn't exist
+  }
   
   // Upload to storage
   const { error: uploadError } = await supabaseClient
