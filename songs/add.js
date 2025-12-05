@@ -26,11 +26,13 @@ let isFirstTimeModal = false;
 // Autocomplete state
 let autocompleteDebounceTimer = null;
 let artistAutocompleteDebounceTimer = null;
+let duplicateCheckDebounceTimer = null;
 let allSongsCache = null;
 let userSongIdsCache = null;
 let allArtistsCache = null;
 let selectedAutocompleteSong = null; // Stores the song selected from autocomplete dropdown
 let selectedAutocompleteArtist = null; // Stores the artist selected from autocomplete dropdown
+let foundDuplicateSong = null; // Stores found duplicate song (title + artist match)
 
 export function initAddModule(options = {}) {
   supabaseClient = options.supabase || null;
@@ -305,6 +307,70 @@ async function handleArtistAutocompleteInput(query, onSelect) {
   }, 200); // 200ms debounce
 }
 
+// =============================================
+// Duplicate Song Detection
+// =============================================
+
+// Check if a song with the same title and artist already exists
+async function checkForDuplicateSong(title, artist) {
+  const titleLower = (title || '').toLowerCase().trim();
+  const artistLower = (artist || '').toLowerCase().trim();
+  
+  if (!titleLower || !artistLower) return null;
+  
+  const allSongs = await fetchAllSongsForAutocomplete();
+  
+  // Find exact match (case-insensitive)
+  const duplicate = allSongs.find(song => {
+    const songTitle = (song.title || '').toLowerCase().trim();
+    const songArtist = (song.artists?.name || '').toLowerCase().trim();
+    return songTitle === titleLower && songArtist === artistLower;
+  });
+  
+  return duplicate || null;
+}
+
+// Show/hide duplicate warning UI
+function showDuplicateWarning(song) {
+  const warning = document.getElementById('duplicate-song-warning');
+  if (warning) {
+    warning.hidden = false;
+  }
+  foundDuplicateSong = song;
+  updateCreateButtonState();
+}
+
+function hideDuplicateWarning() {
+  const warning = document.getElementById('duplicate-song-warning');
+  if (warning) {
+    warning.hidden = true;
+  }
+  foundDuplicateSong = null;
+  updateCreateButtonState();
+}
+
+// Handle duplicate check with debounce
+function handleDuplicateCheck(title, artist) {
+  if (duplicateCheckDebounceTimer) {
+    clearTimeout(duplicateCheckDebounceTimer);
+  }
+  
+  // Clear immediately if inputs are empty
+  if (!title?.trim() || !artist?.trim()) {
+    hideDuplicateWarning();
+    return;
+  }
+  
+  duplicateCheckDebounceTimer = setTimeout(async () => {
+    const duplicate = await checkForDuplicateSong(title, artist);
+    if (duplicate) {
+      showDuplicateWarning(duplicate);
+    } else {
+      hideDuplicateWarning();
+    }
+  }, 300); // 300ms debounce
+}
+
 export function getSelectedLibrarySongs() {
   return selectedLibrarySongs;
 }
@@ -473,6 +539,15 @@ function updateCreateButtonState() {
   const { createButton, artistInput } = getModalElements();
   if (!createButton || !artistInput) return;
   const artist = artistInput.value.trim();
+  
+  // Disable if duplicate exists
+  if (foundDuplicateSong) {
+    createButton.classList.remove('suggested-secondary--active');
+    createButton.disabled = true;
+    return;
+  }
+  
+  createButton.disabled = modalWorking;
   if (artist) {
     createButton.classList.add('suggested-secondary--active');
   } else {
@@ -667,6 +742,7 @@ export function resetNewSongForm() {
   const { titleInput, artistInput, createButton, nextButton } = getModalElements();
   hideAutocompleteDropdown();
   hideArtistAutocompleteDropdown();
+  hideDuplicateWarning(); // Clear duplicate warning
   selectedAutocompleteSong = null; // Clear autocomplete selection
   selectedAutocompleteArtist = null; // Clear artist autocomplete selection
   if (titleInput) {
@@ -677,6 +753,7 @@ export function resetNewSongForm() {
   }
   if (createButton) {
     createButton.classList.remove('suggested-secondary--active');
+    createButton.disabled = false; // Re-enable in case it was disabled by duplicate
   }
   if (nextButton) {
     nextButton.classList.remove('suggested-secondary--active');
@@ -950,6 +1027,11 @@ export function initAddSongModal(exitEraseMode) {
       if (selectedAutocompleteArtist && query !== selectedAutocompleteArtist.name) {
         selectedAutocompleteArtist = null;
       }
+      
+      // Check for duplicate song (title + artist)
+      const titleValue = newSongTitleInput?.value?.trim() || '';
+      handleDuplicateCheck(titleValue, query);
+      
       handleArtistAutocompleteInput(query, (selectedArtist) => {
         // Artist selected from autocomplete - populate input and store selection
         hideArtistAutocompleteDropdown();
@@ -962,6 +1044,10 @@ export function initAddSongModal(exitEraseMode) {
         // Populate the input with the artist name
         newSongArtistInput.value = selectedArtist.name || '';
         
+        // Check for duplicate after selecting artist
+        const titleVal = newSongTitleInput?.value?.trim() || '';
+        handleDuplicateCheck(titleVal, selectedArtist.name);
+        
         // Update button state
         updateCreateButtonState();
       });
@@ -972,6 +1058,73 @@ export function initAddSongModal(exitEraseMode) {
       setTimeout(() => {
         hideArtistAutocompleteDropdown();
       }, 200);
+    });
+  }
+
+  // "Añadir canción existente" button handler (for duplicates)
+  const addExistingSongBtn = document.getElementById('add-existing-song-btn');
+  if (addExistingSongBtn) {
+    addExistingSongBtn.addEventListener('click', async () => {
+      if (modalWorking || !foundDuplicateSong || !selectedUserId) return;
+      
+      setModalWorkingState(true);
+      
+      try {
+        // Check if already in user's list
+        const { data: existingRows, error: existingError } = await supabaseClient
+          .from('user_songs')
+          .select('song_id')
+          .eq('user_id', selectedUserId)
+          .eq('song_id', foundDuplicateSong.id)
+          .maybeSingle();
+
+        if (existingError) throw existingError;
+
+        if (!existingRows) {
+          const { error: insertError } = await supabaseClient
+            .from('user_songs')
+            .insert({ user_id: selectedUserId, song_id: foundDuplicateSong.id, status_tag: DEFAULT_STATUS });
+
+          if (insertError) throw insertError;
+        }
+
+        // Clear caches since we added a song
+        clearAutocompleteCaches();
+
+        const addedSongId = foundDuplicateSong.id;
+        
+        // Clear form and close modal
+        if (newSongTitleInput) newSongTitleInput.value = '';
+        if (newSongArtistInput) newSongArtistInput.value = '';
+        hideDuplicateWarning();
+        
+        closeModal();
+
+        // Show loading in songs container
+        const songsContainer = document.getElementById('songs-container');
+        if (songsContainer) {
+          document.body.classList.remove('songs-empty');
+          songsContainer.innerHTML = `
+            <div class="songs-loading">
+              <div class="songs-loading__spinner"></div>
+              <span class="songs-loading__text">Cargando canciones...</span>
+            </div>
+          `;
+        }
+
+        // Reload songs list
+        if (loadSongsCallback) {
+          await loadSongsCallback();
+        }
+
+        if (onSongsAdded) {
+          onSongsAdded([addedSongId], addedSongId);
+        }
+      } catch (err) {
+        console.error('Error adding existing song:', err);
+      } finally {
+        setModalWorkingState(false);
+      }
     });
   }
 
