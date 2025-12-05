@@ -27,6 +27,7 @@ let isFirstTimeModal = false;
 let autocompleteDebounceTimer = null;
 let allSongsCache = null;
 let userSongIdsCache = null;
+let selectedAutocompleteSong = null; // Stores the song selected from autocomplete dropdown
 
 export function initAddModule(options = {}) {
   supabaseClient = options.supabase || null;
@@ -348,6 +349,12 @@ function updateNextButtonState() {
   } else {
     nextButton.classList.remove('suggested-secondary--active');
   }
+  // Change button text based on whether an autocomplete song is selected
+  if (selectedAutocompleteSong) {
+    nextButton.textContent = 'Añadir';
+  } else {
+    nextButton.textContent = 'Siguiente';
+  }
 }
 
 function updateCreateButtonState() {
@@ -547,6 +554,7 @@ export function setModalWorkingState(isWorking) {
 export function resetNewSongForm() {
   const { titleInput, artistInput, createButton, nextButton } = getModalElements();
   hideAutocompleteDropdown();
+  selectedAutocompleteSong = null; // Clear autocomplete selection
   if (titleInput) {
     titleInput.value = '';
   }
@@ -558,6 +566,7 @@ export function resetNewSongForm() {
   }
   if (nextButton) {
     nextButton.classList.remove('suggested-secondary--active');
+    nextButton.textContent = 'Siguiente'; // Reset button text
   }
   createSongStep = 1;
   setCreateMode(false);
@@ -788,12 +797,52 @@ export function initAddSongModal(exitEraseMode) {
     // Autocomplete handler for song title
     newSongTitleInput.addEventListener('input', (e) => {
       const query = e.target.value;
-      handleAutocompleteInput(query, async (selectedSong) => {
-        // Song selected from autocomplete - add it directly to user's list
+      // If user types after selecting a song, clear the selection
+      if (selectedAutocompleteSong && query !== selectedAutocompleteSong.title) {
+        selectedAutocompleteSong = null;
+        updateNextButtonState();
+      }
+      handleAutocompleteInput(query, (selectedSong) => {
+        // Song selected from autocomplete - populate input and store selection
         hideAutocompleteDropdown();
         
-        if (!selectedUserId || !selectedSong.id) return;
+        if (!selectedSong.id) return;
         
+        // Store the selected song
+        selectedAutocompleteSong = selectedSong;
+        
+        // Populate the input with the song title
+        newSongTitleInput.value = selectedSong.title || '';
+        
+        // Update button state (will change text to "Añadir")
+        updateNextButtonState();
+      });
+    });
+    
+    // Hide autocomplete when input loses focus (with delay for click handling)
+    newSongTitleInput.addEventListener('blur', () => {
+      setTimeout(() => {
+        hideAutocompleteDropdown();
+      }, 200);
+    });
+  }
+  if (newSongArtistInput) {
+    newSongArtistInput.addEventListener('input', updateCreateButtonState);
+  }
+
+  // Next button handler - go to step 2, or add song if selected from autocomplete
+  if (nextButton) {
+    nextButton.addEventListener('click', async () => {
+      if (modalWorking) return;
+      const title = newSongTitleInput?.value?.trim() || '';
+      if (!title) {
+        newSongTitleInput?.focus();
+        return;
+      }
+      hideAutocompleteDropdown();
+      
+      // If a song was selected from autocomplete, add it directly
+      if (selectedAutocompleteSong && selectedUserId) {
         setModalWorkingState(true);
         
         try {
@@ -802,7 +851,7 @@ export function initAddSongModal(exitEraseMode) {
             .from('user_songs')
             .select('song_id')
             .eq('user_id', selectedUserId)
-            .eq('song_id', selectedSong.id)
+            .eq('song_id', selectedAutocompleteSong.id)
             .maybeSingle();
 
           if (existingError) throw existingError;
@@ -810,7 +859,7 @@ export function initAddSongModal(exitEraseMode) {
           if (!existingRows) {
             const { error: insertError } = await supabaseClient
               .from('user_songs')
-              .insert({ user_id: selectedUserId, song_id: selectedSong.id, status_tag: DEFAULT_STATUS });
+              .insert({ user_id: selectedUserId, song_id: selectedAutocompleteSong.id, status_tag: DEFAULT_STATUS });
 
             if (insertError) throw insertError;
           }
@@ -818,9 +867,12 @@ export function initAddSongModal(exitEraseMode) {
           // Clear caches since we added a song
           clearAutocompleteCaches();
 
+          const addedSongId = selectedAutocompleteSong.id;
+          
           // Clear form and close modal
           if (newSongTitleInput) newSongTitleInput.value = '';
           if (newSongArtistInput) newSongArtistInput.value = '';
+          selectedAutocompleteSong = null;
           
           closeModal();
 
@@ -842,37 +894,17 @@ export function initAddSongModal(exitEraseMode) {
           }
 
           if (onSongsAdded) {
-            onSongsAdded([selectedSong.id], selectedSong.id);
+            onSongsAdded([addedSongId], addedSongId);
           }
         } catch (err) {
           console.error('Error adding song from autocomplete:', err);
         } finally {
           setModalWorkingState(false);
         }
-      });
-    });
-    
-    // Hide autocomplete when input loses focus (with delay for click handling)
-    newSongTitleInput.addEventListener('blur', () => {
-      setTimeout(() => {
-        hideAutocompleteDropdown();
-      }, 200);
-    });
-  }
-  if (newSongArtistInput) {
-    newSongArtistInput.addEventListener('input', updateCreateButtonState);
-  }
-
-  // Next button handler - go to step 2
-  if (nextButton) {
-    nextButton.addEventListener('click', () => {
-      if (modalWorking) return;
-      const title = newSongTitleInput?.value?.trim() || '';
-      if (!title) {
-        newSongTitleInput?.focus();
         return;
       }
-      hideAutocompleteDropdown();
+      
+      // Otherwise go to step 2 to create a new song
       setCreateSongStep(2);
       queueFocusOnCreateSongInput();
     });
