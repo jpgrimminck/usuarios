@@ -25,9 +25,12 @@ let isFirstTimeModal = false;
 
 // Autocomplete state
 let autocompleteDebounceTimer = null;
+let artistAutocompleteDebounceTimer = null;
 let allSongsCache = null;
 let userSongIdsCache = null;
+let allArtistsCache = null;
 let selectedAutocompleteSong = null; // Stores the song selected from autocomplete dropdown
+let selectedAutocompleteArtist = null; // Stores the artist selected from autocomplete dropdown
 
 export function initAddModule(options = {}) {
   supabaseClient = options.supabase || null;
@@ -84,10 +87,34 @@ async function fetchUserSongIds() {
   }
 }
 
+// Fetch all artists for autocomplete (with caching)
+async function fetchAllArtistsForAutocomplete() {
+  if (allArtistsCache) return allArtistsCache;
+  
+  try {
+    const { data, error } = await supabaseClient
+      .from('artists')
+      .select('id, name')
+      .order('name', { ascending: true });
+    
+    if (error) {
+      console.error('Error fetching artists for autocomplete:', error);
+      return [];
+    }
+    
+    allArtistsCache = data || [];
+    return allArtistsCache;
+  } catch (err) {
+    console.error('Unexpected error fetching artists:', err);
+    return [];
+  }
+}
+
 // Clear autocomplete caches (call when modal closes or song is added)
 function clearAutocompleteCaches() {
   allSongsCache = null;
   userSongIdsCache = null;
+  allArtistsCache = null;
 }
 
 // Filter songs by search query
@@ -190,6 +217,91 @@ async function handleAutocompleteInput(query, onSelect) {
     
     const filtered = filterSongsForAutocomplete(allSongs, query, userSongIds);
     renderAutocompleteDropdown(filtered, onSelect);
+  }, 200); // 200ms debounce
+}
+
+// =============================================
+// Artist Autocomplete Functions
+// =============================================
+
+// Filter artists by search query
+function filterArtistsForAutocomplete(artists, query) {
+  const queryLower = query.toLowerCase().trim();
+  if (!queryLower) return [];
+  
+  return artists
+    .filter(artist => {
+      const name = (artist.name || '').toLowerCase();
+      return name.includes(queryLower);
+    })
+    .sort((a, b) => {
+      const aName = (a.name || '').toLowerCase();
+      const bName = (b.name || '').toLowerCase();
+      // Prioritize names that start with the query
+      const aStarts = aName.startsWith(queryLower);
+      const bStarts = bName.startsWith(queryLower);
+      if (aStarts !== bStarts) return aStarts ? -1 : 1;
+      return aName.localeCompare(bName);
+    })
+    .slice(0, 10); // Limit to 10 results
+}
+
+// Render artist autocomplete dropdown
+function renderArtistAutocompleteDropdown(artists, onSelect) {
+  const dropdown = document.getElementById('artist-autocomplete-dropdown');
+  if (!dropdown) return;
+  
+  if (artists.length === 0) {
+    dropdown.hidden = true;
+    return;
+  }
+  
+  dropdown.innerHTML = '';
+  
+  artists.forEach(artist => {
+    const item = document.createElement('div');
+    item.className = 'song-autocomplete__item';
+    
+    const nameEl = document.createElement('span');
+    nameEl.className = 'song-autocomplete__title';
+    nameEl.textContent = artist.name || '';
+    
+    item.appendChild(nameEl);
+    
+    item.addEventListener('click', () => {
+      onSelect(artist);
+    });
+    
+    dropdown.appendChild(item);
+  });
+  
+  dropdown.hidden = false;
+}
+
+// Hide artist autocomplete dropdown
+function hideArtistAutocompleteDropdown() {
+  const dropdown = document.getElementById('artist-autocomplete-dropdown');
+  if (dropdown) {
+    dropdown.hidden = true;
+    dropdown.innerHTML = '';
+  }
+}
+
+// Handle artist autocomplete input
+async function handleArtistAutocompleteInput(query, onSelect) {
+  if (artistAutocompleteDebounceTimer) {
+    clearTimeout(artistAutocompleteDebounceTimer);
+  }
+  
+  if (!query || query.trim().length < 1) {
+    hideArtistAutocompleteDropdown();
+    return;
+  }
+  
+  artistAutocompleteDebounceTimer = setTimeout(async () => {
+    const allArtists = await fetchAllArtistsForAutocomplete();
+    const filtered = filterArtistsForAutocomplete(allArtists, query);
+    renderArtistAutocompleteDropdown(filtered, onSelect);
   }, 200); // 200ms debounce
 }
 
@@ -554,7 +666,9 @@ export function setModalWorkingState(isWorking) {
 export function resetNewSongForm() {
   const { titleInput, artistInput, createButton, nextButton } = getModalElements();
   hideAutocompleteDropdown();
+  hideArtistAutocompleteDropdown();
   selectedAutocompleteSong = null; // Clear autocomplete selection
+  selectedAutocompleteArtist = null; // Clear artist autocomplete selection
   if (titleInput) {
     titleInput.value = '';
   }
@@ -828,6 +942,37 @@ export function initAddSongModal(exitEraseMode) {
   }
   if (newSongArtistInput) {
     newSongArtistInput.addEventListener('input', updateCreateButtonState);
+    
+    // Autocomplete handler for artist name
+    newSongArtistInput.addEventListener('input', (e) => {
+      const query = e.target.value;
+      // If user types after selecting an artist, clear the selection
+      if (selectedAutocompleteArtist && query !== selectedAutocompleteArtist.name) {
+        selectedAutocompleteArtist = null;
+      }
+      handleArtistAutocompleteInput(query, (selectedArtist) => {
+        // Artist selected from autocomplete - populate input and store selection
+        hideArtistAutocompleteDropdown();
+        
+        if (!selectedArtist.id) return;
+        
+        // Store the selected artist
+        selectedAutocompleteArtist = selectedArtist;
+        
+        // Populate the input with the artist name
+        newSongArtistInput.value = selectedArtist.name || '';
+        
+        // Update button state
+        updateCreateButtonState();
+      });
+    });
+    
+    // Hide artist autocomplete when input loses focus (with delay for click handling)
+    newSongArtistInput.addEventListener('blur', () => {
+      setTimeout(() => {
+        hideArtistAutocompleteDropdown();
+      }, 200);
+    });
   }
 
   // Next button handler - go to step 2, or add song if selected from autocomplete
