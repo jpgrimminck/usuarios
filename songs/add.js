@@ -23,11 +23,173 @@ let onSongsAdded = null;
 let loadSongsCallback = null;
 let isFirstTimeModal = false;
 
+// Autocomplete state
+let autocompleteDebounceTimer = null;
+let allSongsCache = null;
+let userSongIdsCache = null;
+
 export function initAddModule(options = {}) {
   supabaseClient = options.supabase || null;
   selectedUserId = options.userId || null;
   onSongsAdded = typeof options.onSongsAdded === 'function' ? options.onSongsAdded : null;
   loadSongsCallback = typeof options.loadSongs === 'function' ? options.loadSongs : null;
+}
+
+// Fetch all songs for autocomplete (with caching)
+async function fetchAllSongsForAutocomplete() {
+  if (allSongsCache) return allSongsCache;
+  
+  try {
+    const { data, error } = await supabaseClient
+      .from('songs')
+      .select(`id, title, artists ( name )`)
+      .order('title', { ascending: true });
+    
+    if (error) {
+      console.error('Error fetching songs for autocomplete:', error);
+      return [];
+    }
+    
+    allSongsCache = data || [];
+    return allSongsCache;
+  } catch (err) {
+    console.error('Unexpected error fetching songs:', err);
+    return [];
+  }
+}
+
+// Fetch user's song IDs (with caching)
+async function fetchUserSongIds() {
+  if (userSongIdsCache) return userSongIdsCache;
+  
+  if (!selectedUserId) return new Set();
+  
+  try {
+    const { data, error } = await supabaseClient
+      .from('user_songs')
+      .select('song_id')
+      .eq('user_id', selectedUserId);
+    
+    if (error) {
+      console.error('Error fetching user song IDs:', error);
+      return new Set();
+    }
+    
+    userSongIdsCache = new Set((data || []).map(us => us.song_id));
+    return userSongIdsCache;
+  } catch (err) {
+    console.error('Unexpected error fetching user songs:', err);
+    return new Set();
+  }
+}
+
+// Clear autocomplete caches (call when modal closes or song is added)
+function clearAutocompleteCaches() {
+  allSongsCache = null;
+  userSongIdsCache = null;
+}
+
+// Filter songs by search query
+function filterSongsForAutocomplete(songs, query, userSongIds) {
+  const queryLower = query.toLowerCase().trim();
+  if (!queryLower) return [];
+  
+  return songs
+    .filter(song => {
+      const title = (song.title || '').toLowerCase();
+      const artist = (song.artists?.name || '').toLowerCase();
+      return title.includes(queryLower) || artist.includes(queryLower);
+    })
+    .map(song => ({
+      ...song,
+      artist: song.artists?.name || '',
+      isOwned: userSongIds.has(song.id)
+    }))
+    .sort((a, b) => {
+      // Sort: unowned first, then alphabetically
+      if (a.isOwned !== b.isOwned) return a.isOwned ? 1 : -1;
+      return (a.title || '').localeCompare(b.title || '');
+    })
+    .slice(0, 10); // Limit to 10 results
+}
+
+// Render autocomplete dropdown
+function renderAutocompleteDropdown(songs, onSelect) {
+  const dropdown = document.getElementById('song-autocomplete-dropdown');
+  if (!dropdown) return;
+  
+  if (songs.length === 0) {
+    dropdown.hidden = true;
+    return;
+  }
+  
+  dropdown.innerHTML = '';
+  
+  songs.forEach(song => {
+    const item = document.createElement('div');
+    item.className = 'song-autocomplete__item';
+    if (song.isOwned) {
+      item.classList.add('song-autocomplete__item--disabled');
+    }
+    
+    const titleEl = document.createElement('span');
+    titleEl.className = 'song-autocomplete__title';
+    titleEl.textContent = song.title || '';
+    if (song.isOwned) {
+      const badge = document.createElement('span');
+      badge.className = 'song-autocomplete__badge';
+      badge.textContent = '(ya la tienes)';
+      titleEl.appendChild(badge);
+    }
+    
+    const artistEl = document.createElement('span');
+    artistEl.className = 'song-autocomplete__artist';
+    artistEl.textContent = song.artist || '';
+    
+    item.appendChild(titleEl);
+    item.appendChild(artistEl);
+    
+    if (!song.isOwned) {
+      item.addEventListener('click', () => {
+        onSelect(song);
+      });
+    }
+    
+    dropdown.appendChild(item);
+  });
+  
+  dropdown.hidden = false;
+}
+
+// Hide autocomplete dropdown
+function hideAutocompleteDropdown() {
+  const dropdown = document.getElementById('song-autocomplete-dropdown');
+  if (dropdown) {
+    dropdown.hidden = true;
+    dropdown.innerHTML = '';
+  }
+}
+
+// Handle autocomplete input
+async function handleAutocompleteInput(query, onSelect) {
+  if (autocompleteDebounceTimer) {
+    clearTimeout(autocompleteDebounceTimer);
+  }
+  
+  if (!query || query.trim().length < 2) {
+    hideAutocompleteDropdown();
+    return;
+  }
+  
+  autocompleteDebounceTimer = setTimeout(async () => {
+    const [allSongs, userSongIds] = await Promise.all([
+      fetchAllSongsForAutocomplete(),
+      fetchUserSongIds()
+    ]);
+    
+    const filtered = filterSongsForAutocomplete(allSongs, query, userSongIds);
+    renderAutocompleteDropdown(filtered, onSelect);
+  }, 200); // 200ms debounce
 }
 
 export function getSelectedLibrarySongs() {
@@ -384,6 +546,7 @@ export function setModalWorkingState(isWorking) {
 
 export function resetNewSongForm() {
   const { titleInput, artistInput, createButton, nextButton } = getModalElements();
+  hideAutocompleteDropdown();
   if (titleInput) {
     titleInput.value = '';
   }
@@ -621,6 +784,80 @@ export function initAddSongModal(exitEraseMode) {
   // Input listeners for step validation
   if (newSongTitleInput) {
     newSongTitleInput.addEventListener('input', updateNextButtonState);
+    
+    // Autocomplete handler for song title
+    newSongTitleInput.addEventListener('input', (e) => {
+      const query = e.target.value;
+      handleAutocompleteInput(query, async (selectedSong) => {
+        // Song selected from autocomplete - add it directly to user's list
+        hideAutocompleteDropdown();
+        
+        if (!selectedUserId || !selectedSong.id) return;
+        
+        setModalWorkingState(true);
+        
+        try {
+          // Check if already in user's list (shouldn't happen but just in case)
+          const { data: existingRows, error: existingError } = await supabaseClient
+            .from('user_songs')
+            .select('song_id')
+            .eq('user_id', selectedUserId)
+            .eq('song_id', selectedSong.id)
+            .maybeSingle();
+
+          if (existingError) throw existingError;
+
+          if (!existingRows) {
+            const { error: insertError } = await supabaseClient
+              .from('user_songs')
+              .insert({ user_id: selectedUserId, song_id: selectedSong.id, status_tag: DEFAULT_STATUS });
+
+            if (insertError) throw insertError;
+          }
+
+          // Clear caches since we added a song
+          clearAutocompleteCaches();
+
+          // Clear form and close modal
+          if (newSongTitleInput) newSongTitleInput.value = '';
+          if (newSongArtistInput) newSongArtistInput.value = '';
+          
+          closeModal();
+
+          // Show loading in songs container
+          const songsContainer = document.getElementById('songs-container');
+          if (songsContainer) {
+            document.body.classList.remove('songs-empty');
+            songsContainer.innerHTML = `
+              <div class="songs-loading">
+                <div class="songs-loading__spinner"></div>
+                <span class="songs-loading__text">Cargando canciones...</span>
+              </div>
+            `;
+          }
+
+          // Reload songs list
+          if (loadSongsCallback) {
+            await loadSongsCallback();
+          }
+
+          if (onSongsAdded) {
+            onSongsAdded([selectedSong.id], selectedSong.id);
+          }
+        } catch (err) {
+          console.error('Error adding song from autocomplete:', err);
+        } finally {
+          setModalWorkingState(false);
+        }
+      });
+    });
+    
+    // Hide autocomplete when input loses focus (with delay for click handling)
+    newSongTitleInput.addEventListener('blur', () => {
+      setTimeout(() => {
+        hideAutocompleteDropdown();
+      }, 200);
+    });
   }
   if (newSongArtistInput) {
     newSongArtistInput.addEventListener('input', updateCreateButtonState);
@@ -635,6 +872,7 @@ export function initAddSongModal(exitEraseMode) {
         newSongTitleInput?.focus();
         return;
       }
+      hideAutocompleteDropdown();
       setCreateSongStep(2);
       queueFocusOnCreateSongInput();
     });
@@ -704,6 +942,8 @@ export function initAddSongModal(exitEraseMode) {
     resetNewSongForm();
     setModalWorkingState(false);
     isFirstTimeModal = false;
+    hideAutocompleteDropdown();
+    clearAutocompleteCaches();
     resetViewportZoom();
   }
 
@@ -725,6 +965,7 @@ export function initAddSongModal(exitEraseMode) {
           return;
         }
         // On step 1, exit create mode
+        hideAutocompleteDropdown();
         if (newSongTitleInput) newSongTitleInput.value = '';
         if (newSongArtistInput) newSongArtistInput.value = '';
         resetViewportZoom();
