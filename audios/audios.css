@@ -378,7 +378,7 @@
   display: flex;
   align-items: center;
   justify-content: center;
-  gap: 3rem;
+  gap: 1.5rem;
   margin: 0;
   position: relative;
 }
@@ -406,6 +406,39 @@
 .recorder-button-erase:hover {
   background: rgba(220, 38, 38, 0.9);
   transform: scale(1.05);
+}
+
+.recorder-button-play {
+  position: absolute;
+  right: 0;
+  width: 3.5rem;
+  height: 3.5rem;
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  border-radius: 50%;
+  background: var(--primary-color, #137fec);
+  color: #f8fafc;
+  transition: all 0.2s ease;
+  border: none;
+  cursor: pointer;
+}
+
+.recorder-button-play[hidden] {
+  display: none !important;
+}
+
+.recorder-button-play:hover {
+  background: #1a8fff;
+  transform: scale(1.05);
+}
+
+.recorder-button-play:active {
+  transform: scale(0.95);
+}
+
+.recorder-button-play .material-symbols-outlined {
+  font-size: 1.75rem;
 }
 
 .recorder-section__label {
@@ -544,31 +577,8 @@
   transition: opacity 0.2s ease;
 }
 
-.recorder-preview__play-button {
-  display: flex;
-  align-items: center;
-  justify-content: center;
-  width: 2.5rem;
-  height: 2.5rem;
-  flex-shrink: 0;
-  border: none;
-  border-radius: 50%;
-  background-color: var(--primary-color, #137fec);
-  color: white;
-  cursor: pointer;
-  transition: transform 0.15s ease, background-color 0.15s ease;
-}
-
-.recorder-preview__play-button:hover {
-  background-color: #1a8fff;
-}
-
-.recorder-preview__play-button:active {
-  transform: scale(0.95);
-}
-
-.recorder-preview__play-button .material-symbols-outlined {
-  font-size: 1.5rem;
+.recorder-section__preview .recorder-preview__slider {
+  flex: 1;
 }
 
 .recorder-preview__slider {

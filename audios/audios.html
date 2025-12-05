@@ -35,9 +35,6 @@
             </label>
             <div class="recorder-section__preview recorder-section__preview--hidden" data-recorder-preview>
               <audio data-recorder-audio hidden preload="metadata"></audio>
-              <button type="button" class="recorder-preview__play-button" data-recorder-play aria-label="Reproducir o pausar">
-                <span class="material-symbols-outlined">play_arrow</span>
-              </button>
               <div class="recorder-preview__slider" data-recorder-slider>
                 <div class="recorder-preview__slider-track">
                   <div class="recorder-preview__slider-fill" data-recorder-fill></div>
@@ -51,6 +48,9 @@
               <span class="material-symbols-outlined">delete</span>
             </button>
             <button type="button" class="recorder-button recorder-button--primary recorder-button--round" data-recorder-action="toggle">Grabar</button>
+            <button type="button" class="recorder-button-play" data-recorder-play hidden>
+              <span class="material-symbols-outlined">play_arrow</span>
+            </button>
           </div>
         </section>
       </main>

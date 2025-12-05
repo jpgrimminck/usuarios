@@ -635,10 +635,10 @@ function ensureRecorderElements() {
     titleLabel: section.querySelector('[data-recorder-title-label]'),
     toggleButton: section.querySelector('[data-recorder-action="toggle"]'),
     discardButton: section.querySelector('[data-recorder-action="discard"]'),
+    playButton: section.querySelector('[data-recorder-play]'),
     timerEl: section.querySelector('[data-recorder-timer]'),
     previewEl,
     previewAudio: previewEl?.querySelector('[data-recorder-audio]'),
-    previewPlayButton: previewEl?.querySelector('[data-recorder-play]'),
     previewSlider: previewEl?.querySelector('[data-recorder-slider]'),
     previewFill: previewEl?.querySelector('[data-recorder-fill]'),
     previewTime: previewEl?.querySelector('[data-recorder-time]'),
@@ -897,6 +897,12 @@ export function updateRecorderUi() {
     elements.discardButton.disabled = isUploadingRecording;
   }
 
+  // Show play button only when there's a recording
+  if (elements.playButton) {
+    elements.playButton.hidden = !hasRecording;
+    elements.playButton.disabled = isUploadingRecording;
+  }
+
   // Show title input only after stopping recording
   if (elements.titleLabel) {
     elements.titleLabel.classList.toggle('recorder-section__label--hidden', !shouldShowTitle);
@@ -915,8 +921,8 @@ export function updateRecorderUi() {
       elements.previewAudio.load();
       if (elements.previewFill) elements.previewFill.style.width = '0%';
       if (elements.previewTime) elements.previewTime.textContent = '0:00';
-      if (elements.previewPlayButton) {
-        const icon = elements.previewPlayButton.querySelector('.material-symbols-outlined');
+      if (elements.playButton) {
+        const icon = elements.playButton.querySelector('.material-symbols-outlined');
         if (icon) icon.textContent = 'play_arrow';
       }
     } else if (recordingObjectUrl) {
@@ -1328,7 +1334,7 @@ export function initRecorderControls() {
   });
 
   // Custom preview player controls
-  if (elements.previewAudio && elements.previewPlayButton) {
+  if (elements.previewAudio && elements.playButton) {
     const formatTime = (seconds) => {
       if (!isFinite(seconds) || isNaN(seconds)) return '0:00';
       const mins = Math.floor(seconds / 60);
@@ -1344,13 +1350,13 @@ export function initRecorderControls() {
     };
 
     // Prevent play button from stealing focus (keeps keyboard open)
-    elements.previewPlayButton.addEventListener('mousedown', (e) => {
+    elements.playButton.addEventListener('mousedown', (e) => {
       e.preventDefault();
     });
-    elements.previewPlayButton.addEventListener('touchstart', (e) => {
+    elements.playButton.addEventListener('touchstart', (e) => {
       e.preventDefault();
     }, { passive: false });
-    elements.previewPlayButton.addEventListener('touchend', (e) => {
+    elements.playButton.addEventListener('touchend', (e) => {
       e.preventDefault();
       if (elements.previewAudio.paused) {
         elements.previewAudio.play();
@@ -1360,7 +1366,7 @@ export function initRecorderControls() {
       restoreTitleFocus();
     });
 
-    elements.previewPlayButton.addEventListener('click', (e) => {
+    elements.playButton.addEventListener('click', (e) => {
       // Only handle click for non-touch devices (touch handled by touchend)
       if (e.sourceCapabilities?.firesTouchEvents) return;
       if (elements.previewAudio.paused) {
@@ -1372,17 +1378,17 @@ export function initRecorderControls() {
     });
 
     elements.previewAudio.addEventListener('play', () => {
-      const icon = elements.previewPlayButton.querySelector('.material-symbols-outlined');
+      const icon = elements.playButton.querySelector('.material-symbols-outlined');
       if (icon) icon.textContent = 'pause';
     });
 
     elements.previewAudio.addEventListener('pause', () => {
-      const icon = elements.previewPlayButton.querySelector('.material-symbols-outlined');
+      const icon = elements.playButton.querySelector('.material-symbols-outlined');
       if (icon) icon.textContent = 'play_arrow';
     });
 
     elements.previewAudio.addEventListener('ended', () => {
-      const icon = elements.previewPlayButton.querySelector('.material-symbols-outlined');
+      const icon = elements.playButton.querySelector('.material-symbols-outlined');
       if (icon) icon.textContent = 'play_arrow';
       if (elements.previewFill) elements.previewFill.style.width = '0%';
     });
