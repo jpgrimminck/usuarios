@@ -151,18 +151,6 @@ function removePendingUpload(tempId) {
   savePendingUploads(filtered);
 }
 
-// Update a pending upload's status
-function updatePendingUploadStatus(tempId, status, error = null) {
-  const uploads = getPendingUploads();
-  const upload = uploads.find(u => u.tempId === tempId);
-  if (upload) {
-    upload.status = status;
-    upload.error = error;
-    upload.lastAttempt = Date.now();
-    savePendingUploads(uploads);
-  }
-}
-
 // Convert blob to base64 for storage
 function blobToBase64(blob) {
   return new Promise((resolve, reject) => {
@@ -189,35 +177,13 @@ function buildPendingUploadCard(pendingUpload) {
   const container = document.createElement('div');
   container.className = 'audio-card audio-card--pending flex flex-col gap-4 rounded-lg bg-gray-800 p-4';
   container.dataset.pendingId = pendingUpload.tempId;
-  container.dataset.status = pendingUpload.status;
+  container.dataset.status = 'uploading';
   
-  const isUploading = pendingUpload.status === 'uploading';
-  const isFailed = pendingUpload.status === 'failed';
-  
-  const statusHtml = isUploading 
-    ? `<span class="pending-upload__status pending-upload__status--uploading">
-        <span class="material-symbols-outlined">cloud_upload</span>
-        <span>Subiendo...</span>
-       </span>`
-    : isFailed
-    ? `<span class="pending-upload__status pending-upload__status--failed">
-        <span class="material-symbols-outlined">error</span>
-        <span>Error al subir</span>
-       </span>`
-    : '';
-  
-  const actionsHtml = isFailed
-    ? `<div class="pending-upload__actions">
-        <button type="button" class="pending-upload__retry" data-action="retry" data-temp-id="${pendingUpload.tempId}">
-          <span class="material-symbols-outlined">refresh</span>
-          Reintentar
-        </button>
-        <button type="button" class="pending-upload__delete" data-action="delete" data-temp-id="${pendingUpload.tempId}">
-          <span class="material-symbols-outlined">delete</span>
-          Eliminar
-        </button>
-       </div>`
-    : '';
+  // Always show uploading status
+  const statusHtml = `<span class="pending-upload__status pending-upload__status--uploading">
+      <span class="material-symbols-outlined">cloud_upload</span>
+      <span>Subiendo...</span>
+     </span>`;
 
   const seekSeconds = 3;
   container.innerHTML = `
@@ -243,7 +209,6 @@ function buildPendingUploadCard(pendingUpload) {
         <div class="audio-slider__fill" data-role="slider-fill"></div>
       </div>
     </div>
-    ${actionsHtml}
   `;
   
   // Set up audio playback for pending upload
@@ -351,22 +316,6 @@ function buildPendingUploadCard(pendingUpload) {
     });
   }
   
-  // Set up retry/delete handlers
-  const retryBtn = container.querySelector('[data-action="retry"]');
-  const deleteBtn = container.querySelector('[data-action="delete"]');
-  
-  if (retryBtn) {
-    retryBtn.addEventListener('click', () => {
-      retryPendingUpload(pendingUpload.tempId);
-    });
-  }
-  
-  if (deleteBtn) {
-    deleteBtn.addEventListener('click', () => {
-      deletePendingUpload(pendingUpload.tempId);
-    });
-  }
-  
   return container;
 }
 
@@ -392,28 +341,65 @@ export function renderPendingUploads() {
 function insertCardAlphabetically(container, card, title) {
   const titleLower = (title || '').toLowerCase();
   
-  // Find user's audio cards (not in "Otros usuarios" section)
-  const allCards = Array.from(container.querySelectorAll('.audio-card'));
-  const otherUsersHeader = Array.from(container.querySelectorAll('h3')).find(h => 
-    h.textContent.includes('Otros usuarios')
-  );
+  // Find user's section header (not "Otros usuarios")
+  const allHeaders = Array.from(container.querySelectorAll('h3'));
+  const otherUsersHeader = allHeaders.find(h => h.textContent.includes('Otros usuarios'));
+  const userHeader = allHeaders.find(h => !h.textContent.includes('Otros usuarios'));
   
-  // Get only user's cards (before "Otros usuarios" section)
-  let userCards = allCards;
-  if (otherUsersHeader) {
-    const otherUsersSection = otherUsersHeader.closest('.mb-6');
+  // Find the user's section div
+  let userSection = userHeader?.closest('.mb-6');
+  let otherUsersSection = otherUsersHeader?.closest('.mb-6');
+  
+  // If user section doesn't exist, we need to create it
+  if (!userSection) {
+    // Create user section
+    userSection = document.createElement('div');
+    userSection.className = 'mb-6';
+    
+    // Get user name from localStorage or use default
+    let userName = 'ti';
+    try {
+      const raw = window.localStorage.getItem('usuarios:authorizedProfile');
+      if (raw) {
+        const payload = JSON.parse(raw);
+        if (payload?.userName) {
+          userName = payload.userName;
+        }
+      }
+    } catch (e) {
+      // Ignore
+    }
+    
+    const headerEl = document.createElement('h3');
+    headerEl.className = 'text-2xl font-semibold text-white mb-3';
+    headerEl.textContent = `Audios de ${userName}`;
+    userSection.appendChild(headerEl);
+    
+    // Insert at the beginning of container, before "Otros usuarios" if it exists
     if (otherUsersSection) {
-      userCards = allCards.filter(c => !otherUsersSection.contains(c));
+      container.insertBefore(userSection, otherUsersSection);
+    } else {
+      container.insertBefore(userSection, container.firstChild);
     }
   }
   
-  // Filter out pending cards from comparison
-  userCards = userCards.filter(c => !c.classList.contains('audio-card--pending'));
+  // Get all audio cards in the user's section (not pending ones)
+  const userCards = Array.from(userSection.querySelectorAll('.audio-card'))
+    .filter(c => !c.classList.contains('audio-card--pending'));
   
   // Find the right position alphabetically
   let insertBefore = null;
   for (const existingCard of userCards) {
-    const existingTitle = existingCard.querySelector('.audio-card__title')?.textContent?.trim()?.toLowerCase() || '';
+    const existingTitleEl = existingCard.querySelector('.audio-card__title');
+    // Extract just the title text, excluding status badges
+    let existingTitle = '';
+    if (existingTitleEl) {
+      // Clone to avoid modifying the original
+      const clone = existingTitleEl.cloneNode(true);
+      // Remove status elements
+      clone.querySelectorAll('.pending-upload__status, .audio-card__format').forEach(el => el.remove());
+      existingTitle = clone.textContent?.trim()?.toLowerCase() || '';
+    }
     if (titleLower.localeCompare(existingTitle) < 0) {
       insertBefore = existingCard;
       break;
@@ -421,116 +407,14 @@ function insertCardAlphabetically(container, card, title) {
   }
   
   if (insertBefore) {
-    insertBefore.parentNode.insertBefore(card, insertBefore);
-  } else if (userCards.length > 0) {
-    // Insert after the last user card
-    const lastUserCard = userCards[userCards.length - 1];
-    lastUserCard.parentNode.insertBefore(card, lastUserCard.nextSibling);
+    userSection.insertBefore(card, insertBefore);
   } else {
-    // No user cards yet - insert after the user section header if exists
-    const userHeader = Array.from(container.querySelectorAll('h3')).find(h => 
-      !h.textContent.includes('Otros usuarios')
-    );
-    if (userHeader && userHeader.parentElement) {
-      userHeader.parentElement.insertAdjacentElement('afterend', card);
-    } else {
-      // No sections at all, just prepend
-      container.insertBefore(card, container.firstChild);
-    }
+    // Insert at end of user section
+    userSection.appendChild(card);
   }
 }
 
-// Update a specific pending card's UI
-function updatePendingCardUi(tempId, status) {
-  const card = document.querySelector(`[data-pending-id="${tempId}"]`);
-  if (!card) return;
-  
-  card.dataset.status = status;
-  const titleEl = card.querySelector('.audio-card__title');
-  if (!titleEl) return;
-  
-  // Update status indicator
-  const existingStatus = titleEl.querySelector('.pending-upload__status');
-  if (existingStatus) existingStatus.remove();
-  
-  // Remove existing actions
-  const existingActions = card.querySelector('.pending-upload__actions');
-  if (existingActions) existingActions.remove();
-  
-  if (status === 'uploading') {
-    titleEl.insertAdjacentHTML('beforeend', `
-      <span class="pending-upload__status pending-upload__status--uploading">
-        <span class="material-symbols-outlined">cloud_upload</span>
-        <span>Subiendo...</span>
-      </span>
-    `);
-  } else if (status === 'failed') {
-    titleEl.insertAdjacentHTML('beforeend', `
-      <span class="pending-upload__status pending-upload__status--failed">
-        <span class="material-symbols-outlined">error</span>
-        <span>Error al subir</span>
-      </span>
-    `);
-    card.insertAdjacentHTML('beforeend', `
-      <div class="pending-upload__actions">
-        <button type="button" class="pending-upload__retry" data-action="retry" data-temp-id="${tempId}">
-          <span class="material-symbols-outlined">refresh</span>
-          Reintentar
-        </button>
-        <button type="button" class="pending-upload__delete" data-action="delete" data-temp-id="${tempId}">
-          <span class="material-symbols-outlined">delete</span>
-          Eliminar
-        </button>
-      </div>
-    `);
-    
-    // Re-attach event listeners
-    const retryBtn = card.querySelector('[data-action="retry"]');
-    const deleteBtn = card.querySelector('[data-action="delete"]');
-    if (retryBtn) retryBtn.addEventListener('click', () => retryPendingUpload(tempId));
-    if (deleteBtn) deleteBtn.addEventListener('click', () => deletePendingUpload(tempId));
-  }
-}
-
-// Delete a pending upload
-function deletePendingUpload(tempId) {
-  // Remove from localStorage
-  removePendingUpload(tempId);
-  
-  // Remove card from DOM
-  const card = document.querySelector(`[data-pending-id="${tempId}"]`);
-  if (card) {
-    // Cleanup blob URL if exists
-    const blobUrl = card.dataset.blobUrl;
-    if (blobUrl) URL.revokeObjectURL(blobUrl);
-    card.remove();
-  }
-}
-
-// Retry a failed upload
-async function retryPendingUpload(tempId) {
-  const uploads = getPendingUploads();
-  const upload = uploads.find(u => u.tempId === tempId);
-  if (!upload) return;
-  
-  updatePendingUploadStatus(tempId, 'uploading');
-  updatePendingCardUi(tempId, 'uploading');
-  
-  try {
-    await performUpload(upload);
-    // Success - remove from pending and reload
-    removePendingUpload(tempId);
-    const card = document.querySelector(`[data-pending-id="${tempId}"]`);
-    if (card) card.remove();
-    reloadAudios({ skipRealtimeSetup: true });
-  } catch (err) {
-    console.error('Retry upload failed:', err);
-    updatePendingUploadStatus(tempId, 'failed', err.message);
-    updatePendingCardUi(tempId, 'failed');
-  }
-}
-
-// Perform the actual upload (used by both initial upload and retry)
+// Perform the actual upload
 async function performUpload(uploadData) {
   const { base64Data, mimeType, title, songId, songColumn, uploaderId, nextAudioId } = uploadData;
   
@@ -584,33 +468,29 @@ export async function resumePendingUploads() {
   if (!currentSongId) return;
   
   const uploads = getPendingUploads().filter(
-    u => String(u.songId) === String(currentSongId) && u.status !== 'uploading'
+    u => String(u.songId) === String(currentSongId)
   );
   
   for (const upload of uploads) {
-    // Only auto-retry if it was interrupted (not explicitly failed many times)
-    if (upload.status === 'pending' || (upload.status === 'failed' && (!upload.retryCount || upload.retryCount < 3))) {
-      updatePendingUploadStatus(upload.tempId, 'uploading');
-      updatePendingCardUi(upload.tempId, 'uploading');
-      
-      try {
-        await performUpload(upload);
-        removePendingUpload(upload.tempId);
-        const card = document.querySelector(`[data-pending-id="${upload.tempId}"]`);
-        if (card) card.remove();
-        reloadAudios({ skipRealtimeSetup: true });
-      } catch (err) {
-        console.error('Resume upload failed:', err);
-        const uploads = getPendingUploads();
-        const u = uploads.find(x => x.tempId === upload.tempId);
-        if (u) {
-          u.retryCount = (u.retryCount || 0) + 1;
-          savePendingUploads(uploads);
-        }
-        updatePendingUploadStatus(upload.tempId, 'failed', err.message);
-        updatePendingCardUi(upload.tempId, 'failed');
-      }
-    }
+    attemptUploadWithRetry(upload);
+  }
+}
+
+// Attempt upload with automatic retry on failure
+async function attemptUploadWithRetry(upload, retryDelay = 3000) {
+  try {
+    await performUpload(upload);
+    // Success - remove from pending and reload
+    removePendingUpload(upload.tempId);
+    const card = document.querySelector(`[data-pending-id="${upload.tempId}"]`);
+    if (card) card.remove();
+    reloadAudios({ skipRealtimeSetup: true });
+  } catch (err) {
+    console.warn('Upload failed, will retry:', err.message);
+    // Wait and retry
+    setTimeout(() => {
+      attemptUploadWithRetry(upload, Math.min(retryDelay * 1.5, 30000)); // Increase delay, max 30s
+    }, retryDelay);
   }
 }
 
@@ -1288,24 +1168,8 @@ async function uploadRecording() {
   // Reset recorder UI immediately (user sees instant feedback)
   resetRecordingState({ keepInput: false });
   
-  // Perform upload in background
-  try {
-    await performUpload(pendingUpload);
-    
-    // Success - remove from pending and reload to show real card
-    removePendingUpload(tempId);
-    const pendingCard = document.querySelector(`[data-pending-id="${tempId}"]`);
-    if (pendingCard) {
-      const blobUrl = pendingCard.dataset.blobUrl;
-      if (blobUrl) URL.revokeObjectURL(blobUrl);
-      pendingCard.remove();
-    }
-    reloadAudios({ skipRealtimeSetup: true });
-  } catch (err) {
-    console.error('Upload failed:', err);
-    updatePendingUploadStatus(tempId, 'failed', err.message);
-    updatePendingCardUi(tempId, 'failed');
-  }
+  // Perform upload in background with automatic retry
+  attemptUploadWithRetry(pendingUpload);
 }
 
 export function initRecorderControls() {
