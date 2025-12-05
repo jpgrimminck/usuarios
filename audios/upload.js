@@ -416,7 +416,13 @@ function insertCardAlphabetically(container, card, title) {
 
 // Perform the actual upload
 async function performUpload(uploadData) {
-  const { base64Data, mimeType, title, songId, songColumn, uploaderId, nextAudioId } = uploadData;
+  const { base64Data, mimeType, title, songId, songColumn, uploaderId } = uploadData;
+  
+  // Always fetch a fresh audio ID on each attempt (the stored one might be stale/taken)
+  const nextAudioId = await fetchNextAudioId();
+  if (!nextAudioId) {
+    throw new Error('Could not get next audio ID');
+  }
   
   // Convert base64 back to blob
   const blob = base64ToBlob(base64Data, mimeType);
@@ -456,6 +462,12 @@ async function performUpload(uploadData) {
     .insert(insertPayload);
 
   if (insertError) {
+    // If insert fails, try to clean up the uploaded file
+    try {
+      await supabaseClient.storage.from(audioBucket).remove([filePath]);
+    } catch (cleanupErr) {
+      console.warn('Failed to cleanup orphaned file:', cleanupErr);
+    }
     throw new Error(`Database insert failed: ${insertError.message}`);
   }
   
@@ -476,8 +488,28 @@ export async function resumePendingUploads() {
   }
 }
 
+// Track pending retry timeouts so we can clear them
+const pendingRetryTimeouts = new Map();
+
 // Attempt upload with automatic retry on failure
 async function attemptUploadWithRetry(upload, retryDelay = 3000) {
+  // Clear any existing timeout for this upload
+  if (pendingRetryTimeouts.has(upload.tempId)) {
+    clearTimeout(pendingRetryTimeouts.get(upload.tempId));
+    pendingRetryTimeouts.delete(upload.tempId);
+  }
+  
+  // If offline, wait for online event instead of polling
+  if (!navigator.onLine) {
+    console.log('Offline - waiting for connection to retry upload');
+    const onlineHandler = () => {
+      window.removeEventListener('online', onlineHandler);
+      attemptUploadWithRetry(upload, 1000); // Retry quickly once online
+    };
+    window.addEventListener('online', onlineHandler);
+    return;
+  }
+  
   try {
     await performUpload(upload);
     // Success - remove from pending and reload
@@ -487,12 +519,40 @@ async function attemptUploadWithRetry(upload, retryDelay = 3000) {
     reloadAudios({ skipRealtimeSetup: true });
   } catch (err) {
     console.warn('Upload failed, will retry:', err.message);
-    // Wait and retry
-    setTimeout(() => {
-      attemptUploadWithRetry(upload, Math.min(retryDelay * 1.5, 30000)); // Increase delay, max 30s
+    // Wait and retry with exponential backoff (max 30s)
+    const nextDelay = Math.min(retryDelay * 1.5, 30000);
+    const timeoutId = setTimeout(() => {
+      pendingRetryTimeouts.delete(upload.tempId);
+      attemptUploadWithRetry(upload, nextDelay);
     }, retryDelay);
+    pendingRetryTimeouts.set(upload.tempId, timeoutId);
   }
 }
+
+// Retry all pending uploads when page becomes visible again
+function setupVisibilityRetry() {
+  document.addEventListener('visibilitychange', () => {
+    if (document.visibilityState === 'visible') {
+      // Page became visible - retry any pending uploads
+      const currentSongId = getSongId();
+      if (!currentSongId) return;
+      
+      const uploads = getPendingUploads().filter(
+        u => String(u.songId) === String(currentSongId)
+      );
+      
+      for (const upload of uploads) {
+        // Only start retry if not already retrying (no existing timeout)
+        if (!pendingRetryTimeouts.has(upload.tempId)) {
+          attemptUploadWithRetry(upload, 1000);
+        }
+      }
+    }
+  });
+}
+
+// Initialize visibility retry listener once
+setupVisibilityRetry();
 
 export function initializeUploadModule(options = {}) {
   supabaseClient = options.supabase || null;
