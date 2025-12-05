@@ -780,27 +780,63 @@ export function initAddSongModal(exitEraseMode) {
       try {
         const songRecord = await createSong(titleValue, artistValue);
 
-        selectedLibrarySongs.set(songRecord.id, { 
-          id: songRecord.id, 
-          title: songRecord.title, 
-          artist: songRecord.artist 
-        });
-        lastCreatedSongId = songRecord.id;
-        pendingSuggestedScrollSongId = songRecord.id ?? songRecord.title;
+        // Automatically add the created song to the user's list
+        if (selectedUserId && songRecord.id) {
+          // Check if already in user's list
+          const { data: existingRows, error: existingError } = await supabaseClient
+            .from('user_songs')
+            .select('song_id')
+            .eq('user_id', selectedUserId)
+            .eq('song_id', songRecord.id)
+            .maybeSingle();
 
-        const baseList = Array.isArray(renderSuggestedSongs._lastList) ? [...renderSuggestedSongs._lastList] : [];
-        const filtered = baseList.filter(item => item?.id !== songRecord.id);
-        filtered.push({ id: songRecord.id, title: songRecord.title, artists: { name: songRecord.artist } });
-        renderSuggestedSongs._lastList = filtered;
-        modalSongsFetchToken += 1;
-        renderSuggestedSongs(handleSuggestionSelect);
+          if (existingError) {
+            throw existingError;
+          }
 
-        if (newSongTitleInput) newSongTitleInput.value = '';
-        if (newSongArtistInput) newSongArtistInput.value = '';
-        setCreateMode(false);
+          // If not already in list, add it
+          if (!existingRows) {
+            const { error: insertError } = await supabaseClient
+              .from('user_songs')
+              .insert({ user_id: selectedUserId, song_id: songRecord.id, status_tag: DEFAULT_STATUS });
+
+            if (insertError) {
+              throw insertError;
+            }
+          }
+
+          // Store for scrolling after reload
+          const pendingScrollId = songRecord.id;
+
+          // Clear form and close modal
+          if (newSongTitleInput) newSongTitleInput.value = '';
+          if (newSongArtistInput) newSongArtistInput.value = '';
+          
+          closeModal();
+
+          // Show loading in songs container
+          const songsContainer = document.getElementById('songs-container');
+          if (songsContainer) {
+            document.body.classList.remove('songs-empty');
+            songsContainer.innerHTML = `
+              <div class="songs-loading">
+                <div class="songs-loading__spinner"></div>
+                <span class="songs-loading__text">Cargando canciones...</span>
+              </div>
+            `;
+          }
+
+          // Reload songs list
+          if (loadSongsCallback) {
+            await loadSongsCallback();
+          }
+
+          if (onSongsAdded) {
+            onSongsAdded([songRecord.id], pendingScrollId);
+          }
+        }
       } catch (err) {
         console.error('Error creating song:', err);
-      } finally {
         createSongButton.textContent = originalText;
         setModalWorkingState(false);
       }
