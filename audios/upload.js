@@ -1261,13 +1261,14 @@ export function initRecorderControls() {
   if (!elements || elements.initialized || !elements.toggleButton) return;
   elements.initialized = true;
 
-  // Keep keyboard open when clicking anywhere in the recorder section (except delete button)
+  // Keep keyboard open when clicking anywhere in the recorder section (except buttons)
   // This prevents accidental keyboard dismissal on mobile
   if (elements.section) {
     elements.section.addEventListener('mousedown', (e) => {
-      // Allow default behavior for title input and delete button
+      // Allow default behavior for title input and action buttons
       if (e.target === elements.titleInput) return;
       if (e.target.closest('[data-recorder-action="discard"]')) return;
+      if (e.target.closest('[data-recorder-action="toggle"]')) return;
       
       // If we have a recording and title input is focused, prevent default to keep keyboard open
       if (recordingBlob && elements.titleInput && document.activeElement === elements.titleInput) {
@@ -1276,9 +1277,10 @@ export function initRecorderControls() {
     });
     
     elements.section.addEventListener('touchstart', (e) => {
-      // Allow default behavior for title input and delete button
+      // Allow default behavior for title input and action buttons
       if (e.target === elements.titleInput) return;
       if (e.target.closest('[data-recorder-action="discard"]')) return;
+      if (e.target.closest('[data-recorder-action="toggle"]')) return;
       
       // If we have a recording and title input is focused, prevent default to keep keyboard open
       if (recordingBlob && elements.titleInput && document.activeElement === elements.titleInput) {
@@ -1287,9 +1289,10 @@ export function initRecorderControls() {
     }, { passive: false });
     
     elements.section.addEventListener('click', (e) => {
-      // Allow default behavior for title input and delete button
+      // Allow default behavior for title input and action buttons
       if (e.target === elements.titleInput) return;
       if (e.target.closest('[data-recorder-action="discard"]')) return;
+      if (e.target.closest('[data-recorder-action="toggle"]')) return;
       
       // If we have a recording, restore focus to title input
       if (recordingBlob && elements.titleInput) {
