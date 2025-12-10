@@ -473,47 +473,17 @@ body, html {
   display: none;
 }
 
-/* Duplicate song warning */
-.duplicate-warning {
-  display: flex;
-  flex-direction: column;
-  gap: 0.5rem;
-  padding: 0.75rem;
-  margin-top: 0.5rem;
-  background-color: rgba(251, 191, 36, 0.15);
-  border: 1px solid rgba(251, 191, 36, 0.4);
-  border-radius: 0.375rem;
+/* Duplicate song hint */
+.duplicate-hint {
+  display: block;
+  margin-top: 0.375rem;
+  color: #9ca3af;
+  font-size: 0.8rem;
+  font-style: italic;
 }
 
-.duplicate-warning[hidden] {
+.duplicate-hint[hidden] {
   display: none;
-}
-
-.duplicate-warning__text {
-  color: #fbbf24;
-  font-size: 0.85rem;
-  line-height: 1.4;
-}
-
-.duplicate-warning__btn {
-  padding: 0.5rem 0.75rem;
-  background-color: rgba(251, 191, 36, 0.2);
-  border: 1px solid rgba(251, 191, 36, 0.5);
-  border-radius: 0.25rem;
-  color: #fbbf24;
-  font-size: 0.85rem;
-  font-weight: 500;
-  cursor: pointer;
-  transition: background-color 0.15s, border-color 0.15s;
-}
-
-.duplicate-warning__btn:hover {
-  background-color: rgba(251, 191, 36, 0.3);
-  border-color: rgba(251, 191, 36, 0.7);
-}
-
-.duplicate-warning__btn:active {
-  background-color: rgba(251, 191, 36, 0.4);
 }
 
 .suggested-input {

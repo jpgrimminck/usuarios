@@ -540,14 +540,15 @@ function updateCreateButtonState() {
   if (!createButton || !artistInput) return;
   const artist = artistInput.value.trim();
   
-  // Disable if duplicate exists
+  createButton.disabled = modalWorking;
+  
+  // Change button text based on whether a duplicate exists
   if (foundDuplicateSong) {
-    createButton.classList.remove('suggested-secondary--active');
-    createButton.disabled = true;
-    return;
+    createButton.textContent = 'Añadir';
+  } else {
+    createButton.textContent = 'Crear';
   }
   
-  createButton.disabled = modalWorking;
   if (artist) {
     createButton.classList.add('suggested-secondary--active');
   } else {
@@ -753,7 +754,8 @@ export function resetNewSongForm() {
   }
   if (createButton) {
     createButton.classList.remove('suggested-secondary--active');
-    createButton.disabled = false; // Re-enable in case it was disabled by duplicate
+    createButton.disabled = false;
+    createButton.textContent = 'Crear'; // Reset button text
   }
   if (nextButton) {
     nextButton.classList.remove('suggested-secondary--active');
@@ -1061,73 +1063,6 @@ export function initAddSongModal(exitEraseMode) {
     });
   }
 
-  // "Añadir canción existente" button handler (for duplicates)
-  const addExistingSongBtn = document.getElementById('add-existing-song-btn');
-  if (addExistingSongBtn) {
-    addExistingSongBtn.addEventListener('click', async () => {
-      if (modalWorking || !foundDuplicateSong || !selectedUserId) return;
-      
-      setModalWorkingState(true);
-      
-      try {
-        // Check if already in user's list
-        const { data: existingRows, error: existingError } = await supabaseClient
-          .from('user_songs')
-          .select('song_id')
-          .eq('user_id', selectedUserId)
-          .eq('song_id', foundDuplicateSong.id)
-          .maybeSingle();
-
-        if (existingError) throw existingError;
-
-        if (!existingRows) {
-          const { error: insertError } = await supabaseClient
-            .from('user_songs')
-            .insert({ user_id: selectedUserId, song_id: foundDuplicateSong.id, status_tag: DEFAULT_STATUS });
-
-          if (insertError) throw insertError;
-        }
-
-        // Clear caches since we added a song
-        clearAutocompleteCaches();
-
-        const addedSongId = foundDuplicateSong.id;
-        
-        // Clear form and close modal
-        if (newSongTitleInput) newSongTitleInput.value = '';
-        if (newSongArtistInput) newSongArtistInput.value = '';
-        hideDuplicateWarning();
-        
-        closeModal();
-
-        // Show loading in songs container
-        const songsContainer = document.getElementById('songs-container');
-        if (songsContainer) {
-          document.body.classList.remove('songs-empty');
-          songsContainer.innerHTML = `
-            <div class="songs-loading">
-              <div class="songs-loading__spinner"></div>
-              <span class="songs-loading__text">Cargando canciones...</span>
-            </div>
-          `;
-        }
-
-        // Reload songs list
-        if (loadSongsCallback) {
-          await loadSongsCallback();
-        }
-
-        if (onSongsAdded) {
-          onSongsAdded([addedSongId], addedSongId);
-        }
-      } catch (err) {
-        console.error('Error adding existing song:', err);
-      } finally {
-        setModalWorkingState(false);
-      }
-    });
-  }
-
   // Next button handler - go to step 2, or add song if selected from autocomplete
   if (nextButton) {
     nextButton.addEventListener('click', async () => {
@@ -1326,7 +1261,7 @@ export function initAddSongModal(exitEraseMode) {
     renderSuggestedSongs(handleSuggestionSelect);
   });
 
-  // Crear canción
+  // Crear canción (or add existing if duplicate found)
   if (createSongButton) {
     createSongButton.addEventListener('click', async () => {
       if (modalWorking) {
@@ -1349,16 +1284,25 @@ export function initAddSongModal(exitEraseMode) {
       createSongButton.textContent = 'Guardando...';
 
       try {
-        const songRecord = await createSong(titleValue, artistValue);
+        let songIdToAdd;
+        
+        // If duplicate exists, add the existing song instead of creating
+        if (foundDuplicateSong) {
+          songIdToAdd = foundDuplicateSong.id;
+        } else {
+          // Create new song
+          const songRecord = await createSong(titleValue, artistValue);
+          songIdToAdd = songRecord.id;
+        }
 
-        // Automatically add the created song to the user's list
-        if (selectedUserId && songRecord.id) {
+        // Add the song to the user's list
+        if (selectedUserId && songIdToAdd) {
           // Check if already in user's list
           const { data: existingRows, error: existingError } = await supabaseClient
             .from('user_songs')
             .select('song_id')
             .eq('user_id', selectedUserId)
-            .eq('song_id', songRecord.id)
+            .eq('song_id', songIdToAdd)
             .maybeSingle();
 
           if (existingError) {
@@ -1369,7 +1313,7 @@ export function initAddSongModal(exitEraseMode) {
           if (!existingRows) {
             const { error: insertError } = await supabaseClient
               .from('user_songs')
-              .insert({ user_id: selectedUserId, song_id: songRecord.id, status_tag: DEFAULT_STATUS });
+              .insert({ user_id: selectedUserId, song_id: songIdToAdd, status_tag: DEFAULT_STATUS });
 
             if (insertError) {
               throw insertError;
@@ -1377,7 +1321,7 @@ export function initAddSongModal(exitEraseMode) {
           }
 
           // Store for scrolling after reload
-          const pendingScrollId = songRecord.id;
+          const pendingScrollId = songIdToAdd;
 
           // Clear form and close modal
           if (newSongTitleInput) newSongTitleInput.value = '';
@@ -1403,11 +1347,11 @@ export function initAddSongModal(exitEraseMode) {
           }
 
           if (onSongsAdded) {
-            onSongsAdded([songRecord.id], pendingScrollId);
+            onSongsAdded([songIdToAdd], pendingScrollId);
           }
         }
       } catch (err) {
-        console.error('Error creating song:', err);
+        console.error('Error creating/adding song:', err);
         createSongButton.textContent = originalText;
         setModalWorkingState(false);
       }
