@@ -576,8 +576,8 @@ body, html {
 /* Status Arrow Buttons */
 .song-status-arrows {
   display: flex;
-  flex-direction: column;
-  gap: 0.125rem;
+  flex-direction: row;
+  gap: 0.25rem;
   flex-shrink: 0;
 }
 
@@ -585,9 +585,9 @@ body, html {
   display: flex;
   align-items: center;
   justify-content: center;
-  width: 2rem;
-  height: 1.5rem;
-  border-radius: 0.25rem;
+  width: 2.5rem;
+  height: 2.5rem;
+  border-radius: 0.5rem;
   background-color: #374151;
   color: #9ca3af;
   border: none;
@@ -606,7 +606,7 @@ body, html {
 }
 
 .song-arrow-btn .material-symbols-outlined {
-  font-size: 1.25rem;
+  font-size: 1.5rem;
 }
 
 .song-arrow-btn--up:hover:not(:disabled) {
