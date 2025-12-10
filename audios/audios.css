@@ -100,6 +100,18 @@
   gap: 0.75rem;
 }
 
+.audio-card__private-icon {
+  display: inline-flex;
+  align-items: center;
+  margin-right: 0.35rem;
+  color: #a5b4fc;
+  vertical-align: middle;
+}
+
+.audio-card__private-icon .material-symbols-outlined {
+  font-size: 1rem;
+}
+
 .audio-card__title {
   margin: 0;
 }
@@ -579,6 +591,68 @@
 
 .recorder-section__preview .recorder-preview__slider {
   flex: 1;
+}
+
+.recorder-section__row {
+  display: flex;
+  align-items: center;
+  gap: 0.75rem;
+  width: 100%;
+}
+
+.recorder-section__left {
+  flex: 1;
+  display: flex;
+  flex-direction: column;
+  gap: 0.5rem;
+  min-width: 0;
+}
+
+.recorder-privacy-toggle {
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  justify-content: center;
+  gap: 0.25rem;
+  padding: 0.5rem 0.75rem;
+  border-radius: 0.5rem;
+  background: rgba(55, 65, 81, 0.6);
+  border: 1px solid rgba(148, 163, 184, 0.2);
+  color: rgba(226, 232, 240, 0.8);
+  cursor: pointer;
+  transition: all 0.2s ease;
+  flex-shrink: 0;
+}
+
+.recorder-privacy-toggle--hidden {
+  display: none;
+}
+
+.recorder-privacy-toggle:hover {
+  background: rgba(55, 65, 81, 0.8);
+  border-color: rgba(148, 163, 184, 0.35);
+}
+
+.recorder-privacy-toggle .material-symbols-outlined {
+  font-size: 1.25rem;
+}
+
+.recorder-privacy-toggle__label {
+  font-size: 0.65rem;
+  text-transform: uppercase;
+  letter-spacing: 0.03em;
+  white-space: nowrap;
+}
+
+.recorder-privacy-toggle--private {
+  background: rgba(79, 70, 229, 0.3);
+  border-color: rgba(79, 70, 229, 0.5);
+  color: #a5b4fc;
+}
+
+.recorder-privacy-toggle--private:hover {
+  background: rgba(79, 70, 229, 0.4);
+  border-color: rgba(79, 70, 229, 0.6);
 }
 
 .recorder-preview__slider {

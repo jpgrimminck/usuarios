@@ -22,6 +22,7 @@ let pcmSamples = [];
 let pcmSampleRate = 44100;
 let isRecordingPcm = false;
 let usingFallbackRecorder = false; // Track if we're using fallback
+let isPrivateRecording = false; // Track if recording should be private
 
 // Encode mono PCM samples to stereo WAV (duplicates mono to both L and R channels)
 function encodePcmToStereoWav(samples, sampleRate) {
@@ -477,7 +478,8 @@ async function performUpload(uploadData) {
     detail: 'recording',
     name: title,
     uploader_id: uploaderId,
-    url: filePath
+    url: filePath,
+    is_private: uploadData.isPrivate || false
   };
   insertPayload[songColumn] = songId;
 
@@ -601,6 +603,7 @@ function ensureRecorderElements() {
     discardButton: section.querySelector('[data-recorder-action="discard"]'),
     playButton: section.querySelector('[data-recorder-play]'),
     timerEl: section.querySelector('[data-recorder-timer]'),
+    privacyToggle: section.querySelector('[data-recorder-privacy-toggle]'),
     previewEl,
     previewAudio: previewEl?.querySelector('[data-recorder-audio]'),
     previewSlider: previewEl?.querySelector('[data-recorder-slider]'),
@@ -806,6 +809,29 @@ function stopRecordingTimer() {
   }
 }
 
+function updatePrivacyToggleUi(toggleEl) {
+  if (!toggleEl) return;
+  const icon = toggleEl.querySelector('.material-symbols-outlined');
+  const label = toggleEl.querySelector('.recorder-privacy-toggle__label');
+  
+  toggleEl.classList.toggle('recorder-privacy-toggle--private', isPrivateRecording);
+  
+  if (icon) {
+    icon.textContent = isPrivateRecording ? 'lock' : 'lock_open';
+  }
+  if (label) {
+    label.textContent = isPrivateRecording ? 'Make public' : 'Make private';
+  }
+}
+
+function togglePrivacy() {
+  isPrivateRecording = !isPrivateRecording;
+  const elements = ensureRecorderElements();
+  if (elements?.privacyToggle) {
+    updatePrivacyToggleUi(elements.privacyToggle);
+  }
+}
+
 export function updateRecorderUi() {
   const elements = ensureRecorderElements();
   if (!elements) return;
@@ -831,6 +857,12 @@ export function updateRecorderUi() {
     if (isRecording) {
       updateRecordingTimer();
     }
+  }
+
+  // Show/hide privacy toggle based on recording state
+  if (elements.privacyToggle) {
+    elements.privacyToggle.classList.toggle('recorder-privacy-toggle--hidden', !hasRecording);
+    updatePrivacyToggleUi(elements.privacyToggle);
   }
 
   if (elements.toggleButton) {
@@ -920,6 +952,7 @@ function resetRecordingState(options = {}) {
   recordingBlob = null;
   recordedChunks = [];
   usingFallbackRecorder = false;
+  isPrivateRecording = false; // Reset privacy state
   const elements = ensureRecorderElements();
   if (elements) {
     if (!keepInput && elements.titleInput) {
@@ -942,6 +975,11 @@ function resetRecordingState(options = {}) {
     }
     if (elements.dynamicContainer) {
       elements.dynamicContainer.classList.remove('recorder-section__dynamic--recorded');
+    }
+    // Reset privacy toggle UI
+    if (elements.privacyToggle) {
+      elements.privacyToggle.classList.add('recorder-privacy-toggle--hidden');
+      updatePrivacyToggleUi(elements.privacyToggle);
     }
   }
   pendingTitleFocus = false;
@@ -1236,7 +1274,8 @@ async function uploadRecording() {
     blobUrl: recordingObjectUrl, // Keep for immediate playback
     status: 'uploading',
     createdAt: Date.now(),
-    retryCount: 0
+    retryCount: 0,
+    isPrivate: isPrivateRecording
   };
   
   // Save to localStorage immediately
@@ -1269,6 +1308,7 @@ export function initRecorderControls() {
       if (e.target === elements.titleInput) return;
       if (e.target.closest('[data-recorder-action="discard"]')) return;
       if (e.target.closest('[data-recorder-action="toggle"]')) return;
+      if (e.target.closest('[data-recorder-privacy-toggle]')) return;
       
       // If we have a recording and title input is focused, prevent default to keep keyboard open
       if (recordingBlob && elements.titleInput && document.activeElement === elements.titleInput) {
@@ -1281,6 +1321,7 @@ export function initRecorderControls() {
       if (e.target === elements.titleInput) return;
       if (e.target.closest('[data-recorder-action="discard"]')) return;
       if (e.target.closest('[data-recorder-action="toggle"]')) return;
+      if (e.target.closest('[data-recorder-privacy-toggle]')) return;
       
       // If we have a recording and title input is focused, prevent default to keep keyboard open
       if (recordingBlob && elements.titleInput && document.activeElement === elements.titleInput) {
@@ -1293,6 +1334,7 @@ export function initRecorderControls() {
       if (e.target === elements.titleInput) return;
       if (e.target.closest('[data-recorder-action="discard"]')) return;
       if (e.target.closest('[data-recorder-action="toggle"]')) return;
+      if (e.target.closest('[data-recorder-privacy-toggle]')) return;
       
       // If we have a recording, restore focus to title input
       if (recordingBlob && elements.titleInput) {
@@ -1320,6 +1362,14 @@ export function initRecorderControls() {
     event.preventDefault();
     discardRecording();
   });
+
+  // Privacy toggle click handler
+  if (elements.privacyToggle) {
+    elements.privacyToggle.addEventListener('click', (event) => {
+      event.preventDefault();
+      togglePrivacy();
+    });
+  }
 
   // Custom preview player controls
   if (elements.previewAudio && elements.playButton) {

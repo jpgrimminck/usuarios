@@ -150,7 +150,7 @@ async function fetchSongAudiosByCandidates(songId) {
     try {
       const { data, error } = await state.supabase
         .from('audios')
-        .select('id, name, url, uploader_id')
+        .select('id, name, url, uploader_id, is_private')
         .eq(column, songId)
         .order('name', { ascending: true });
 
@@ -285,10 +285,12 @@ function buildAudioCard(audio) {
     if (!normalized || normalized.length > 5) return null;
     return normalized;
   })();
+  const isPrivate = audio.is_private === true;
   const seekSeconds = Math.abs(getSeekOffsetSeconds()) || Math.abs(SEEK_OFFSET_SECONDS);
   container.innerHTML = `
     <div class="audio-card__header">
       <p class="audio-card__title text-lg font-semibold text-white">
+        ${isPrivate ? '<span class="audio-card__private-icon" title="Private audio"><span class="material-symbols-outlined">lock</span></span>' : ''}
         ${audio.name || 'Audio sin nombre'}
         ${formatLabel ? `<span class="ml-2 inline-flex items-center rounded-full bg-gray-700 px-2 py-0.5 text-[0.6rem] font-semibold uppercase tracking-wide text-blue-300 audio-card__format">${formatLabel}</span>` : ''}
       </p>
@@ -440,7 +442,15 @@ async function loadAudios(options = {}) {
     const container = document.querySelector('.space-y-4');
     container.innerHTML = '';
 
-    if (!audios || audios.length === 0) {
+    // Filter out private audios that don't belong to the current user
+    const visibleAudios = (audios || []).filter((audio) => {
+      // Public audios are always visible
+      if (!audio.is_private) return true;
+      // Private audios are only visible to their creator
+      return state.normalizedUserId && String(audio.uploader_id) === String(state.normalizedUserId);
+    });
+
+    if (visibleAudios.length === 0) {
       container.appendChild(buildEmptyStateElement());
       clearPlaybackCache();
       collapseCurrentCard();
@@ -462,7 +472,7 @@ async function loadAudios(options = {}) {
     const userAudios = [];
     const otherAudios = [];
     
-    audios.forEach((audio) => {
+    visibleAudios.forEach((audio) => {
       // Use string comparison to handle potential type mismatches (string vs number)
       if (state.normalizedUserId && String(audio.uploader_id) === String(state.normalizedUserId)) {
         userAudios.push(audio);
