@@ -198,6 +198,10 @@ async function loadSongs() {
       }
 
       const songIds = (userSongs || []).map(r => r.song_id).filter(Boolean);
+      
+      // Update the set of user's song IDs for realtime filtering
+      userSongIdsSet = new Set(songIds);
+      
       (userSongs || []).forEach(record => {
         if (!record || !record.song_id) return;
         statusBySongId.set(record.song_id, record.status_tag || DEFAULT_STATUS);
@@ -338,6 +342,9 @@ async function loadSongs() {
 // Realtime
 // ============================================
 
+// Track which song IDs the current user has (for filtering realtime updates)
+let userSongIdsSet = new Set();
+
 function scheduleSongsRefresh() {
   if (songsRefreshTimeoutId) {
     clearTimeout(songsRefreshTimeoutId);
@@ -348,12 +355,45 @@ function scheduleSongsRefresh() {
   }, 150);
 }
 
+// Handle songs table changes - only refresh if user has that song
+function handleSongsTableChange(payload) {
+  const changedSongId = payload.old?.id || payload.new?.id;
+  
+  // If we can't determine the song ID, refresh to be safe
+  if (!changedSongId) {
+    scheduleSongsRefresh();
+    return;
+  }
+  
+  // Only refresh if user has this song in their list
+  if (userSongIdsSet.has(changedSongId)) {
+    scheduleSongsRefresh();
+  }
+}
+
+// Handle artists table changes - only refresh if user has a song by that artist
+// For simplicity, we refresh on artist changes since it's rare and affects song display
+function handleArtistsTableChange() {
+  // Artist changes are rare, just refresh if user has any songs
+  if (userSongIdsSet.size > 0) {
+    scheduleSongsRefresh();
+  }
+}
+
 function initSongsRealtime() {
   const channel = supabase
     .channel('songs_realtime')
-    .on('postgres_changes', { event: '*', schema: 'public', table: 'songs' }, scheduleSongsRefresh)
-    .on('postgres_changes', { event: '*', schema: 'public', table: 'artists' }, scheduleSongsRefresh)
-    .on('postgres_changes', { event: '*', schema: 'public', table: 'user_songs' }, scheduleSongsRefresh);
+    .on('postgres_changes', { event: '*', schema: 'public', table: 'songs' }, handleSongsTableChange)
+    .on('postgres_changes', { event: '*', schema: 'public', table: 'artists' }, handleArtistsTableChange);
+  
+  // Only listen to user_songs changes for the current user
+  if (selectedUserId) {
+    channel.on(
+      'postgres_changes',
+      { event: '*', schema: 'public', table: 'user_songs', filter: `user_id=eq.${selectedUserId}` },
+      scheduleSongsRefresh
+    );
+  }
 
   channel.subscribe((status) => {
     if (status === 'CHANNEL_ERROR') {
