@@ -253,68 +253,115 @@ async function loadSongs() {
     // Actualizar estado del FAB según cantidad de canciones
     updateFabState(songs.length);
 
+    // Group songs by status
+    const songsByStatus = {
+      1: [], // No iniciado
+      2: [], // En práctica
+      3: []  // Completado
+    };
+
     songs.forEach(song => {
       if (!song || !song.id) return;
-      const songTitle = song.title;
-      if (!songTitle) return;
-      const artistName = song.artists?.name || '';
-      const songElement = document.createElement('a');
-      songElement.dataset.songId = song.id;
-      const audioParams = new URLSearchParams({ songId: song.id, title: songTitle });
-      if (selectedUserId) {
-        audioParams.set('id', selectedUserId);
-      }
-      songElement.href = `../audios/audios.html?${audioParams.toString()}`;
-      songElement.className = 'song-card';
       const statusTag = statusBySongId.get(song.id) || DEFAULT_STATUS;
-      const statusClassSuffix = normalizeStatusTag(statusTag);
-      const statusLabel = STATUS_MAP[statusTag] || STATUS_MAP[DEFAULT_STATUS];
-      const statusButtonHtml = selectedUserId
-        ? `<button type="button" class="song-status-button song-status-button--${statusClassSuffix}" data-song-id="${song.id}" data-status="${statusTag}">${statusLabel}</button>`
-        : '';
-      songElement.innerHTML = `
-        <div class="song-info">
-          <p class="song-title">${songTitle}</p>
-          <p class="song-artist">${artistName}</p>
-        </div>
-        ${statusButtonHtml}
+      if (songsByStatus[statusTag]) {
+        songsByStatus[statusTag].push({ ...song, statusTag });
+      } else {
+        songsByStatus[DEFAULT_STATUS].push({ ...song, statusTag: DEFAULT_STATUS });
+      }
+    });
+
+    // Render each status section
+    const statusSections = [
+      { status: 1, label: 'Not started', icon: 'radio_button_unchecked' },
+      { status: 2, label: 'Practicing', icon: 'pace' },
+      { status: 3, label: 'Completed', icon: 'check_circle' }
+    ];
+
+    statusSections.forEach(({ status, label, icon }) => {
+      const sectionSongs = songsByStatus[status];
+      if (!sectionSongs || sectionSongs.length === 0) return;
+
+      // Create section header
+      const sectionHeader = document.createElement('div');
+      sectionHeader.className = 'songs-section-header';
+      sectionHeader.innerHTML = `
+        <span class="material-symbols-outlined songs-section-icon songs-section-icon--${normalizeStatusTag(status)}">${icon}</span>
+        <span class="songs-section-title">${label}</span>
+        <span class="songs-section-count">${sectionSongs.length}</span>
       `;
-      
-      if (selectedUserId) {
-        const deleteBtn = createDeleteButton(song.id);
-        songElement.appendChild(deleteBtn);
-      }
-      
-      songElement.addEventListener('click', (e) => {
-        if (e.target.closest('.song-delete-btn') || e.target.closest('.song-status-button')) {
-          return;
+      container.appendChild(sectionHeader);
+
+      // Create section container for songs
+      const sectionContainer = document.createElement('div');
+      sectionContainer.className = 'songs-section';
+      sectionContainer.dataset.status = status;
+
+      sectionSongs.forEach(song => {
+        const songTitle = song.title;
+        if (!songTitle) return;
+        const artistName = song.artists?.name || '';
+        const songElement = document.createElement('a');
+        songElement.dataset.songId = song.id;
+        const audioParams = new URLSearchParams({ songId: song.id, title: songTitle });
+        if (selectedUserId) {
+          audioParams.set('id', selectedUserId);
         }
-        exitEraseMode();
-      });
-      
-      const statusButton = songElement.querySelector('.song-status-button');
-      if (statusButton && selectedUserId) {
-        applyStatusStyles(statusButton, statusTag);
-        statusButton.addEventListener('click', async (event) => {
-          event.preventDefault();
-          event.stopPropagation();
-          const currentStatus = Number(statusButton.dataset.status) || DEFAULT_STATUS;
-          const nextStatus = getNextStatusTag(currentStatus);
-          statusButton.disabled = true;
-          applyStatusStyles(statusButton, nextStatus);
-          try {
-            const persistedStatus = await persistStatusTag(song.id, nextStatus);
-            applyStatusStyles(statusButton, persistedStatus);
-            statusBySongId.set(song.id, persistedStatus);
-          } catch (err) {
-            console.error('Error updating status_tag:', err);
-            applyStatusStyles(statusButton, currentStatus);
-          } finally {
-            statusButton.disabled = false;
+        songElement.href = `../audios/audios.html?${audioParams.toString()}`;
+        songElement.className = 'song-card';
+        const statusTag = song.statusTag;
+        const statusClassSuffix = normalizeStatusTag(statusTag);
+        const statusLabel = STATUS_MAP[statusTag] || STATUS_MAP[DEFAULT_STATUS];
+        const statusButtonHtml = selectedUserId
+          ? `<button type="button" class="song-status-button song-status-button--${statusClassSuffix}" data-song-id="${song.id}" data-status="${statusTag}">${statusLabel}</button>`
+          : '';
+        songElement.innerHTML = `
+          <div class="song-info">
+            <p class="song-title">${songTitle}</p>
+            <p class="song-artist">${artistName}</p>
+          </div>
+          ${statusButtonHtml}
+        `;
+        
+        if (selectedUserId) {
+          const deleteBtn = createDeleteButton(song.id);
+          songElement.appendChild(deleteBtn);
+        }
+        
+        songElement.addEventListener('click', (e) => {
+          if (e.target.closest('.song-delete-btn') || e.target.closest('.song-status-button')) {
+            return;
           }
+          exitEraseMode();
         });
-      }
-      container.appendChild(songElement);
+        
+        const statusButton = songElement.querySelector('.song-status-button');
+        if (statusButton && selectedUserId) {
+          applyStatusStyles(statusButton, statusTag);
+          statusButton.addEventListener('click', async (event) => {
+            event.preventDefault();
+            event.stopPropagation();
+            const currentStatus = Number(statusButton.dataset.status) || DEFAULT_STATUS;
+            const nextStatus = getNextStatusTag(currentStatus);
+            statusButton.disabled = true;
+            applyStatusStyles(statusButton, nextStatus);
+            try {
+              const persistedStatus = await persistStatusTag(song.id, nextStatus);
+              applyStatusStyles(statusButton, persistedStatus);
+              statusBySongId.set(song.id, persistedStatus);
+              // Reload to re-group by status
+              loadSongs();
+            } catch (err) {
+              console.error('Error updating status_tag:', err);
+              applyStatusStyles(statusButton, currentStatus);
+            } finally {
+              statusButton.disabled = false;
+            }
+          });
+        }
+        sectionContainer.appendChild(songElement);
+      });
+
+      container.appendChild(sectionContainer);
     });
 
     if (pendingScrollSongId) {

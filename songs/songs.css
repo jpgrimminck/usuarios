@@ -739,3 +739,54 @@ body, html {
     transform: rotate(360deg);
   }
 }
+
+/* Songs Section Headers */
+.songs-section-header {
+  display: flex;
+  align-items: center;
+  gap: 0.5rem;
+  padding: 1rem 1rem 0.5rem 1rem;
+  color: #9ca3af;
+  font-size: 0.85rem;
+  font-weight: 600;
+  text-transform: uppercase;
+  letter-spacing: 0.05em;
+}
+
+.songs-section-header:first-child {
+  padding-top: 0.75rem;
+}
+
+.songs-section-icon {
+  font-size: 1.25rem;
+}
+
+.songs-section-icon--no-iniciado {
+  color: #6b7280;
+}
+
+.songs-section-icon--en-practica {
+  color: #3b82f6;
+}
+
+.songs-section-icon--completado {
+  color: #22c55e;
+}
+
+.songs-section-title {
+  flex: 1;
+}
+
+.songs-section-count {
+  background: rgba(107, 114, 128, 0.3);
+  color: #9ca3af;
+  padding: 0.15rem 0.5rem;
+  border-radius: 9999px;
+  font-size: 0.75rem;
+  font-weight: 500;
+}
+
+.songs-section {
+  display: flex;
+  flex-direction: column;
+}
