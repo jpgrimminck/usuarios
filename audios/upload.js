@@ -820,7 +820,7 @@ function updatePrivacyToggleUi(toggleEl) {
     icon.textContent = isPrivateRecording ? 'lock' : 'lock_open';
   }
   if (label) {
-    label.textContent = isPrivateRecording ? 'Make public' : 'Make private';
+    label.textContent = isPrivateRecording ? 'PRIVATE' : 'PUBLIC';
   }
 }
 
