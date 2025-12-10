@@ -112,6 +112,18 @@
   font-size: 1rem;
 }
 
+.audio-card__public-icon {
+  display: inline-flex;
+  align-items: center;
+  margin-right: 0.35rem;
+  color: #86efac;
+  vertical-align: middle;
+}
+
+.audio-card__public-icon .material-symbols-outlined {
+  font-size: 1rem;
+}
+
 .audio-card__title {
   margin: 0;
 }

@@ -270,7 +270,8 @@ function initAudiosRealtime() {
   });
 }
 
-function buildAudioCard(audio) {
+function buildAudioCard(audio, options = {}) {
+  const { showPrivacyIcon = false } = options;
   const container = document.createElement('div');
   container.className = 'audio-card flex flex-col gap-4 rounded-lg bg-gray-800 p-4';
   container.dataset.audioId = audio.id;
@@ -286,11 +287,16 @@ function buildAudioCard(audio) {
     return normalized;
   })();
   const isPrivate = audio.is_private === true;
+  const privacyIcon = showPrivacyIcon
+    ? (isPrivate 
+        ? '<span class="audio-card__private-icon" title="Private audio"><span class="material-symbols-outlined">lock</span></span>'
+        : '<span class="audio-card__public-icon" title="Public audio"><span class="material-symbols-outlined">lock_open</span></span>')
+    : '';
   const seekSeconds = Math.abs(getSeekOffsetSeconds()) || Math.abs(SEEK_OFFSET_SECONDS);
   container.innerHTML = `
     <div class="audio-card__header">
       <p class="audio-card__title text-lg font-semibold text-white">
-        ${isPrivate ? '<span class="audio-card__private-icon" title="Private audio"><span class="material-symbols-outlined">lock</span></span>' : ''}
+        ${privacyIcon}
         ${audio.name || 'Audio sin nombre'}
         ${formatLabel ? `<span class="ml-2 inline-flex items-center rounded-full bg-gray-700 px-2 py-0.5 text-[0.6rem] font-semibold uppercase tracking-wide text-blue-300 audio-card__format">${formatLabel}</span>` : ''}
       </p>
@@ -500,7 +506,7 @@ async function loadAudios(options = {}) {
       container.appendChild(userSection);
       
       userAudios.forEach((audio) => {
-        const audioElement = buildAudioCard(audio);
+        const audioElement = buildAudioCard(audio, { showPrivacyIcon: true });
         const playButton = audioElement.querySelector('[data-role="play-button"]');
         const rewindButton = audioElement.querySelector('[data-role="rewind-button"]');
         const forwardButton = audioElement.querySelector('[data-role="forward-button"]');
