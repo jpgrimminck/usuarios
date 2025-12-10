@@ -9,6 +9,7 @@ import {
   DEFAULT_STATUS,
   normalizeStatusTag,
   getNextStatusTag,
+  getPreviousStatusTag,
   applyStatusStyles
 } from '../audios/status.js';
 
@@ -50,6 +51,7 @@ let songsRefreshTimeoutId = null;
 let pendingScrollSongId = null;
 let isLoadingSongs = false;
 let pendingLoadSongs = false;
+let suppressRealtimeRefresh = false; // Flag to suppress realtime refresh during local updates
 
 // ============================================
 // Funciones de UI
@@ -144,6 +146,144 @@ window.updateFabState = updateFabState;
 // ============================================
 // Persistencia de Status
 // ============================================
+
+// Status section configuration
+const STATUS_SECTIONS = [
+  { status: 1, label: 'Not started', icon: 'radio_button_unchecked' },
+  { status: 2, label: 'Practicing', icon: 'pace' },
+  { status: 3, label: 'Completed', icon: 'check_circle' }
+];
+
+/**
+ * Move a song card to a different status section without reloading
+ */
+function moveSongToSection(songId, oldStatus, newStatus) {
+  const container = document.getElementById('songs-container');
+  if (!container) {
+    console.error('moveSongToSection: container not found');
+    return;
+  }
+  
+  // Ensure statuses are numbers
+  oldStatus = Number(oldStatus);
+  newStatus = Number(newStatus);
+
+  const songCard = container.querySelector(`a.song-card[data-song-id="${songId}"]`);
+  if (!songCard) {
+    console.error('moveSongToSection: songCard not found for id', songId);
+    return;
+  }
+
+  const oldSection = container.querySelector(`.songs-section[data-status="${oldStatus}"]`);
+  
+  // Find or create the target section
+  let targetSection = container.querySelector(`.songs-section[data-status="${newStatus}"]`);
+  
+  if (!targetSection) {
+    // Need to create the section and header
+    const sectionConfig = STATUS_SECTIONS.find(s => s.status === newStatus);
+    if (!sectionConfig) {
+      console.error('moveSongToSection: no config for status', newStatus);
+      return;
+    }
+    
+    // Create header
+    const targetHeader = document.createElement('div');
+    targetHeader.className = 'songs-section-header';
+    targetHeader.dataset.status = newStatus;
+    targetHeader.innerHTML = `
+      <span class="material-symbols-outlined songs-section-icon songs-section-icon--${normalizeStatusTag(newStatus)}">${sectionConfig.icon}</span>
+      <span class="songs-section-title">${sectionConfig.label}</span>
+      <span class="songs-section-count">0</span>
+    `;
+    
+    // Create section container
+    targetSection = document.createElement('div');
+    targetSection.className = 'songs-section';
+    targetSection.dataset.status = newStatus;
+    
+    // Insert in correct order (by status number)
+    // Find the first section with a higher status number
+    const allSections = Array.from(container.querySelectorAll('.songs-section[data-status]'));
+    let insertBeforeSection = null;
+    
+    for (const section of allSections) {
+      const sectionStatus = Number(section.dataset.status);
+      if (sectionStatus > newStatus) {
+        insertBeforeSection = section;
+        break;
+      }
+    }
+    
+    if (insertBeforeSection) {
+      // Find the header that comes before this section
+      const headerBeforeSection = insertBeforeSection.previousElementSibling;
+      // Insert our header and section before the found header
+      container.insertBefore(targetHeader, headerBeforeSection);
+      container.insertBefore(targetSection, headerBeforeSection);
+    } else {
+      // Append at the end
+      container.appendChild(targetHeader);
+      container.appendChild(targetSection);
+    }
+  }
+  
+  // Move the card to the target section (sorted alphabetically by title)
+  const songTitle = songCard.querySelector('.song-title')?.textContent?.toLowerCase() || '';
+  const existingCards = Array.from(targetSection.querySelectorAll('.song-card'));
+  let insertBefore = null;
+  
+  for (const card of existingCards) {
+    const cardTitle = card.querySelector('.song-title')?.textContent?.toLowerCase() || '';
+    if (cardTitle > songTitle) {
+      insertBefore = card;
+      break;
+    }
+  }
+  
+  if (insertBefore) {
+    targetSection.insertBefore(songCard, insertBefore);
+  } else {
+    targetSection.appendChild(songCard);
+  }
+  
+  // Now update the card's arrow buttons for the new status
+  const arrowsContainer = songCard.querySelector('.song-status-arrows');
+  if (arrowsContainer) {
+    arrowsContainer.dataset.status = newStatus;
+    const upBtn = arrowsContainer.querySelector('.song-arrow-btn--up');
+    const downBtn = arrowsContainer.querySelector('.song-arrow-btn--down');
+    if (upBtn) upBtn.disabled = newStatus <= 1;
+    if (downBtn) downBtn.disabled = newStatus >= 3;
+  }
+  
+  // Update section counts
+  updateSectionCount(container, oldStatus);
+  updateSectionCount(container, newStatus);
+  
+  // Remove empty old section
+  if (oldSection && oldSection.children.length === 0) {
+    const oldHeader = container.querySelector(`.songs-section-header[data-status="${oldStatus}"]`);
+    if (oldHeader) oldHeader.remove();
+    oldSection.remove();
+  }
+  
+  // Smooth scroll to the moved card
+  setTimeout(() => scrollSongIntoView(songId), 100);
+}
+
+/**
+ * Update the count badge for a status section
+ */
+function updateSectionCount(container, status) {
+  const section = container.querySelector(`.songs-section[data-status="${status}"]`);
+  const header = container.querySelector(`.songs-section-header[data-status="${status}"]`);
+  if (section && header) {
+    const count = section.querySelectorAll('.song-card').length;
+    const countEl = header.querySelector('.songs-section-count');
+    if (countEl) countEl.textContent = count;
+  }
+}
 
 async function persistStatusTag(songId, nextStatus) {
   const query = supabase
@@ -284,6 +424,7 @@ async function loadSongs() {
       // Create section header
       const sectionHeader = document.createElement('div');
       sectionHeader.className = 'songs-section-header';
+      sectionHeader.dataset.status = status;
       sectionHeader.innerHTML = `
         <span class="material-symbols-outlined songs-section-icon songs-section-icon--${normalizeStatusTag(status)}">${icon}</span>
         <span class="songs-section-title">${label}</span>
@@ -309,17 +450,24 @@ async function loadSongs() {
         songElement.href = `../audios/audios.html?${audioParams.toString()}`;
         songElement.className = 'song-card';
         const statusTag = song.statusTag;
-        const statusClassSuffix = normalizeStatusTag(statusTag);
-        const statusLabel = STATUS_MAP[statusTag] || STATUS_MAP[DEFAULT_STATUS];
-        const statusButtonHtml = selectedUserId
-          ? `<button type="button" class="song-status-button song-status-button--${statusClassSuffix}" data-song-id="${song.id}" data-status="${statusTag}">${statusLabel}</button>`
+        const canMoveUp = statusTag > 1;
+        const canMoveDown = statusTag < 3;
+        const statusArrowsHtml = selectedUserId
+          ? `<div class="song-status-arrows" data-song-id="${song.id}" data-status="${statusTag}">
+              <button type="button" class="song-arrow-btn song-arrow-btn--up" ${!canMoveUp ? 'disabled' : ''} title="Move to previous status">
+                <span class="material-symbols-outlined">keyboard_arrow_up</span>
+              </button>
+              <button type="button" class="song-arrow-btn song-arrow-btn--down" ${!canMoveDown ? 'disabled' : ''} title="Move to next status">
+                <span class="material-symbols-outlined">keyboard_arrow_down</span>
+              </button>
+            </div>`
           : '';
         songElement.innerHTML = `
           <div class="song-info">
             <p class="song-title">${songTitle}</p>
             <p class="song-artist">${artistName}</p>
           </div>
-          ${statusButtonHtml}
+          ${statusArrowsHtml}
         `;
         
         if (selectedUserId) {
@@ -328,35 +476,64 @@ async function loadSongs() {
         }
         
         songElement.addEventListener('click', (e) => {
-          if (e.target.closest('.song-delete-btn') || e.target.closest('.song-status-button')) {
+          if (e.target.closest('.song-delete-btn') || e.target.closest('.song-status-arrows')) {
             return;
           }
           exitEraseMode();
         });
         
-        const statusButton = songElement.querySelector('.song-status-button');
-        if (statusButton && selectedUserId) {
-          applyStatusStyles(statusButton, statusTag);
-          statusButton.addEventListener('click', async (event) => {
-            event.preventDefault();
-            event.stopPropagation();
-            const currentStatus = Number(statusButton.dataset.status) || DEFAULT_STATUS;
-            const nextStatus = getNextStatusTag(currentStatus);
-            statusButton.disabled = true;
-            applyStatusStyles(statusButton, nextStatus);
+        const arrowsContainer = songElement.querySelector('.song-status-arrows');
+        if (arrowsContainer && selectedUserId) {
+          const upBtn = arrowsContainer.querySelector('.song-arrow-btn--up');
+          const downBtn = arrowsContainer.querySelector('.song-arrow-btn--down');
+          
+          const handleStatusChange = async (oldStatus, newStatus) => {
+            upBtn.disabled = true;
+            downBtn.disabled = true;
+            
+            // Suppress realtime refresh during local update
+            suppressRealtimeRefresh = true;
+            
             try {
-              const persistedStatus = await persistStatusTag(song.id, nextStatus);
-              applyStatusStyles(statusButton, persistedStatus);
+              const persistedStatus = await persistStatusTag(song.id, newStatus);
               statusBySongId.set(song.id, persistedStatus);
-              // Reload to re-group by status
-              loadSongs();
+              moveSongToSection(song.id, oldStatus, persistedStatus);
             } catch (err) {
               console.error('Error updating status_tag:', err);
-              applyStatusStyles(statusButton, currentStatus);
+              // Re-enable buttons on error
+              upBtn.disabled = oldStatus <= 1;
+              downBtn.disabled = oldStatus >= 3;
             } finally {
-              statusButton.disabled = false;
+              // Re-enable realtime refresh after a short delay
+              setTimeout(() => {
+                suppressRealtimeRefresh = false;
+              }, 500);
             }
-          });
+          };
+          
+          if (upBtn) {
+            upBtn.addEventListener('click', async (event) => {
+              event.preventDefault();
+              event.stopPropagation();
+              const currentStatus = Number(arrowsContainer.dataset.status) || DEFAULT_STATUS;
+              const prevStatus = getPreviousStatusTag(currentStatus);
+              if (prevStatus < currentStatus) {
+                await handleStatusChange(currentStatus, prevStatus);
+              }
+            });
+          }
+          
+          if (downBtn) {
+            downBtn.addEventListener('click', async (event) => {
+              event.preventDefault();
+              event.stopPropagation();
+              const currentStatus = Number(arrowsContainer.dataset.status) || DEFAULT_STATUS;
+              const nextStatus = getNextStatusTag(currentStatus);
+              if (nextStatus > currentStatus) {
+                await handleStatusChange(currentStatus, nextStatus);
+              }
+            });
+          }
         }
         sectionContainer.appendChild(songElement);
       });
@@ -393,6 +570,9 @@ async function loadSongs() {
 let userSongIdsSet = new Set();
 
 function scheduleSongsRefresh() {
+  // Skip refresh if suppressed (during local status updates)
+  if (suppressRealtimeRefresh) return;
+  
   if (songsRefreshTimeoutId) {
     clearTimeout(songsRefreshTimeoutId);
   }

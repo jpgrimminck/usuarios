@@ -53,6 +53,15 @@ export function getNextStatusTag(currentStatus) {
   return STATUS_CYCLE[index + 1];
 }
 
+export function getPreviousStatusTag(currentStatus) {
+  const val = Number(currentStatus);
+  const index = STATUS_CYCLE.indexOf(val);
+  if (index === -1 || index === 0) {
+    return STATUS_CYCLE[STATUS_CYCLE.length - 1];
+  }
+  return STATUS_CYCLE[index - 1];
+}
+
 export function applyStatusStyles(button, statusTag) {
   if (!button) return;
   const val = Number(statusTag);
