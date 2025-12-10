@@ -593,28 +593,24 @@
   flex: 1;
 }
 
-.recorder-section__row {
+.recorder-section__toggle-row {
   display: flex;
-  align-items: flex-start;
-  gap: 0.75rem;
+  justify-content: flex-end;
   width: 100%;
+  margin-bottom: 0.5rem;
 }
 
-.recorder-section__left {
-  flex: 1;
-  display: flex;
-  flex-direction: column;
-  gap: 0.5rem;
-  min-width: 0;
+.recorder-section__toggle-row--hidden {
+  display: none;
 }
 
 .recorder-privacy-toggle {
   display: flex;
-  flex-direction: column;
+  flex-direction: row;
   align-items: center;
   justify-content: center;
-  gap: 0.25rem;
-  padding: 0.5rem 0.75rem;
+  gap: 0.35rem;
+  padding: 0.4rem 0.65rem;
   border-radius: 0.5rem;
   background: rgba(55, 65, 81, 0.6);
   border: 1px solid rgba(148, 163, 184, 0.2);
@@ -634,11 +630,12 @@
 }
 
 .recorder-privacy-toggle .material-symbols-outlined {
-  font-size: 1.25rem;
+  font-size: 1.1rem;
 }
 
 .recorder-privacy-toggle__label {
-  font-size: 0.65rem;
+  font-size: 0.7rem;
+  font-weight: 600;
   text-transform: uppercase;
   letter-spacing: 0.03em;
   white-space: nowrap;

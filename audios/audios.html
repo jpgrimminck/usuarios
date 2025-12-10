@@ -30,25 +30,23 @@
         <section class="recorder-section" data-recorder-section>
           <div class="recorder-section__dynamic" data-recorder-dynamic>
             <div class="recorder-section__timer recorder-section__timer--hidden" data-recorder-timer>0:00</div>
-            <div class="recorder-section__row" data-recorder-row>
-              <div class="recorder-section__left">
-                <label class="recorder-section__label recorder-section__label--hidden" data-recorder-title-label>
-                  <input type="text" class="recorder-section__input" placeholder="Ingrese título" data-recorder-field="title" />
-                </label>
-                <div class="recorder-section__preview recorder-section__preview--hidden" data-recorder-preview>
-                  <audio data-recorder-audio hidden preload="metadata"></audio>
-                  <div class="recorder-preview__slider" data-recorder-slider>
-                    <div class="recorder-preview__slider-track">
-                      <div class="recorder-preview__slider-fill" data-recorder-fill></div>
-                    </div>
-                  </div>
-                  <span class="recorder-preview__time" data-recorder-time>0:00</span>
-                </div>
-              </div>
-              <button type="button" class="recorder-privacy-toggle recorder-privacy-toggle--hidden" data-recorder-privacy-toggle>
+            <div class="recorder-section__toggle-row recorder-section__toggle-row--hidden" data-recorder-toggle-row>
+              <button type="button" class="recorder-privacy-toggle" data-recorder-privacy-toggle>
                 <span class="material-symbols-outlined">lock_open</span>
                 <span class="recorder-privacy-toggle__label">PUBLIC</span>
               </button>
+            </div>
+            <label class="recorder-section__label recorder-section__label--hidden" data-recorder-title-label>
+              <input type="text" class="recorder-section__input" placeholder="Ingrese título" data-recorder-field="title" />
+            </label>
+            <div class="recorder-section__preview recorder-section__preview--hidden" data-recorder-preview>
+              <audio data-recorder-audio hidden preload="metadata"></audio>
+              <div class="recorder-preview__slider" data-recorder-slider>
+                <div class="recorder-preview__slider-track">
+                  <div class="recorder-preview__slider-fill" data-recorder-fill></div>
+                </div>
+              </div>
+              <span class="recorder-preview__time" data-recorder-time>0:00</span>
             </div>
           </div>
           <div class="recorder-section__controls">

@@ -604,6 +604,7 @@ function ensureRecorderElements() {
     playButton: section.querySelector('[data-recorder-play]'),
     timerEl: section.querySelector('[data-recorder-timer]'),
     privacyToggle: section.querySelector('[data-recorder-privacy-toggle]'),
+    privacyToggleRow: section.querySelector('[data-recorder-toggle-row]'),
     previewEl,
     previewAudio: previewEl?.querySelector('[data-recorder-audio]'),
     previewSlider: previewEl?.querySelector('[data-recorder-slider]'),
@@ -859,9 +860,11 @@ export function updateRecorderUi() {
     }
   }
 
-  // Show/hide privacy toggle based on recording state
+  // Show/hide privacy toggle row based on recording state
+  if (elements.privacyToggleRow) {
+    elements.privacyToggleRow.classList.toggle('recorder-section__toggle-row--hidden', !hasRecording);
+  }
   if (elements.privacyToggle) {
-    elements.privacyToggle.classList.toggle('recorder-privacy-toggle--hidden', !hasRecording);
     updatePrivacyToggleUi(elements.privacyToggle);
   }
 
@@ -977,8 +980,10 @@ function resetRecordingState(options = {}) {
       elements.dynamicContainer.classList.remove('recorder-section__dynamic--recorded');
     }
     // Reset privacy toggle UI
+    if (elements.privacyToggleRow) {
+      elements.privacyToggleRow.classList.add('recorder-section__toggle-row--hidden');
+    }
     if (elements.privacyToggle) {
-      elements.privacyToggle.classList.add('recorder-privacy-toggle--hidden');
       updatePrivacyToggleUi(elements.privacyToggle);
     }
   }
