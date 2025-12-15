@@ -67,16 +67,14 @@ function scrollSongIntoView(songId, attempt = 0) {
     return;
   }
   const scrollContainer = document.getElementById('songs-scroll');
-  if (scrollContainer && typeof target.scrollIntoView === 'function') {
-    try {
-      target.scrollIntoView({ block: 'center', behavior: 'smooth' });
-    } catch (_) {
-      const offsetTop = target.getBoundingClientRect().top - scrollContainer.getBoundingClientRect().top + scrollContainer.scrollTop;
-      scrollContainer.scrollTo({ top: Math.max(offsetTop - 40, 0), behavior: 'smooth' });
-    }
-  } else if (scrollContainer) {
-    const offsetTop = target.getBoundingClientRect().top - scrollContainer.getBoundingClientRect().top + scrollContainer.scrollTop;
-    scrollContainer.scrollTo({ top: Math.max(offsetTop - 40, 0), behavior: 'smooth' });
+  if (scrollContainer) {
+    // Calculate position relative to the scroll container only
+    const containerRect = scrollContainer.getBoundingClientRect();
+    const targetRect = target.getBoundingClientRect();
+    const offsetTop = targetRect.top - containerRect.top + scrollContainer.scrollTop;
+    // Center the card in the visible area
+    const centerOffset = offsetTop - (containerRect.height / 2) + (targetRect.height / 2);
+    scrollContainer.scrollTo({ top: Math.max(centerOffset, 0), behavior: 'smooth' });
   }
 
   target.classList.add('song-card--recent');
