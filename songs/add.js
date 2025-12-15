@@ -985,30 +985,62 @@ export function initAddSongModal(exitEraseMode) {
 
   // Input listeners for step validation
   if (newSongTitleInput) {
-    newSongTitleInput.addEventListener('input', updateNextButtonState);
-    
     // Autocomplete handler for song title
     newSongTitleInput.addEventListener('input', (e) => {
       const query = e.target.value;
+      
+      // If a song was just selected from autocomplete and the value matches, don't do anything
+      if (selectedAutocompleteSong && query === selectedAutocompleteSong.title) {
+        updateNextButtonState();
+        return;
+      }
+      
       // If user types after selecting a song, clear the selection
       if (selectedAutocompleteSong && query !== selectedAutocompleteSong.title) {
         selectedAutocompleteSong = null;
-        updateNextButtonState();
       }
+      
+      // Update button state based on current input
+      updateNextButtonState();
+      
       handleAutocompleteInput(query, (selectedSong) => {
         // Song selected from autocomplete - populate input and store selection
+        
+        // Cancel any pending debounce timer to prevent it from interfering
+        if (autocompleteDebounceTimer) {
+          clearTimeout(autocompleteDebounceTimer);
+          autocompleteDebounceTimer = null;
+        }
+        
         hideAutocompleteDropdown();
         
         if (!selectedSong.id) return;
         
-        // Store the selected song
+        // Store the selected song FIRST before changing input
         selectedAutocompleteSong = selectedSong;
         
         // Populate the input with the song title
         newSongTitleInput.value = selectedSong.title || '';
         
-        // Update button state (will change text to "Añadir")
+        // Update button state multiple times to handle any race conditions
         updateNextButtonState();
+        
+        // Schedule additional updates to handle async input events
+        requestAnimationFrame(() => {
+          // Re-ensure the selection is still set
+          if (!selectedAutocompleteSong && newSongTitleInput.value === selectedSong.title) {
+            selectedAutocompleteSong = selectedSong;
+          }
+          updateNextButtonState();
+        });
+        
+        setTimeout(() => {
+          // Re-ensure the selection is still set
+          if (!selectedAutocompleteSong && newSongTitleInput.value === selectedSong.title) {
+            selectedAutocompleteSong = selectedSong;
+          }
+          updateNextButtonState();
+        }, 100);
       });
     });
     
