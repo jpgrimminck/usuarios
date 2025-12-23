@@ -33,6 +33,8 @@ let allArtistsCache = null;
 let selectedAutocompleteSong = null; // Stores the song selected from autocomplete dropdown
 let selectedAutocompleteArtist = null; // Stores the artist selected from autocomplete dropdown
 let foundDuplicateSong = null; // Stores found duplicate song (title + artist match)
+let autocompleteVersion = 0; // Version counter to invalidate stale async operations
+let artistAutocompleteVersion = 0; // Version counter for artist autocomplete
 
 export function initAddModule(options = {}) {
   supabaseClient = options.supabase || null;
@@ -200,8 +202,42 @@ function hideAutocompleteDropdown() {
   }
 }
 
+// Handle song selection from autocomplete dropdown
+function handleSongAutocompleteSelection(song) {
+  if (!song || !song.id) return;
+  
+  // Increment version to invalidate any pending async operations
+  autocompleteVersion++;
+  
+  // Cancel any pending debounce timer
+  if (autocompleteDebounceTimer) {
+    clearTimeout(autocompleteDebounceTimer);
+    autocompleteDebounceTimer = null;
+  }
+  
+  hideAutocompleteDropdown();
+  
+  // Store the selected song
+  selectedAutocompleteSong = song;
+  
+  // Get elements directly
+  const titleInput = document.getElementById('new-song-title');
+  const nextButton = document.getElementById('create-song-next');
+  
+  // Populate the input with the song title
+  if (titleInput) {
+    titleInput.value = song.title || '';
+  }
+  
+  // Directly set button to correct state
+  if (nextButton) {
+    nextButton.classList.add('suggested-secondary--active');
+    nextButton.textContent = 'Añadir';
+  }
+}
+
 // Handle autocomplete input
-async function handleAutocompleteInput(query, onSelect) {
+async function handleAutocompleteInput(query) {
   if (autocompleteDebounceTimer) {
     clearTimeout(autocompleteDebounceTimer);
   }
@@ -211,14 +247,22 @@ async function handleAutocompleteInput(query, onSelect) {
     return;
   }
   
+  // Increment version for this new search
+  const currentVersion = ++autocompleteVersion;
+  
   autocompleteDebounceTimer = setTimeout(async () => {
     const [allSongs, userSongIds] = await Promise.all([
       fetchAllSongsForAutocomplete(),
       fetchUserSongIds()
     ]);
     
+    // Check if this operation is still valid (not superseded by selection or newer search)
+    if (currentVersion !== autocompleteVersion) {
+      return; // Stale operation, ignore
+    }
+    
     const filtered = filterSongsForAutocomplete(allSongs, query, userSongIds);
-    renderAutocompleteDropdown(filtered, onSelect);
+    renderAutocompleteDropdown(filtered, handleSongAutocompleteSelection);
   }, 200); // 200ms debounce
 }
 
@@ -289,8 +333,46 @@ function hideArtistAutocompleteDropdown() {
   }
 }
 
+// Handle artist selection from autocomplete dropdown
+function handleArtistAutocompleteSelection(artist) {
+  if (!artist || !artist.id) return;
+  
+  // Increment version to invalidate any pending async operations
+  artistAutocompleteVersion++;
+  
+  // Cancel any pending debounce timer
+  if (artistAutocompleteDebounceTimer) {
+    clearTimeout(artistAutocompleteDebounceTimer);
+    artistAutocompleteDebounceTimer = null;
+  }
+  
+  hideArtistAutocompleteDropdown();
+  
+  // Store the selected artist
+  selectedAutocompleteArtist = artist;
+  
+  // Get elements directly
+  const artistInput = document.getElementById('new-song-artist');
+  const titleInput = document.getElementById('new-song-title');
+  const createButton = document.getElementById('create-new-song');
+  
+  // Populate the input with the artist name
+  if (artistInput) {
+    artistInput.value = artist.name || '';
+  }
+  
+  // Check for duplicate after selecting artist
+  const titleVal = titleInput?.value?.trim() || '';
+  handleDuplicateCheck(titleVal, artist.name);
+  
+  // Directly set button to correct state
+  if (createButton && artistInput?.value?.trim()) {
+    createButton.classList.add('suggested-secondary--active');
+  }
+}
+
 // Handle artist autocomplete input
-async function handleArtistAutocompleteInput(query, onSelect) {
+async function handleArtistAutocompleteInput(query) {
   if (artistAutocompleteDebounceTimer) {
     clearTimeout(artistAutocompleteDebounceTimer);
   }
@@ -300,10 +382,19 @@ async function handleArtistAutocompleteInput(query, onSelect) {
     return;
   }
   
+  // Increment version for this new search
+  const currentVersion = ++artistAutocompleteVersion;
+  
   artistAutocompleteDebounceTimer = setTimeout(async () => {
     const allArtists = await fetchAllArtistsForAutocomplete();
+    
+    // Check if this operation is still valid
+    if (currentVersion !== artistAutocompleteVersion) {
+      return; // Stale operation, ignore
+    }
+    
     const filtered = filterArtistsForAutocomplete(allArtists, query);
-    renderArtistAutocompleteDropdown(filtered, onSelect);
+    renderArtistAutocompleteDropdown(filtered, handleArtistAutocompleteSelection);
   }, 200); // 200ms debounce
 }
 
@@ -522,6 +613,7 @@ function updateNextButtonState() {
   const { nextButton, titleInput } = getModalElements();
   if (!nextButton || !titleInput) return;
   const title = titleInput.value.trim();
+  
   if (title) {
     nextButton.classList.add('suggested-secondary--active');
   } else {
@@ -989,59 +1081,23 @@ export function initAddSongModal(exitEraseMode) {
     newSongTitleInput.addEventListener('input', (e) => {
       const query = e.target.value;
       
-      // If a song was just selected from autocomplete and the value matches, don't do anything
+      // If a song was just selected from autocomplete and the value matches, 
+      // keep selection and just sync button state (mobile can fire extra input events)
       if (selectedAutocompleteSong && query === selectedAutocompleteSong.title) {
         updateNextButtonState();
         return;
       }
       
       // If user types after selecting a song, clear the selection
-      if (selectedAutocompleteSong && query !== selectedAutocompleteSong.title) {
+      if (selectedAutocompleteSong) {
         selectedAutocompleteSong = null;
       }
       
       // Update button state based on current input
       updateNextButtonState();
       
-      handleAutocompleteInput(query, (selectedSong) => {
-        // Song selected from autocomplete - populate input and store selection
-        
-        // Cancel any pending debounce timer to prevent it from interfering
-        if (autocompleteDebounceTimer) {
-          clearTimeout(autocompleteDebounceTimer);
-          autocompleteDebounceTimer = null;
-        }
-        
-        hideAutocompleteDropdown();
-        
-        if (!selectedSong.id) return;
-        
-        // Store the selected song FIRST before changing input
-        selectedAutocompleteSong = selectedSong;
-        
-        // Populate the input with the song title
-        newSongTitleInput.value = selectedSong.title || '';
-        
-        // Update button state multiple times to handle any race conditions
-        updateNextButtonState();
-        
-        // Schedule additional updates to handle async input events
-        requestAnimationFrame(() => {
-          // Re-ensure the selection is still set
-          if (!selectedAutocompleteSong && newSongTitleInput.value === selectedSong.title) {
-            selectedAutocompleteSong = selectedSong;
-          }
-          updateNextButtonState();
-        });
-        
-        setTimeout(() => {
-          // Re-ensure the selection is still set
-          if (!selectedAutocompleteSong && newSongTitleInput.value === selectedSong.title) {
-            selectedAutocompleteSong = selectedSong;
-          }
-          updateNextButtonState();
-        }, 100);
-      });
+      // Trigger autocomplete search
+      handleAutocompleteInput(query);
     });
     
     // Hide autocomplete when input loses focus (with delay for click handling)
@@ -1052,39 +1108,30 @@ export function initAddSongModal(exitEraseMode) {
     });
   }
   if (newSongArtistInput) {
-    newSongArtistInput.addEventListener('input', updateCreateButtonState);
-    
     // Autocomplete handler for artist name
     newSongArtistInput.addEventListener('input', (e) => {
       const query = e.target.value;
+      
+      // If an artist was just selected and the value matches, do nothing
+      if (selectedAutocompleteArtist && query === selectedAutocompleteArtist.name) {
+        updateCreateButtonState();
+        return;
+      }
+      
       // If user types after selecting an artist, clear the selection
-      if (selectedAutocompleteArtist && query !== selectedAutocompleteArtist.name) {
+      if (selectedAutocompleteArtist) {
         selectedAutocompleteArtist = null;
       }
+      
+      // Update button state based on current input
+      updateCreateButtonState();
       
       // Check for duplicate song (title + artist)
       const titleValue = newSongTitleInput?.value?.trim() || '';
       handleDuplicateCheck(titleValue, query);
       
-      handleArtistAutocompleteInput(query, (selectedArtist) => {
-        // Artist selected from autocomplete - populate input and store selection
-        hideArtistAutocompleteDropdown();
-        
-        if (!selectedArtist.id) return;
-        
-        // Store the selected artist
-        selectedAutocompleteArtist = selectedArtist;
-        
-        // Populate the input with the artist name
-        newSongArtistInput.value = selectedArtist.name || '';
-        
-        // Check for duplicate after selecting artist
-        const titleVal = newSongTitleInput?.value?.trim() || '';
-        handleDuplicateCheck(titleVal, selectedArtist.name);
-        
-        // Update button state
-        updateCreateButtonState();
-      });
+      // Trigger autocomplete search
+      handleArtistAutocompleteInput(query);
     });
     
     // Hide artist autocomplete when input loses focus (with delay for click handling)
